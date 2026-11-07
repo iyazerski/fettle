@@ -45,11 +45,31 @@ jobs:
         run: cargo build --release --locked --target "$TARGET"
       - name: Test binary
         run: target/$TARGET/release/quill --version
+      # A self-signed certificate, the same for every release, so macOS keeps
+      # the Accessibility grant when Quill updates.
+      - name: Import signing certificate
+        env:
+          CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -hex 16)"
+          echo "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -k "$keychain" -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
       - name: Package app
+        env:
+          QUILL_SIGN_IDENTITY: Quill Code Signing
         run: |
           mkdir dist
           scripts/bundle.sh "target/$TARGET/release/quill" "$VERSION" dist
           ditto -c -k --keepParent dist/Quill.app "dist/$ASSET"
+          codesign -dr - dist/Quill.app
           rm -rf dist/Quill.app
           cd dist
           shasum -a 256 "$ASSET" > "$ASSET.sha256"

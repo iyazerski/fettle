@@ -14,25 +14,30 @@ pub const DEFAULT_API_BASE: &str = "https://api.openai.com/v1";
 /// A small, fast model that ChatGPT sign-in serves.
 pub const DEFAULT_CHATGPT_MODEL: &str = "gpt-6-luna";
 
-/// The languages the translate picker offers.
+/// The languages Translate offers, alphabetical: the 20 with the most
+/// speakers (Ethnologue), counting Chinese and Arabic once each and
+/// leaving out Nigerian Pidgin.
 pub const LANGUAGES: &[&str] = &[
-    "English",
-    "Belarusian",
-    "Russian",
-    "Ukrainian",
-    "Polish",
-    "German",
-    "French",
-    "Spanish",
-    "Italian",
-    "Portuguese",
-    "Dutch",
-    "Czech",
-    "Lithuanian",
-    "Turkish",
+    "Arabic",
+    "Bengali",
     "Chinese (Simplified)",
+    "English",
+    "French",
+    "German",
+    "Hindi",
+    "Indonesian",
     "Japanese",
     "Korean",
+    "Marathi",
+    "Portuguese",
+    "Russian",
+    "Spanish",
+    "Tagalog",
+    "Tamil",
+    "Telugu",
+    "Turkish",
+    "Urdu",
+    "Vietnamese",
 ];
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -49,8 +54,11 @@ pub struct Settings {
     pub reasoning: Reasoning,
     /// The language Translate writes in.
     pub language: String,
+    /// Languages listed first in the picker.
+    pub favourite_languages: Vec<String>,
     /// The global shortcut, like `ctrl+alt+e`.
     pub shortcut: String,
+    pub appearance: Appearance,
 }
 
 impl Default for Settings {
@@ -64,7 +72,9 @@ impl Default for Settings {
             api_model: String::new(),
             reasoning: Reasoning::Off,
             language: "English".to_owned(),
+            favourite_languages: Vec::new(),
             shortcut: DEFAULT_SHORTCUT.to_owned(),
+            appearance: Appearance::System,
         }
     }
 }
@@ -76,6 +86,28 @@ pub enum Provider {
     ChatGpt,
     /// Any OpenAI-compatible chat completions API.
     Api,
+}
+
+/// Light or dark window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Appearance {
+    /// Follow macOS.
+    System,
+    Light,
+    Dark,
+}
+
+impl Appearance {
+    pub const ALL: [Appearance; 3] = [Appearance::System, Appearance::Light, Appearance::Dark];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Appearance::System => "System",
+            Appearance::Light => "Light",
+            Appearance::Dark => "Dark",
+        }
+    }
 }
 
 /// How hard the model thinks before answering.
@@ -172,6 +204,28 @@ impl Settings {
         }
     }
 
+    /// Whether `language` is a favourite.
+    pub fn is_favourite(&self, language: &str) -> bool {
+        self.favourite_languages.iter().any(|l| l == language)
+    }
+
+    /// Add `language` to the favourites, or take it out.
+    pub fn toggle_favourite(&mut self, language: &str) {
+        if self.is_favourite(language) {
+            self.favourite_languages.retain(|l| l != language);
+        } else {
+            self.favourite_languages.push(language.to_owned());
+        }
+    }
+
+    /// [`LANGUAGES`] split into the favourites and the rest, both alphabetical.
+    pub fn languages(&self) -> (Vec<&'static str>, Vec<&'static str>) {
+        LANGUAGES
+            .iter()
+            .copied()
+            .partition(|l| self.is_favourite(l))
+    }
+
     /// Why the model can't be called yet, if it can't.
     pub fn missing(&self) -> Option<&'static str> {
         match self.provider {
@@ -215,5 +269,18 @@ mod tests {
         settings.provider = Provider::ChatGpt;
         settings.chatgpt = None;
         assert_eq!(settings.missing(), Some("Sign in with ChatGPT in Settings"));
+    }
+
+    #[test]
+    fn favourite_languages_come_first() {
+        let mut settings = Settings::default();
+        settings.toggle_favourite("Spanish");
+        settings.toggle_favourite("Arabic");
+        settings.toggle_favourite("German");
+        settings.toggle_favourite("Spanish");
+        let (favourites, rest) = settings.languages();
+        assert_eq!(favourites, ["Arabic", "German"]);
+        assert_eq!(rest.len(), LANGUAGES.len() - 2);
+        assert!(rest.contains(&"Spanish") && !rest.contains(&"German"));
     }
 }

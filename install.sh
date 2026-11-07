@@ -33,18 +33,19 @@ if [ ! -w "$apps" ]; then
   mkdir -p "$apps"
 fi
 
-updating=false
-if [ -d "$apps/Quill.app" ]; then
-  updating=true
+# An ad-hoc signature changes with every build, so its Accessibility grant
+# can't carry over to the new app. Releases now keep one signature.
+adhoc=false
+if codesign -dv "$apps/Quill.app" 2>&1 | grep -q 'Signature=adhoc'; then
+  adhoc=true
 fi
 pkill -x quill 2>/dev/null && sleep 1 || true
 rm -rf "$apps/Quill.app"
 mv "$install_tmp/Quill.app" "$apps/Quill.app"
 xattr -dr com.apple.quarantine "$apps/Quill.app" 2>/dev/null || true
 
-if [ "$updating" = true ]; then
-  # The Accessibility permission belongs to the old build's signature: clear
-  # it, so Quill asks again instead of silently failing to copy.
+if [ "$adhoc" = true ]; then
+  # Clear the stale grant, so Quill asks again instead of failing to copy.
   tccutil reset Accessibility "$id" >/dev/null 2>&1 || true
 fi
 

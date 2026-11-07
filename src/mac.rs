@@ -8,8 +8,9 @@ use std::time::{Duration, Instant};
 use objc2::rc::{Retained, autoreleasepool};
 use objc2::runtime::ProtocolObject;
 use objc2_app_kit::{
-    NSAppearance, NSAppearanceNameAqua, NSApplication, NSEvent, NSPasteboard, NSPasteboardItem,
-    NSPasteboardTypeString, NSPasteboardWriting, NSScreen, NSWorkspace,
+    NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication, NSEvent,
+    NSPasteboard, NSPasteboardItem, NSPasteboardTypeString, NSPasteboardWriting, NSScreen,
+    NSWorkspace,
 };
 use objc2_core_graphics::{
     CGEvent, CGEventFlags, CGEventSource, CGEventSourceStateID, CGEventTapLocation,
@@ -46,16 +47,47 @@ pub fn accessibility_trusted(prompt: bool) -> bool {
     unsafe { AXIsProcessTrustedWithOptions(&*options) }
 }
 
-/// Draw the app light, whatever the system's appearance: the window's blur
-/// follows it. Does nothing off the main thread.
-pub fn use_light_appearance() {
+/// Draw the app light or dark (`None` follows macOS): the window's blur and
+/// the theme Rune reports follow it. Does nothing off the main thread.
+pub fn set_dark(dark: Option<bool>) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
-    // SAFETY: NSAppearanceNameAqua is an immutable constant AppKit sets up
-    // before any code runs.
-    let aqua = NSAppearance::appearanceNamed(unsafe { NSAppearanceNameAqua });
-    NSApplication::sharedApplication(mtm).setAppearance(aqua.as_deref());
+    let appearance = dark.and_then(|dark| {
+        // SAFETY: both names are immutable constants AppKit sets up before any
+        // code runs.
+        let name = unsafe {
+            if dark {
+                NSAppearanceNameDarkAqua
+            } else {
+                NSAppearanceNameAqua
+            }
+        };
+        NSAppearance::appearanceNamed(name)
+    });
+    NSApplication::sharedApplication(mtm).setAppearance(appearance.as_deref());
+}
+
+/// The pointer, in physical pixels from the primary screen's top-left, as
+/// winit counts window positions.
+pub fn pointer() -> Option<(f64, f64)> {
+    let mtm = MainThreadMarker::new()?;
+    let screens = NSScreen::screens(mtm);
+    let primary = screens.iter().next()?.frame().size.height;
+    let pointer = NSEvent::mouseLocation();
+    let scale = screen_at(&screens, pointer.x, pointer.y)?.backingScaleFactor();
+    Some((pointer.x * scale, (primary - pointer.y) * scale))
+}
+
+fn screen_at(screens: &NSArray<NSScreen>, x: f64, y: f64) -> Option<Retained<NSScreen>> {
+    screens
+        .iter()
+        .find(|s| {
+            let f = s.frame();
+            (f.origin.x..f.origin.x + f.size.width).contains(&x)
+                && (f.origin.y..f.origin.y + f.size.height).contains(&y)
+        })
+        .or_else(|| screens.iter().next())
 }
 
 /// Where a window `width` points wide goes to sit centred near the top of the
@@ -66,14 +98,7 @@ pub fn top_center_under_pointer(width: f32, margin: f32) -> Option<(i32, i32)> {
     let screens = NSScreen::screens(mtm);
     let primary = screens.iter().next()?.frame().size.height;
     let pointer = NSEvent::mouseLocation();
-    let screen = screens
-        .iter()
-        .find(|s| {
-            let f = s.frame();
-            (f.origin.x..f.origin.x + f.size.width).contains(&pointer.x)
-                && (f.origin.y..f.origin.y + f.size.height).contains(&pointer.y)
-        })
-        .or_else(|| screens.iter().next())?;
+    let screen = screen_at(&screens, pointer.x, pointer.y)?;
     let area = screen.visibleFrame();
     let scale = screen.backingScaleFactor();
     // AppKit counts up from the primary screen's bottom; winit down from its top.

@@ -3,6 +3,7 @@
 //! selection and opens it; model calls run on a small tokio runtime beside it.
 
 mod icons;
+mod settings_state;
 mod settings_view;
 mod state;
 mod view;

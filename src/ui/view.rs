@@ -2,36 +2,46 @@
 //! answer at the bottom; or the settings ([`settings_view`](super::settings_view)).
 
 use rune::{
-    Color, Cx, El, Key, KeyEvent, ScrollSpec, Span, SystemMaterial, Tx, col, el, icon, rich, row,
-    spacer, text,
+    Color, Cursor, Cx, El, Key, KeyEvent, ScrollSpec, Span, SystemMaterial, Tx, col, el, icon,
+    rich, row, spacer, text,
 };
 use rune_kit::{
-    Button, ButtonVariant, IconButton, IconButtonVariant, Kit, Spinner, Switch, TextArea,
+    Button, ButtonVariant, IconButton, IconButtonVariant, Kit, Placement, Popover, Spinner, Switch,
+    TextArea,
 };
 
 use super::icons;
 use super::settings_view;
-use super::state::{Answer, Page, State, Status};
+use super::state::{Answer, Menu, Page, State, Status};
 use crate::diff::{self, Kind};
 use crate::prompts::Action;
-use crate::settings::LANGUAGES;
 
 /// The window's corner radius.
 pub const CORNER: f32 = 16.0;
 pub const WIDTH: f32 = 520.0;
 /// The tallest the answer gets before it scrolls.
 const ANSWER_MAX: f32 = 320.0;
+/// The tallest the language list gets before it scrolls.
+const LANGUAGES_MAX: f32 = 250.0;
+/// Clear space under the window while a dropdown is open: the window is as
+/// tall as its content, and a dropdown may hang below it.
+const MENU_ROOM: f32 = LANGUAGES_MAX + 16.0;
 
-pub fn view(s: &State, _cx: &mut Cx<State>) -> El {
-    // Light, whatever the system's appearance: the window reads as paper.
-    let k = rune_theme_opencode::kit(false);
+pub fn view(s: &State, cx: &mut Cx<State>) -> El {
+    let dark = s.dark(cx.system_dark());
+    let k = rune_theme_opencode::kit(dark);
+    let mut layer = Vec::new();
     let page = match s.page {
-        Page::Main => main(s, k),
-        Page::Settings => settings_view::view(s, k),
+        Page::Main => main(s, k, &mut layer),
+        Page::Settings => settings_view::view(s, k, &mut layer),
     };
-    // Not `rune_kit::root`: it fills the window, and the window fits the content.
-    col()
-        .key("window")
+    let tint = if dark {
+        k.c.bg_base.alpha(0.72)
+    } else {
+        Color::WHITE.alpha(0.8)
+    };
+    let card = col()
+        .key("card")
         .w_full()
         .radius(CORNER)
         .system_material(SystemMaterial::Popover)
@@ -39,15 +49,21 @@ pub fn view(s: &State, _cx: &mut Cx<State>) -> El {
             col()
                 .w_full()
                 .radius(CORNER)
-                .fill(Color::WHITE.alpha(0.8))
+                .fill(tint)
                 .border(1.0, k.c.border_base.alpha(0.6))
                 .padding(14.0)
                 .gap(12.0)
                 .child(page),
-        )
+        );
+    // Not `rune_kit::root`: it fills the window, and the window fits the content.
+    let mut root = col().key("window").w_full().child(card);
+    if s.menu.is_some() {
+        root = root.child(el().key("menu-room").w_full().h(MENU_ROOM));
+    }
+    root.children(layer)
 }
 
-fn main(s: &State, k: &Kit) -> El {
+fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let running = s
         .answer
         .as_ref()
@@ -68,19 +84,23 @@ fn main(s: &State, k: &Kit) -> El {
     if let Some(notice) = &s.notice {
         page = page.child(note(k, notice, false));
     }
-    page = page.child(actions(s, k, running));
-    if s.language_open {
-        page = page.child(languages(s, k));
-    }
+    page = page.child(actions(s, k, running, layer));
     if let Some(answer) = &s.answer {
         page = page.child(divider(k)).child(answer_view(s, answer, k));
     }
     page
 }
 
-/// The title row, with a back button on sub-pages and the hide button.
+/// The title row, with a back button on sub-pages and the hide button. It
+/// moves the window when dragged.
 pub fn header(k: &Kit, title: &str, back: Option<fn(&mut State)>) -> El {
-    let mut bar = row().w_full().center_y().gap(6.0);
+    let mut bar = row()
+        .key("header")
+        .w_full()
+        .center_y()
+        .gap(6.0)
+        .cursor(Cursor::Grab)
+        .on_drag(|s: &mut State, drag, _| s.drag(drag.phase));
     if let Some(back) = back {
         bar = bar.child(
             IconButton::new(&icons::BACK)
@@ -115,7 +135,7 @@ pub fn header(k: &Kit, title: &str, back: Option<fn(&mut State)>) -> El {
     )
 }
 
-fn actions(s: &State, k: &Kit, running: bool) -> El {
+fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
     let mut bar = row()
         .w_full()
         .center_y()
@@ -128,23 +148,7 @@ fn actions(s: &State, k: &Kit, running: bool) -> El {
                 .on_press(|s: &mut State| s.start(Action::Improve))
                 .build(k),
         )
-        .child(
-            Button::new("Translate")
-                .icon(&icons::GLOBE)
-                .variant(ButtonVariant::Neutral)
-                .shortcut("⌘2")
-                .on_press(|s: &mut State| s.start(Action::Translate))
-                .build(k),
-        )
-        .child(
-            Button::new(format!("to {}", s.settings.language))
-                .icon(&icons::CHEV_DOWN)
-                .variant(ButtonVariant::Ghost)
-                .expanded(s.language_open)
-                .help("Translation language")
-                .on_press(|s: &mut State| s.language_open = !s.language_open)
-                .build(k),
-        )
+        .child(translate(s, k, layer))
         .child(spacer());
     if running {
         bar = bar.child(
@@ -158,23 +162,112 @@ fn actions(s: &State, k: &Kit, running: bool) -> El {
     bar
 }
 
-/// The translation languages, inline: a popup would run past the window's bottom.
-fn languages(s: &State, k: &Kit) -> El {
-    let mut chips = row().w_full().flex_wrap().gap(6.0);
-    for &language in LANGUAGES {
-        let current = s.settings.language == language;
-        chips = chips.child(
-            Button::new(language)
-                .variant(if current {
-                    ButtonVariant::Contrast
-                } else {
-                    ButtonVariant::Outline
-                })
-                .on_press(move |s: &mut State| s.set_language(language))
+/// Translate and the language it writes in, joined in one control.
+fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
+    let picker = Popover::new("languages")
+        .trigger(
+            Button::new(s.settings.language.clone())
+                .icon(&icons::CHEV_DOWN)
+                .variant(ButtonVariant::Ghost)
+                .help("Translation language")
+                .on_press(|s: &mut State| s.toggle_menu(Menu::Language))
                 .build(k),
-        );
+        )
+        .open(s.menu_open(Menu::Language))
+        .placement(Placement::BottomStart)
+        .label("Translation language")
+        .padding(4.0)
+        .on_close(|s: &mut State| s.menu = None)
+        .child(languages(s, k))
+        .build(k, layer);
+    row()
+        .center_y()
+        .radius(k.radius.md)
+        .fill(k.c.bg_button_neutral)
+        .border(1.0, k.c.border_muted)
+        .child(
+            Button::new("Translate")
+                .icon(&icons::GLOBE)
+                .variant(ButtonVariant::Ghost)
+                .shortcut("⌘2")
+                .on_press(|s: &mut State| s.start(Action::Translate))
+                .build(k),
+        )
+        .child(el().w(1.0).h(18.0).fill(k.c.border_muted))
+        .child(picker)
+}
+
+/// The languages, favourites first; a star marks or unmarks one.
+fn languages(s: &State, k: &Kit) -> El {
+    let (favourites, rest) = s.settings.languages();
+    let mut list = col().w(240.0).gap(2.0);
+    if !favourites.is_empty() {
+        list = list
+            .children(favourites.into_iter().map(|l| language(s, k, l)))
+            .child(el().w_full().h(1.0).my(3.0).fill(k.c.border_muted));
     }
-    chips
+    list = list.children(rest.into_iter().map(|l| language(s, k, l)));
+    col()
+        .max_h(LANGUAGES_MAX)
+        .min_h(0.0)
+        .shrink()
+        .scroll(ScrollSpec {
+            stick_bottom: false,
+        })
+        .child(list)
+}
+
+fn language(s: &State, k: &Kit, name: &'static str) -> El {
+    let favourite = s.settings.is_favourite(name);
+    let current = s.settings.language == name;
+    let star = el()
+        .key(format!("star-{name}"))
+        .role("button")
+        .label(if favourite {
+            "Remove from favourites"
+        } else {
+            "Add to favourites"
+        })
+        .size(24.0, 24.0)
+        .center()
+        .radius(4.0)
+        .hover(k.c.hover)
+        .on_press(move |s: &mut State| s.toggle_favourite(name))
+        .child(
+            icon(
+                if favourite {
+                    &icons::STAR_FILLED
+                } else {
+                    &icons::STAR
+                },
+                14.0,
+            )
+            .color(if favourite {
+                k.c.warning.icon
+            } else {
+                k.c.icon_faint
+            }),
+        );
+    row()
+        .key(format!("language-{name}"))
+        .role("option")
+        .label(name)
+        .w_full()
+        .h(30.0)
+        .pl(3.0)
+        .pr(8.0)
+        .gap(6.0)
+        .center_y()
+        .radius(6.0)
+        .hover(k.c.hover)
+        .on_press(move |s: &mut State| s.set_language(name))
+        .child(star)
+        .child(text(name).font(k.ty.ui).color(k.c.text_base).grow(1.0))
+        .child(
+            icon(k.glyph.check_small, 14.0)
+                .color(k.c.icon_base)
+                .opacity(if current { 1.0 } else { 0.0 }),
+        )
 }
 
 fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
@@ -331,7 +424,7 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     if key.key == Key::Escape {
         match s.page {
             _ if s.form.shortcut.is_recording() => return false,
-            _ if s.language_open => s.language_open = false,
+            _ if s.menu.is_some() => s.menu = None,
             Page::Settings => s.back(),
             Page::Main => s.hide(),
         }

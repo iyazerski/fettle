@@ -13,6 +13,7 @@ mod mac;
 mod prompts;
 mod settings;
 mod ui;
+mod update;
 
 use anyhow::Result;
 use clap::Parser;

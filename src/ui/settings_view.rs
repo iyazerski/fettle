@@ -1,27 +1,29 @@
 //! The settings page: where the model runs, which model, how hard it thinks,
-//! and the shortcut, login item and permission.
+//! the look, the shortcut, login item and permission, and updates.
 
-use rune::{El, ScrollSpec, col, icon, row, spacer, text};
+use rune::{El, col, icon, row, spacer, text};
 use rune_kit::{
-    Button, ButtonVariant, Kit, SegmentedControl, ShortcutRecorder, Switch, TextInput,
-    shortcut_error_message,
+    Button, ButtonVariant, Kit, Placement, SegmentedControl, Select, SelectAppearance,
+    ShortcutRecorder, Spinner, Switch, TextInput, shortcut_error_message,
 };
 
 use super::icons;
-use super::state::{Login, Models, State};
-use super::view::{divider, header, note};
-use crate::settings::{Provider, Reasoning};
+use super::state::{Login, Menu, Models, State, Update};
+use super::view::{WIDTH, divider, header, note};
+use crate::settings::{Appearance, Provider, Reasoning};
 
-/// The tallest the model list gets before it scrolls.
-const MODELS_MAX: f32 = 150.0;
+/// The label column's width.
+const LABEL: f32 = 110.0;
+/// A control's width beside its label: the window less its padding, the label and the gap.
+const CONTROL: f32 = WIDTH - 2.0 * 14.0 - LABEL - 12.0;
 
-pub fn view(s: &State, k: &Kit) -> El {
+pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let mut page = col()
         .w_full()
         .gap(12.0)
         .child(header(k, "Settings", Some(State::back)));
-    if let Some(notice) = &s.notice {
-        page = page.child(note(k, notice, true));
+    if let Some(error) = &s.form.error {
+        page = page.child(note(k, error, true));
     }
     page.child(section(k, "Model"))
         .child(
@@ -43,7 +45,7 @@ pub fn view(s: &State, k: &Kit) -> El {
             Provider::ChatGpt => chatgpt(s, k),
             Provider::Api => api(s, k),
         })
-        .child(model(s, k))
+        .children(model(s, k, layer))
         .child(labeled(
             k,
             "Reasoning",
@@ -59,6 +61,19 @@ pub fn view(s: &State, k: &Kit) -> El {
         ))
         .child(divider(k))
         .child(section(k, "General"))
+        .child(labeled(
+            k,
+            "Appearance",
+            SegmentedControl::new(
+                &Appearance::ALL.map(Appearance::label),
+                Appearance::ALL
+                    .iter()
+                    .position(|a| *a == s.settings.appearance),
+            )
+            .width(None)
+            .on_pick(|s: &mut State, i, _| s.set_appearance(Appearance::ALL[i]))
+            .build(k),
+        ))
         .child(labeled(
             k,
             "Shortcut",
@@ -82,24 +97,54 @@ pub fn view(s: &State, k: &Kit) -> El {
         ))
         .child(labeled(k, "Accessibility", accessibility(s, k)))
         .child(divider(k))
-        .child(
-            row()
-                .w_full()
-                .center_y()
-                .child(
-                    text(format!("Quill {}", crate::VERSION))
-                        .font(k.ty.text_small)
-                        .color(k.c.text_faint),
-                )
-                .child(spacer())
-                .child(
-                    Button::new("Quit Quill")
-                        .variant(ButtonVariant::GhostMuted)
-                        .shortcut("⌘Q")
-                        .on_press_tx(|_: &mut State, tx| tx.quit())
-                        .build(k),
-                ),
-        )
+        .child(footer(s, k))
+}
+
+/// The version, the update button, and Quit.
+fn footer(s: &State, k: &Kit) -> El {
+    let mut bar = row().w_full().center_y().gap(8.0).child(
+        text(format!("Quill {}", crate::VERSION))
+            .font(k.ty.text_small)
+            .color(k.c.text_faint),
+    );
+    let status = |label: String| text(label).font(k.ty.text_small).color(k.c.text_muted);
+    let check = || {
+        Button::new("Check for updates")
+            .variant(ButtonVariant::Ghost)
+            .on_press(|s: &mut State| s.check_update())
+            .build(k)
+    };
+    bar = match &s.update {
+        Update::Idle | Update::Failed(_) => bar.child(check()),
+        Update::Checking => bar
+            .child(Spinner::new().size(12.0).build(k))
+            .child(status("Checking…".into())),
+        Update::Latest => bar
+            .child(icon(&icons::CHECK, 14.0).color(k.c.success.icon))
+            .child(status("Up to date".into())),
+        Update::Available(version) => bar.child(
+            Button::new(format!("Update to {version}"))
+                .icon(&icons::DOWNLOAD)
+                .variant(ButtonVariant::Contrast)
+                .help("Download it, then restart Quill")
+                .on_press(|s: &mut State| s.install_update())
+                .build(k),
+        ),
+        Update::Installing(version) => bar
+            .child(Spinner::new().size(12.0).build(k))
+            .child(status(format!("Updating to {version}…"))),
+    };
+    bar = bar.child(spacer()).child(
+        Button::new("Quit Quill")
+            .variant(ButtonVariant::GhostMuted)
+            .shortcut("⌘Q")
+            .on_press_tx(|_: &mut State, tx| tx.quit())
+            .build(k),
+    );
+    match &s.update {
+        Update::Failed(e) => col().w_full().gap(6.0).child(note(k, e, true)).child(bar),
+        _ => bar,
+    }
 }
 
 fn chatgpt(s: &State, k: &Kit) -> El {
@@ -163,7 +208,7 @@ fn api(s: &State, k: &Kit) -> El {
                 .placeholder("https://api.openai.com/v1")
                 .width(None)
                 .on_edit(|s: &mut State| &mut s.form.api_base)
-                .on_change(|s: &mut State, _| s.form_edited())
+                .on_change(|s: &mut State, _| s.api_edited())
                 .build(k),
         ))
         .child(labeled(
@@ -175,68 +220,56 @@ fn api(s: &State, k: &Kit) -> El {
                 .placeholder("sk-…, or empty for none")
                 .width(None)
                 .on_edit(|s: &mut State| &mut s.form.api_key)
-                .on_change(|s: &mut State, _| s.form_edited())
+                .on_change(|s: &mut State, _| s.api_edited())
                 .build(k),
         ))
 }
 
-fn model(s: &State, k: &Kit) -> El {
-    let loading = matches!(s.form.models, Models::Loading);
-    let field = row()
-        .w_full()
-        .gap(8.0)
-        .center_y()
-        .child(
-            TextInput::new(&s.form.model)
-                .label("Model")
-                .placeholder("Model ID")
-                .width(None)
-                .on_edit(|s: &mut State| &mut s.form.model)
-                .on_change(|s: &mut State, _| s.form_edited())
-                .build(k)
-                .grow(1.0),
-        )
-        .child(
-            Button::new(if loading { "Loading…" } else { "Show models" })
-                .variant(ButtonVariant::Neutral)
-                .disabled(loading)
-                .on_press(|s: &mut State| s.load_models())
-                .build(k),
-        );
-    let mut block = col().w_full().gap(6.0).child(labeled(k, "Model", field));
-    match &s.form.models {
-        Models::Ready(models) => {
-            let mut chips = row().w_full().flex_wrap().gap(6.0);
-            for model in models {
-                let current = s.settings.model() == model;
-                let pick = model.clone();
-                chips = chips.child(
-                    Button::new(model.clone())
-                        .variant(if current {
-                            ButtonVariant::Contrast
-                        } else {
-                            ButtonVariant::Outline
-                        })
-                        .on_press(move |s: &mut State| s.pick_model(&pick))
-                        .build(k),
-                );
-            }
-            block = block.child(
-                col()
-                    .w_full()
-                    .max_h(MODELS_MAX)
-                    .scroll(ScrollSpec {
-                        stick_bottom: false,
-                    })
-                    .child(chips),
-            );
-        }
-        Models::Failed(e) => block = block.child(note(k, e, true)),
-        Models::Idle | Models::Loading => {}
+/// The model dropdown, once the provider can list its models.
+fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
+    if s.settings.missing().is_some_and(|m| !m.contains("model")) {
+        return None;
     }
-    block
+    let loading = matches!(s.form.models, Models::Loading);
+    let models: &[String] = match &s.form.models {
+        Models::Ready(models) => models,
+        _ => &[],
+    };
+    let current = Some(s.settings.model()).filter(|m| !m.is_empty());
+    let select = Select::new("model", models)
+        .label("Model")
+        .appearance(SelectAppearance::Field)
+        .width(CONTROL)
+        .current(current)
+        .placeholder(if loading {
+            "Loading models…"
+        } else {
+            "Choose a model"
+        })
+        .placement(Placement::BottomStart)
+        .open(s.menu_open(Menu::Model) && !models.is_empty())
+        .on_toggle(|s: &mut State| s.toggle_models())
+        .on_close(|s: &mut State| s.menu = None)
+        .on_choose(|s: &mut State, model, _| s.pick_model(model))
+        .build(k, layer);
+    let mut block = col().w_full().gap(6.0).child(labeled(k, "Model", select));
+    if let Models::Failed(e) = &s.form.models {
+        block = block.child(
+            row()
+                .w_full()
+                .center_y()
+                .gap(8.0)
+                .child(note(k, e, true).grow(1.0))
+                .child(
+                    Button::new("Try again")
+                        .variant(ButtonVariant::Ghost)
+                        .on_press(|s: &mut State| s.load_models())
+                        .build(k),
+                ),
+        );
+    }
+    Some(block)
 }
-
 fn accessibility(s: &State, k: &Kit) -> El {
     if s.trusted {
         return row()
@@ -279,7 +312,7 @@ fn labeled(k: &Kit, label: &str, control: El) -> El {
             text(label.to_owned())
                 .font(k.ty.ui)
                 .color(k.c.text_base)
-                .w(110.0),
+                .w(LABEL),
         )
         .child(col().grow(1.0).child(control))
 }

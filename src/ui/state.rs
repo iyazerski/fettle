@@ -1,10 +1,11 @@
-//! The window's state and what changes it: showing the selection, running an
-//! action, and the settings.
+//! The window's state and what changes it on the main page: showing the
+//! selection, running an action, and moving the window. The settings page's
+//! part is in [`settings_state`](super::settings_state).
 
 use std::path::PathBuf;
 use std::time::Duration;
 
-use rune::{AppHandle, Shortcut, ShortcutError, ShortcutId, TextEdit};
+use rune::{AppHandle, Phase, ShortcutId, TextEdit};
 use rune_kit::ShortcutRecorderState;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
@@ -13,7 +14,7 @@ use super::view::WIDTH;
 use crate::diff::{self, Piece};
 use crate::llm::{Ask, Backend, chatgpt};
 use crate::prompts::{self, Action};
-use crate::settings::{Provider, Reasoning, Settings};
+use crate::settings::{Appearance, Settings};
 use crate::{login_item, mac};
 
 /// How far below the top of the screen the window opens.
@@ -21,35 +22,53 @@ const TOP_MARGIN: f32 = 120.0;
 /// How long the window waits, hidden, before pasting, so the app the text
 /// came from has its key window back.
 const PASTE_DELAY: Duration = Duration::from_millis(120);
+/// How long the window takes to grow for a dropdown.
+const MENU_DELAY: Duration = Duration::from_millis(200);
 
 pub struct State {
     pub app: AppHandle<State>,
-    rt: Handle,
-    http: reqwest::Client,
+    pub(super) rt: Handle,
+    pub(super) http: reqwest::Client,
     pub settings: Settings,
-    settings_path: PathBuf,
+    pub(super) settings_path: PathBuf,
     pub page: Page,
     /// The text to work on: the selection, editable.
     pub source: TextEdit,
     pub answer: Option<Answer>,
     /// Show the improvement as a word diff rather than plain text.
     pub show_changes: bool,
-    pub language_open: bool,
+    /// The dropdown that's open.
+    pub menu: Option<Menu>,
+    /// Whether the open dropdown's list shows yet: it waits for the window to
+    /// grow, since a window that fits its content doesn't lay out again when
+    /// its height changes, and the list would be cut to the old height.
+    pub menu_shown: bool,
     /// A one-line note under the text: nothing selected, copied, a save error.
     pub notice: Option<String>,
     /// Whether Quill may copy and paste in other apps.
     pub trusted: bool,
     pub form: Form,
-    shortcut: Option<ShortcutId>,
+    pub update: Update,
+    pub(super) shortcut: Option<ShortcutId>,
     job: Option<JoinHandle<()>>,
     /// Counts runs, so a late piece of an old answer is dropped.
     run: u64,
+    /// The window's top-left in physical pixels, once Quill has placed it.
+    position: Option<(i32, i32)>,
+    /// The pointer and the window's position when a drag of the window began.
+    drag: Option<((f64, f64), (i32, i32))>,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Page {
     Main,
     Settings,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Menu {
+    Language,
+    Model,
 }
 
 pub struct Answer {
@@ -74,11 +93,12 @@ pub enum Status {
 pub struct Form {
     pub api_base: TextEdit,
     pub api_key: TextEdit,
-    pub model: TextEdit,
     pub shortcut: ShortcutRecorderState,
     pub models: Models,
     pub login: Login,
     pub at_login: bool,
+    /// A problem to show at the top of the page.
+    pub error: Option<String>,
 }
 
 pub enum Models {
@@ -94,6 +114,16 @@ pub enum Login {
     Failed(String),
 }
 
+/// Where checking for a new version stands.
+pub enum Update {
+    Idle,
+    Checking,
+    Latest,
+    Available(String),
+    Installing(String),
+    Failed(String),
+}
+
 impl State {
     pub fn new(
         app: AppHandle<State>,
@@ -105,11 +135,11 @@ impl State {
         let form = Form {
             api_base: TextEdit::new(&settings.api_base),
             api_key: TextEdit::new(&settings.api_key).secure(),
-            model: TextEdit::new(settings.model()),
             shortcut: ShortcutRecorderState::new(settings.shortcut.parse().ok()),
             models: Models::Idle,
             login: Login::Idle,
             at_login: login_item::enabled(),
+            error: None,
         };
         Self {
             app,
@@ -121,28 +151,24 @@ impl State {
             source: TextEdit::new(""),
             answer: None,
             show_changes: true,
-            language_open: false,
+            menu: None,
+            menu_shown: false,
             notice: None,
             trusted: mac::accessibility_trusted(false),
             form,
+            update: Update::Idle,
             shortcut: None,
             job: None,
             run: 0,
+            position: None,
+            drag: None,
         }
     }
 
     /// Take the shortcut, and unless started in the background, show the settings.
     pub fn started(&mut self, background: bool) {
-        mac::use_light_appearance();
-        match self.settings.shortcut.parse::<Shortcut>() {
-            Ok(shortcut) => {
-                if let Err(e) = self.register(shortcut.clone()) {
-                    self.form.shortcut.mark_unregistered();
-                    self.notice = Some(self.shortcut_message(&e, &shortcut));
-                }
-            }
-            Err(e) => self.notice = Some(format!("The saved shortcut is broken: {e}")),
-        }
+        self.apply_appearance();
+        self.register_saved_shortcut();
         eprintln!(
             "quill {} is running; {} opens it",
             crate::VERSION,
@@ -151,6 +177,23 @@ impl State {
         if !background {
             self.open_settings();
         }
+    }
+
+    /// Whether the window draws dark.
+    pub fn dark(&self, system_dark: bool) -> bool {
+        match self.settings.appearance {
+            Appearance::System => system_dark,
+            Appearance::Light => false,
+            Appearance::Dark => true,
+        }
+    }
+
+    pub(super) fn apply_appearance(&self) {
+        mac::set_dark(match self.settings.appearance {
+            Appearance::System => None,
+            Appearance::Light => Some(false),
+            Appearance::Dark => Some(true),
+        });
     }
 
     /// The shortcut: hide the window if it shows, else copy the selection
@@ -162,9 +205,9 @@ impl State {
         }
         self.trusted = mac::accessibility_trusted(false);
         if !self.trusted {
-            self.notice =
-                Some("Allow Quill in Accessibility so it can copy the selected text.".into());
             self.open_settings();
+            self.form.error =
+                Some("Allow Quill in Accessibility so it can copy the selected text.".into());
             return;
         }
         let app = self.app.clone();
@@ -179,7 +222,7 @@ impl State {
         self.cancel();
         self.page = Page::Main;
         self.answer = None;
-        self.language_open = false;
+        self.menu = None;
         self.notice = match &text {
             Some(_) => None,
             None => Some("No text selected. Type or paste it here.".into()),
@@ -188,23 +231,12 @@ impl State {
         self.show();
     }
 
-    pub fn open_settings(&mut self) {
-        self.trusted = mac::accessibility_trusted(false);
-        self.form.at_login = login_item::enabled();
-        self.page = Page::Settings;
-        self.show();
-    }
-
-    pub fn back(&mut self) {
-        self.page = Page::Main;
-        self.notice = None;
-    }
-
-    fn show(&mut self) {
+    pub(super) fn show(&mut self) {
         // Not `AppHandle::place`: it pins the window's size, and the window fits its content.
         if !self.app.is_visible()
             && let Some(position) = mac::top_center_under_pointer(WIDTH, TOP_MARGIN)
         {
+            self.position = Some(position);
             self.app.set_position(position);
         }
         self.app.open();
@@ -212,7 +244,7 @@ impl State {
 
     pub fn hide(&mut self) {
         self.cancel();
-        self.language_open = false;
+        self.menu = None;
         self.app.hide();
     }
 
@@ -223,9 +255,48 @@ impl State {
         }
     }
 
+    /// Move the window with the pointer. The panel is outside winit's reach, so
+    /// `.window_drag()` can't move it.
+    pub fn drag(&mut self, phase: Phase) {
+        match phase {
+            Phase::Down => self.drag = mac::pointer().zip(self.position),
+            Phase::Move => {
+                let (Some((start, origin)), Some(now)) = (self.drag, mac::pointer()) else {
+                    return;
+                };
+                let at = (
+                    origin.0 + (now.0 - start.0).round() as i32,
+                    origin.1 + (now.1 - start.1).round() as i32,
+                );
+                self.position = Some(at);
+                self.app.set_position(at);
+            }
+            Phase::Up => self.drag = None,
+        }
+    }
+
+    pub fn toggle_menu(&mut self, menu: Menu) {
+        if self.menu == Some(menu) {
+            self.menu = None;
+            return;
+        }
+        self.menu = Some(menu);
+        self.menu_shown = false;
+        let app = self.app.clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(MENU_DELAY);
+            app.update(move |s, _| s.menu_shown = s.menu == Some(menu));
+        });
+    }
+
+    /// Whether `menu`'s list shows.
+    pub fn menu_open(&self, menu: Menu) -> bool {
+        self.menu == Some(menu) && self.menu_shown
+    }
+
     /// Run `action` on the text in the window.
     pub fn start(&mut self, action: Action) {
-        self.language_open = false;
+        self.menu = None;
         let original = self.source.text.clone();
         if original.trim().is_empty() {
             self.notice = Some("There's no text to work on.".into());
@@ -354,7 +425,7 @@ impl State {
     }
 
     pub fn set_language(&mut self, language: &str) {
-        self.language_open = false;
+        self.menu = None;
         self.settings.language = language.to_owned();
         self.save();
         if self
@@ -366,192 +437,28 @@ impl State {
         }
     }
 
-    // Settings.
+    pub fn toggle_favourite(&mut self, language: &str) {
+        self.settings.toggle_favourite(language);
+        self.save();
+    }
 
-    fn save(&mut self) {
+    pub(super) fn save(&mut self) {
         if let Err(e) = self.settings.save(&self.settings_path) {
-            self.notice = Some(format!("Couldn't save the settings: {e:#}"));
+            self.report(format!("Couldn't save the settings: {e:#}"));
         }
     }
 
-    pub fn set_provider(&mut self, provider: Provider) {
-        if self.settings.provider == provider {
-            return;
-        }
-        self.settings.provider = provider;
-        self.form.model.replace_text(self.settings.model());
-        self.form.models = Models::Idle;
-        self.save();
-    }
-
-    pub fn set_reasoning(&mut self, reasoning: Reasoning) {
-        self.settings.reasoning = reasoning;
-        self.save();
-    }
-
-    /// Copy the API fields and the model from the form into the settings.
-    pub fn form_edited(&mut self) {
-        self.settings.api_base = self.form.api_base.text.trim().to_owned();
-        self.settings.api_key = self.form.api_key.text.trim().to_owned();
-        *self.settings.model_mut() = self.form.model.text.trim().to_owned();
-        self.save();
-    }
-
-    pub fn pick_model(&mut self, model: &str) {
-        self.form.model.replace_text(model);
-        self.form_edited();
-    }
-
-    pub fn load_models(&mut self) {
-        let Some(backend) = Backend::of(&self.settings) else {
-            self.form.models = Models::Failed("Sign in first.".into());
-            return;
-        };
-        self.form.models = Models::Loading;
-        let (app, http) = (self.app.clone(), self.http.clone());
-        self.rt.spawn(async move {
-            let result = async {
-                let backend = fresh_backend(&app, &http, backend).await?;
-                backend.models(&http).await
-            }
-            .await;
-            app.update(move |s, _| {
-                s.form.models = match result {
-                    Ok(models) if models.is_empty() => Models::Failed("No models found.".into()),
-                    Ok(models) => Models::Ready(models),
-                    Err(e) => Models::Failed(format!("{e:#}")),
-                };
-            });
-        });
-    }
-
-    pub fn sign_in(&mut self) {
-        if let Login::Waiting(job) = &self.form.login {
-            job.abort();
-        }
-        let (app, http) = (self.app.clone(), self.http.clone());
-        let job = self.rt.spawn(async move {
-            let result = chatgpt::login(&http, |url| {
-                if let Err(e) = std::process::Command::new("/usr/bin/open")
-                    .arg(url)
-                    .status()
-                {
-                    eprintln!("opening the browser: {e}");
-                }
-            })
-            .await;
-            app.update(move |s, _| s.signed_in(result.map_err(|e| format!("{e:#}"))));
-        });
-        self.form.login = Login::Waiting(job);
-    }
-
-    fn signed_in(&mut self, result: Result<crate::settings::ChatGptAuth, String>) {
-        match result {
-            Ok(auth) => {
-                self.form.login = Login::Idle;
-                self.settings.chatgpt = Some(auth);
-                self.save();
-                self.load_models();
-                self.open_settings();
-            }
-            Err(e) => self.form.login = Login::Failed(e),
-        }
-    }
-
-    pub fn cancel_sign_in(&mut self) {
-        if let Login::Waiting(job) = &self.form.login {
-            job.abort();
-        }
-        self.form.login = Login::Idle;
-    }
-
-    pub fn sign_out(&mut self) {
-        self.settings.chatgpt = None;
-        self.form.models = Models::Idle;
-        self.save();
-    }
-
-    fn saved_auth(&mut self, auth: crate::settings::ChatGptAuth) {
-        self.settings.chatgpt = Some(auth);
-        self.save();
-    }
-
-    pub fn toggle_at_login(&mut self) {
-        let result = if self.form.at_login {
-            login_item::disable()
-        } else {
-            login_item::enable()
-        };
-        match result {
-            Ok(()) => self.form.at_login = !self.form.at_login,
-            Err(e) => self.notice = Some(format!("{e:#}")),
-        }
-    }
-
-    pub fn ask_accessibility(&mut self) {
-        self.trusted = mac::accessibility_trusted(true);
-        if !self.trusted {
-            mac::open_accessibility_settings();
-        }
-    }
-
-    pub fn recheck_accessibility(&mut self) {
-        self.trusted = mac::accessibility_trusted(false);
-        if self.trusted
-            && self
-                .notice
-                .as_deref()
-                .is_some_and(|n| n.contains("Accessibility"))
-        {
-            self.notice = None;
-        }
-    }
-
-    /// Move the global shortcut to `shortcut`: take the new one before
-    /// letting go of the old, so a refused chord keeps the old working.
-    pub fn change_shortcut(&mut self, shortcut: Option<&Shortcut>) -> Result<(), ShortcutError> {
-        let Some(shortcut) = shortcut else {
-            // Without a shortcut Quill can't be reached at all.
-            return Err(ShortcutError::InvalidAccelerator("empty".into()));
-        };
-        let old = self.shortcut.take();
-        if let Err(e) = self.register(shortcut.clone()) {
-            self.shortcut = old;
-            return Err(e);
-        }
-        if let Some(old) = old {
-            let _ = self.app.unregister_shortcut(old);
-        }
-        self.settings.shortcut = shortcut.to_string();
-        self.save();
-        if self
-            .notice
-            .as_deref()
-            .is_some_and(|n| n.contains("shortcut"))
-        {
-            self.notice = None;
-        }
-        Ok(())
-    }
-
-    fn register(&mut self, shortcut: Shortcut) -> Result<(), ShortcutError> {
-        let id = self.app.register_shortcut(shortcut, |s, _| s.summon())?;
-        self.shortcut = Some(id);
-        Ok(())
-    }
-
-    pub fn shortcut_message(&self, error: &ShortcutError, shortcut: &Shortcut) -> String {
-        match (error, self.app.shortcut_owner(shortcut)) {
-            (ShortcutError::Conflict, Some(owner)) => {
-                format!("{owner} already uses the shortcut. Pick another in Settings.")
-            }
-            _ => format!("Couldn't use the shortcut: {error}. Pick another in Settings."),
+    /// Show `message` on the page that's open.
+    pub(super) fn report(&mut self, message: String) {
+        match self.page {
+            Page::Main => self.notice = Some(message),
+            Page::Settings => self.form.error = Some(message),
         }
     }
 }
 
 /// `backend` with a fresh ChatGPT token, saving a refreshed one.
-async fn fresh_backend(
+pub(super) async fn fresh_backend(
     app: &AppHandle<State>,
     http: &reqwest::Client,
     backend: Backend,

@@ -55,3 +55,15 @@ pub static STOP: Icon = icon(
     "stop",
     r#"<rect x="7" y="7" width="10" height="10" rx="2.5" fill="currentColor"/>"#,
 );
+pub static STAR: Icon = icon(
+    "star",
+    r#"<path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.9l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>"#,
+);
+pub static STAR_FILLED: Icon = icon(
+    "star-filled",
+    r#"<path d="M12 3.6l2.6 5.3 5.8.85-4.2 4.1 1 5.8L12 16.9l-5.2 2.75 1-5.8-4.2-4.1 5.8-.85z" fill="currentColor" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>"#,
+);
+pub static DOWNLOAD: Icon = icon(
+    "download",
+    r#"<path d="M12 4v11m-4.5-4.5L12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>"#,
+);
