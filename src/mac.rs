@@ -129,7 +129,8 @@ pub fn copy_selection() -> Option<String> {
     while change_count() == before && start.elapsed() < COPY_WAIT {
         sleep(Duration::from_millis(10));
     }
-    if change_count() == before {
+    let copied = change_count();
+    if copied == before {
         return None;
     }
     let text = autoreleasepool(|_| {
@@ -140,7 +141,7 @@ pub fn copy_selection() -> Option<String> {
             .stringForType(kind)
             .map(|s| s.to_string())
     });
-    saved.restore();
+    saved.restore(copied);
     text.filter(|t| !t.trim().is_empty())
 }
 
@@ -148,17 +149,18 @@ pub fn copy_selection() -> Option<String> {
 /// old contents back. Blocks for a moment: call it off the main thread.
 pub fn paste(text: &str) {
     let saved = Saved::take();
-    autoreleasepool(|_| {
+    let written = autoreleasepool(|_| {
         let pasteboard = NSPasteboard::generalPasteboard();
         pasteboard.clearContents();
         // SAFETY: as in `copy_selection`.
         let kind = unsafe { NSPasteboardTypeString };
         pasteboard.setString_forType(&NSString::from_str(text), kind);
         pasteboard.setString_forType(&NSString::from_str(""), &NSString::from_str(TRANSIENT));
+        pasteboard.changeCount()
     });
     post_command_key(KEY_V);
     sleep(PASTE_WAIT);
-    saved.restore();
+    saved.restore(written);
 }
 
 /// Put `text` on the pasteboard for good.
@@ -215,9 +217,14 @@ impl Saved {
         })
     }
 
-    fn restore(self) {
+    /// Put the saved items back, unless someone wrote to the pasteboard after
+    /// Quill's own write, which left it at change count `written`.
+    fn restore(self, written: isize) {
         autoreleasepool(|_| {
             let pasteboard = NSPasteboard::generalPasteboard();
+            if pasteboard.changeCount() != written {
+                return;
+            }
             pasteboard.clearContents();
             if self.items.is_empty() {
                 return;

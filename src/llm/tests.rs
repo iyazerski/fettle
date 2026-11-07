@@ -125,3 +125,33 @@ async fn api_lists_models_sorted() {
         ["alpha", "zeta"]
     );
 }
+
+#[tokio::test]
+async fn api_answers_count_only_when_the_stream_says_they_are_done() {
+    let delta = "data: {\"choices\":[{\"delta\":{\"content\":\"the text\"}}]}\n\n";
+    let cases = [
+        ("data: [DONE]\n\n", Ok(())),
+        (
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            Ok(()),
+        ),
+        (
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n",
+            Err("the answer was cut off (length)"),
+        ),
+        ("", Err("the answer stopped early")),
+    ];
+    for (end, want) in cases {
+        let events = format!("{delta}{end}");
+        let (base, _request) = serve_once("200 OK", "text/event-stream", &events).await;
+        let backend = Backend::Api {
+            base,
+            key: String::new(),
+        };
+        let got = backend
+            .stream(&http().unwrap(), &ask(None), |_| {})
+            .await
+            .map_err(|e| e.to_string());
+        assert_eq!(got, want.map_err(str::to_owned), "ending {end:?}");
+    }
+}

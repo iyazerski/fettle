@@ -1,7 +1,7 @@
 //! Server-sent events, as both APIs stream them: `data:` lines, one event per
 //! blank-line-separated block.
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use futures_util::StreamExt;
 
 /// Splits a byte stream into the `data` of each event.
@@ -46,27 +46,32 @@ pub enum Flow {
     Done,
 }
 
-/// Run `on_event` on the data of each event in `response`'s body. Returns
-/// whether an event said the answer was done before the body ended.
+/// Run `on_event` on the data of each event in `response`'s body, until one
+/// says the answer is done.
+///
+/// # Errors
+///
+/// Fails if reading the body or `on_event` fails, or if the body ends before
+/// an event said the answer was done: the answer would be cut short.
 pub async fn each(
     response: reqwest::Response,
     mut on_event: impl FnMut(&str) -> Result<Flow>,
-) -> Result<bool> {
+) -> Result<()> {
     let mut decoder = Decoder::default();
     let mut body = response.bytes_stream();
     while let Some(chunk) = body.next().await {
         for event in decoder.push(&chunk?) {
             if let Flow::Done = on_event(&event)? {
-                return Ok(true);
+                return Ok(());
             }
         }
     }
     if let Some(event) = decoder.finish()
         && let Flow::Done = on_event(&event)?
     {
-        return Ok(true);
+        return Ok(());
     }
-    Ok(false)
+    bail!("the answer stopped early")
 }
 
 #[cfg(test)]

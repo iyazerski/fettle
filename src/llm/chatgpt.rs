@@ -11,7 +11,8 @@ use ring::rand::{SecureRandom, SystemRandom};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::task::JoinSet;
 
 use super::sse::{self, Flow};
 use super::{Ask, check, error_message};
@@ -121,7 +122,7 @@ pub async fn stream(
         .header("accept", "text/event-stream")
         .json(&body);
     let response = check(request.send().await?).await?;
-    let done = sse::each(response, |data| {
+    sse::each(response, |data| {
         let event: Value = serde_json::from_str(data)?;
         match event
             .get("type")
@@ -146,11 +147,7 @@ pub async fn stream(
             _ => Ok(Flow::More),
         }
     })
-    .await?;
-    if !done {
-        bail!("the answer stopped early");
-    }
-    Ok(())
+    .await
 }
 
 /// The models the plan offers.
@@ -234,62 +231,86 @@ async fn token(http: &reqwest::Client, form: &[(&str, &str)]) -> Result<Tokens> 
 }
 
 /// Serve the browser until it brings the sign-in back, and return its code.
+/// Each connection is read on its own: browsers open idle ones ahead of use.
 async fn callback(listener: &TcpListener, state: &str) -> Result<String> {
+    let mut heads = JoinSet::new();
     loop {
-        let (mut socket, _) = listener.accept().await?;
-        let mut head = Vec::new();
-        let mut buf = [0u8; 2048];
-        while !head.windows(4).any(|w| w == b"\r\n\r\n") && head.len() < 16 * 1024 {
-            let n = socket.read(&mut buf).await?;
-            if n == 0 {
-                break;
+        tokio::select! {
+            accepted = listener.accept() => {
+                let (socket, _) = accepted?;
+                heads.spawn(read_head(socket));
             }
-            head.extend_from_slice(&buf[..n]);
-        }
-        let head = String::from_utf8_lossy(&head);
-        let target = head.split_whitespace().nth(1).unwrap_or("/");
-        let url = url::Url::parse(&format!("http://localhost{target}"))?;
-        if url.path() != "/auth/callback" {
-            socket
-                .write_all(
-                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                )
-                .await?;
-            continue;
-        }
-        let param = |name: &str| {
-            url.query_pairs()
-                .find(|(k, _)| k == name)
-                .map(|(_, v)| v.into_owned())
-        };
-        let result = match (param("code"), param("error")) {
-            _ if param("state").as_deref() != Some(state) => {
-                Err(anyhow!("the sign-in came back for another request"))
+            Some(read) = heads.join_next() => {
+                // A connection that broke off isn't the sign-in.
+                let Ok(Ok((mut socket, target))) = read else {
+                    continue;
+                };
+                match url::Url::parse(&format!("http://localhost{target}")) {
+                    Ok(url) if url.path() == "/auth/callback" => {
+                        return finish_sign_in(socket, &url, state).await;
+                    }
+                    _ => {
+                        let _ = socket.write_all(NOT_FOUND).await;
+                    }
+                }
             }
-            (Some(code), None) => Ok(code),
-            (_, error) => Err(anyhow!(
-                "the sign-in failed: {}",
-                param("error_description")
-                    .or(error)
-                    .unwrap_or_else(|| "no code".into())
-            )),
-        };
-        let page = match &result {
-            Ok(_) => "Signed in to Quill. You can close this tab.".to_owned(),
-            Err(e) => format!("Quill couldn't sign in: {e}"),
-        };
-        let html = format!(
-            "<!doctype html><meta charset=utf-8><title>Quill</title>\
-             <body style=\"font:16px -apple-system;padding:48px;text-align:center\">{page}</body>"
-        );
-        let reply = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{html}",
-            html.len()
-        );
-        socket.write_all(reply.as_bytes()).await?;
-        let _ = socket.shutdown().await;
-        return result;
+        }
     }
+}
+
+const NOT_FOUND: &[u8] =
+    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
+/// Read a request's head from `socket`, and return the socket with the request's target.
+async fn read_head(mut socket: TcpStream) -> std::io::Result<(TcpStream, String)> {
+    let mut head = Vec::new();
+    let mut buf = [0u8; 2048];
+    while !head.windows(4).any(|w| w == b"\r\n\r\n") && head.len() < 16 * 1024 {
+        let n = socket.read(&mut buf).await?;
+        if n == 0 {
+            break;
+        }
+        head.extend_from_slice(&buf[..n]);
+    }
+    let head = String::from_utf8_lossy(&head);
+    let target = head.split_whitespace().nth(1).unwrap_or("/").to_owned();
+    Ok((socket, target))
+}
+
+/// Answer the browser's sign-in callback at `url` with a page, and return its code.
+async fn finish_sign_in(mut socket: TcpStream, url: &url::Url, state: &str) -> Result<String> {
+    let param = |name: &str| {
+        url.query_pairs()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.into_owned())
+    };
+    let result = match (param("code"), param("error")) {
+        _ if param("state").as_deref() != Some(state) => {
+            Err(anyhow!("the sign-in came back for another request"))
+        }
+        (Some(code), None) => Ok(code),
+        (_, error) => Err(anyhow!(
+            "the sign-in failed: {}",
+            param("error_description")
+                .or(error)
+                .unwrap_or_else(|| "no code".into())
+        )),
+    };
+    let page = match &result {
+        Ok(_) => "Signed in to Quill. You can close this tab.".to_owned(),
+        Err(e) => format!("Quill couldn't sign in: {e}"),
+    };
+    let html = format!(
+        "<!doctype html><meta charset=utf-8><title>Quill</title>\
+         <body style=\"font:16px -apple-system;padding:48px;text-align:center\">{page}</body>"
+    );
+    let reply = format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{html}",
+        html.len()
+    );
+    socket.write_all(reply.as_bytes()).await?;
+    let _ = socket.shutdown().await;
+    result
 }
 
 /// A JWT's claims, unverified: the token came straight from OpenAI over TLS.
@@ -310,4 +331,37 @@ fn now() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::{TcpListener, TcpStream};
+
+    use super::callback;
+
+    #[tokio::test]
+    async fn sign_in_callback_gets_past_idle_and_other_requests() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let browser = tokio::spawn(async move {
+            // Browsers open connections before they have a request for them.
+            let idle = TcpStream::connect(addr).await.unwrap();
+            for target in ["/favicon.ico", "/auth/callback?code=c1&state=s1"] {
+                let mut socket = TcpStream::connect(addr).await.unwrap();
+                let request = format!("GET {target} HTTP/1.1\r\nHost: localhost\r\n\r\n");
+                socket.write_all(request.as_bytes()).await.unwrap();
+                let mut reply = String::new();
+                socket.read_to_string(&mut reply).await.unwrap();
+            }
+            idle
+        });
+        let code = tokio::time::timeout(Duration::from_secs(5), callback(&listener, "s1"))
+            .await
+            .expect("the callback should not wait on the idle connection");
+        assert_eq!(code.unwrap(), "c1");
+        browser.await.unwrap();
+    }
 }

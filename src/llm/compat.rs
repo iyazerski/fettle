@@ -30,7 +30,7 @@ pub async fn stream(
         request = request.bearer_auth(key);
     }
     let response = check(request.send().await?).await?;
-    // Some servers end the stream without `[DONE]`; the answer is complete then too.
+    // Some servers end the stream without `[DONE]`, so a `stop` finish ends it too.
     sse::each(response, |data| {
         if data == "[DONE]" {
             return Ok(Flow::Done);
@@ -39,16 +39,23 @@ pub async fn stream(
         if event.get("error").is_some() {
             bail!("{}", error_message(data));
         }
-        if let Some(delta) = event
-            .pointer("/choices/0/delta/content")
+        let choice = event.pointer("/choices/0");
+        if let Some(delta) = choice
+            .and_then(|c| c.pointer("/delta/content"))
             .and_then(Value::as_str)
         {
             on_delta(delta);
         }
-        Ok(Flow::More)
+        match choice
+            .and_then(|c| c.get("finish_reason"))
+            .and_then(Value::as_str)
+        {
+            None => Ok(Flow::More),
+            Some("stop") => Ok(Flow::Done),
+            Some(reason) => bail!("the answer was cut off ({reason})"),
+        }
     })
-    .await?;
-    Ok(())
+    .await
 }
 
 pub async fn models(http: &reqwest::Client, base: &str, key: &str) -> Result<Vec<String>> {

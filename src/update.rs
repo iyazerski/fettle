@@ -125,6 +125,11 @@ fn swap(app: &Path, zip: &[u8]) -> Result<()> {
         }
         Ok(())
     })();
+    // Without an app in place, a failed rollback left the old one in `work`.
+    if !app.exists() {
+        return result
+            .with_context(|| format!("the old version is in {}", work.join("old.app").display()));
+    }
     let _ = std::fs::remove_dir_all(&work);
     result
 }

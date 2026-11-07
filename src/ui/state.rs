@@ -50,6 +50,9 @@ pub struct State {
     pub form: Form,
     pub update: Update,
     pub(super) shortcut: Option<ShortcutId>,
+    /// Whether the selection is being copied, so a second press can't copy
+    /// over the first one's borrowed pasteboard.
+    capturing: bool,
     job: Option<JoinHandle<()>>,
     /// Counts runs, so a late piece of an old answer is dropped.
     run: u64,
@@ -158,6 +161,7 @@ impl State {
             form,
             update: Update::Idle,
             shortcut: None,
+            capturing: false,
             job: None,
             run: 0,
             position: None,
@@ -199,6 +203,9 @@ impl State {
     /// The shortcut: hide the window if it shows, else copy the selection
     /// and show it.
     pub fn summon(&mut self) {
+        if self.capturing {
+            return;
+        }
         if self.app.is_visible() {
             self.hide();
             return;
@@ -210,6 +217,7 @@ impl State {
                 Some("Allow Quill in Accessibility so it can copy the selected text.".into());
             return;
         }
+        self.capturing = true;
         let app = self.app.clone();
         // Copying waits for the other app, off the UI thread.
         std::thread::spawn(move || {
@@ -219,6 +227,7 @@ impl State {
     }
 
     fn show_text(&mut self, text: Option<String>) {
+        self.capturing = false;
         self.cancel();
         self.page = Page::Main;
         self.answer = None;
