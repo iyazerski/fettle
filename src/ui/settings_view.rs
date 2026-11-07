@@ -16,7 +16,7 @@ use crate::mac;
 use crate::settings::{Appearance, Missing, Provider, Reasoning};
 
 const AUTHOR: &str = "Ihar Yazerski";
-const AUTHOR_URL: &str = "https://github.com/iyazerski";
+const AUTHOR_URL: &str = "https://buymeacoffee.com/iyazerski";
 const REPO_URL: &str = "https://github.com/iyazerski/fettle";
 const LICENSE_URL: &str = "https://github.com/iyazerski/fettle/blob/main/LICENSE";
 const NOTICES_URL: &str = "https://github.com/iyazerski/fettle/blob/main/THIRD_PARTY_LICENSES.md";
@@ -126,7 +126,7 @@ fn credits(k: &Kit) -> El {
         .center_y()
         .gap(5.0)
         .child(faint("Made by"))
-        .child(link(AUTHOR, AUTHOR_URL))
+        .child(link(AUTHOR, AUTHOR_URL).help("Buy me a coffee"))
         .child(faint("·"))
         .child(link("MIT License", LICENSE_URL))
         .child(faint("·"))

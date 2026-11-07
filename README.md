@@ -128,6 +128,10 @@ make test
 
 Pre-commit hooks run with [prek](https://github.com/j178/prek): `prek install`.
 
+## Support
+
+If Fettle saves you time, you can [buy me a coffee](https://buymeacoffee.com/iyazerski).
+
 ## License
 
 [MIT](LICENSE) © Ihar Yazerski. Fettle includes open-source software under its own licenses: see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
