@@ -24,7 +24,7 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
 ## Why Quill
 
 - **Works in every app.** Mail, Slack, Notes, your browser, your code editor. If you can select the text, Quill can fix it.
-- **See every change.** Fixes show up word by word, like track changes. Removed words are struck through in red, new words are green.
+- **See every change.** Fixes show up word by word, like track changes.
 - **Translate into 33 languages.** Star the ones you use most to keep them at the top.
 - **Paste it back in one keystroke.** <kbd>⌘</kbd><kbd>↩</kbd> replaces your selection with the result. Your clipboard stays as it was.
 - **Use your ChatGPT plan or your own API.** Sign in with ChatGPT, or point Quill at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
@@ -43,7 +43,7 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
 
 Pick a language from the list next to **Translate**. Quill asks the model to keep the tone, formatting, names, links and code, and to leave text alone if it's already in that language.
 
-Languages: Amharic, Arabic, Belarusian, Bengali, Chinese (Simplified), English, French, German, Gujarati, Hausa, Hindi, Indonesian, Italian, Japanese, Javanese, Kannada, Korean, Marathi, Persian, Polish, Portuguese, Punjabi, Russian, Spanish, Swahili, Tagalog, Tamil, Telugu, Thai, Turkish, Ukrainian, Urdu, Vietnamese.
+> Languages: Amharic, Arabic, Belarusian, Bengali, Chinese (Simplified), English, French, German, Gujarati, Hausa, Hindi, Indonesian, Italian, Japanese, Javanese, Kannada, Korean, Marathi, Persian, Polish, Portuguese, Punjabi, Russian, Spanish, Swahili, Tagalog, Tamil, Telugu, Thai, Turkish, Ukrainian, Urdu, Vietnamese.
 
 ## How it works
 
@@ -58,9 +58,8 @@ You can also type or paste text straight into the window.
 
 For macOS 13 or later on Apple silicon (M1 and newer). Pick one:
 
-- **Download:** get [**Quill.dmg**](https://github.com/iyazerski/quill/releases/latest/download/Quill.dmg), open it, and drag Quill into Applications.
+- [**Download**](https://github.com/iyazerski/quill/releases/latest/download/Quill.dmg) and install the latest release.
 - **Homebrew:** `brew install --cask iyazerski/tap/quill`
-- **Terminal:** `curl -fsSL https://raw.githubusercontent.com/iyazerski/quill/main/install.sh | sh`. This installs Quill into `/Applications` and starts it, and skips the step below. To pin a release, set `QUILL_VERSION=v0.1.N`.
 
 ### First launch
 
@@ -70,17 +69,13 @@ Quill isn't notarized by Apple yet, so macOS blocks it the first time you open i
 2. Open **System Settings > Privacy & Security** and scroll down to **Security**.
 3. Click **Open Anyway** next to the message about Quill, and confirm.
 
-You only do this once. Quill is open source, so you can [read the code](src) or [build it yourself](#build-from-source).
-
-**Updates:** click **Check for updates** in Settings. Quill downloads the new version, checks it, and restarts. Every release is signed with the same certificate, so macOS keeps the Accessibility permission after an update.
-
 ## Set up
 
 Quill opens its settings on the first start:
 
 1. **Model.** Choose one:
-   - **ChatGPT plan:** sign in with your ChatGPT account, the same way Codex does.
-   - **OpenAI-compatible API:** enter the base URL (up to `/v1`) and a key.
+   - **ChatGPT plan:** sign in with your ChatGPT account.
+   - **OpenAI-compatible API:** enter the base URL and a key.
 
    Then pick a model from the list and how much it should reason. Reasoning off is the fastest.
 2. **Accessibility.** Click **Allow…** and turn Quill on. Quill presses <kbd>⌘</kbd><kbd>C</kbd> and <kbd>⌘</kbd><kbd>V</kbd> for you to read the selection and paste the result, and macOS asks for this permission first.
@@ -88,27 +83,11 @@ Quill opens its settings on the first start:
 4. **Shortcut.** Click the field and press a new key combination to change it.
 5. **Start at login.** Keeps Quill ready in the background.
 
-## Keyboard shortcuts
-
-| Key | Action |
-| --- | --- |
-| <kbd>⌃</kbd><kbd>⌥</kbd><kbd>E</kbd> | Open Quill with the selected text (configurable) |
-| <kbd>⌘</kbd><kbd>1</kbd> | Fix |
-| <kbd>⌘</kbd><kbd>2</kbd> | Translate |
-| <kbd>⌘</kbd><kbd>↩</kbd> | Replace the selection with the result |
-| <kbd>⇧</kbd><kbd>⌘</kbd><kbd>C</kbd> | Copy the result |
-| <kbd>⌘</kbd><kbd>,</kbd> | Settings |
-| <kbd>Esc</kbd> | Hide |
-
-Drag the window by its title row to move it.
-
 ## Privacy
 
 - Quill has no account and no analytics, and it has no server of its own.
 - The text you fix or translate goes only to the model provider you chose: OpenAI when you sign in with ChatGPT, or the API URL you entered.
-- Quill also talks to GitHub, but only when you click **Check for updates**.
 - Quill restores your clipboard after it copies and pastes.
-- Settings, including your sign-in token or API key, are saved in `~/Library/Application Support/Quill/settings.json`. Only your user account can read the file.
 
 ## FAQ
 
