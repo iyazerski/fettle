@@ -69,14 +69,6 @@ Fettle isn't notarized by Apple yet, so macOS blocks it the first time you open 
 2. Open **System Settings > Privacy & Security** and scroll down to **Security**.
 3. Click **Open Anyway** next to the message about Fettle, and confirm.
 
-### Coming from Quill
-
-Fettle used to be called Quill, and Quill can't update itself to Fettle. In Quill's settings, turn off **Start at login** and click **Quit Quill**. Then delete Quill from Applications, or run `brew uninstall --zap --cask quill` if you installed it with Homebrew, and install Fettle as above. Sign in again in Fettle's settings, since they start fresh. To remove Quill's old settings and log, run:
-
-```sh
-rm -rf ~/Library/Application\ Support/Quill ~/Library/Logs/quill.log
-```
-
 ## Set up
 
 Fettle opens its settings on the first start:
