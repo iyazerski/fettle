@@ -19,6 +19,8 @@ use objc2_foundation::{
     MainThreadMarker, NSArray, NSData, NSDictionary, NSNumber, NSString, NSURL,
 };
 
+use crate::settings::Appearance;
+
 /// The virtual key codes of C and V on an ANSI keyboard; other layouts keep
 /// them where ⌘C and ⌘V work.
 const KEY_C: u16 = 8;
@@ -36,9 +38,18 @@ unsafe extern "C" {
     fn AXIsProcessTrustedWithOptions(options: *const NSDictionary<NSString, NSNumber>) -> bool;
 }
 
-/// Whether Quill may send keys to other apps. With `prompt`, macOS asks the
-/// user to allow it (once per launch) and lists Quill in the settings.
-pub fn accessibility_trusted(prompt: bool) -> bool {
+/// Whether Quill may send keys to other apps.
+pub fn accessibility_trusted() -> bool {
+    check_accessibility(false)
+}
+
+/// Whether Quill may send keys to other apps; if not, macOS asks the user to
+/// allow it (once per launch) and lists Quill in the settings.
+pub fn request_accessibility() -> bool {
+    check_accessibility(true)
+}
+
+fn check_accessibility(prompt: bool) -> bool {
     let key = NSString::from_str("AXTrustedCheckOptionPrompt");
     let value = NSNumber::new_bool(prompt);
     let options = NSDictionary::from_slices(&[&*key], &[&*value]);
@@ -47,24 +58,22 @@ pub fn accessibility_trusted(prompt: bool) -> bool {
     unsafe { AXIsProcessTrustedWithOptions(&*options) }
 }
 
-/// Draw the app light or dark (`None` follows macOS): the window's blur and
-/// the theme Rune reports follow it. Does nothing off the main thread.
-pub fn set_dark(dark: Option<bool>) {
+/// Draw the app in `appearance`: the window's blur and the theme Rune reports
+/// follow it. Does nothing off the main thread.
+pub fn set_appearance(appearance: Appearance) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
-    let appearance = dark.and_then(|dark| {
-        // SAFETY: both names are immutable constants AppKit sets up before any
-        // code runs.
-        let name = unsafe {
-            if dark {
-                NSAppearanceNameDarkAqua
-            } else {
-                NSAppearanceNameAqua
-            }
-        };
-        NSAppearance::appearanceNamed(name)
-    });
+    // SAFETY: both names are immutable constants AppKit sets up before any
+    // code runs.
+    let name = unsafe {
+        match appearance {
+            Appearance::System => None,
+            Appearance::Light => Some(NSAppearanceNameAqua),
+            Appearance::Dark => Some(NSAppearanceNameDarkAqua),
+        }
+    };
+    let appearance = name.and_then(NSAppearance::appearanceNamed);
     NSApplication::sharedApplication(mtm).setAppearance(appearance.as_deref());
 }
 

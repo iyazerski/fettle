@@ -29,7 +29,7 @@ const LANGUAGES_MAX: f32 = 250.0;
 const MENU_ROOM: f32 = LANGUAGES_MAX + 16.0;
 
 pub fn view(s: &State, cx: &mut Cx<State>) -> El {
-    let dark = s.dark(cx.system_dark());
+    let dark = s.settings.appearance.dark(cx.system_dark());
     let k = rune_theme_opencode::kit(dark);
     let mut layer = Vec::new();
     let page = match s.page {
@@ -89,7 +89,7 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
                 .build(k),
         );
     if let Some(notice) = &s.notice {
-        page = page.child(note(k, notice, false));
+        page = page.child(note(k, notice, NoteKind::Info));
     }
     page = page.child(actions(s, k, running, layer));
     if let Some(answer) = &s.answer {
@@ -324,13 +324,13 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         )
     };
     let body = match &answer.status {
-        Status::Failed(e) => note(k, e, true),
+        Status::Failed(e) => note(k, e, NoteKind::Failure),
         Status::Running { text: partial, .. } if partial.is_empty() => {
             text("Thinking…").font(k.ty.body).color(k.c.text_faint)
         }
         Status::Running { text: partial, .. } => plain(partial),
         Status::Done { .. } if answer.action == Action::Fix && !changed => {
-            note(k, "Looks good. Nothing to fix.", false)
+            note(k, "Looks good. Nothing to fix.", NoteKind::Info)
         }
         Status::Done { changes, .. } if changed && s.show_changes => {
             scroll_box(k, diff_text(changes, k))
@@ -424,16 +424,22 @@ fn scroll_box(k: &Kit, content: El) -> El {
         .child(content)
 }
 
-pub fn note(k: &Kit, message: &str, failure: bool) -> El {
-    let color = if failure {
-        k.c.danger.fg
-    } else {
-        k.c.text_muted
-    };
+/// What a [`note`] says, which sets how it looks.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum NoteKind {
+    Info,
+    Failure,
+}
+
+pub fn note(k: &Kit, message: &str, kind: NoteKind) -> El {
     let mut line = row().w_full().gap(6.0);
-    if failure {
-        line = line.child(icon(&icons::ALERT, 14.0).color(k.c.danger.icon));
-    }
+    let color = match kind {
+        NoteKind::Info => k.c.text_muted,
+        NoteKind::Failure => {
+            line = line.child(icon(&icons::ALERT, 14.0).color(k.c.danger.icon));
+            k.c.danger.fg
+        }
+    };
     line.child(
         text(message.to_owned())
             .font(k.ty.text_small)

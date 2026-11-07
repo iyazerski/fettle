@@ -116,6 +116,15 @@ pub enum Appearance {
 impl Appearance {
     pub const ALL: [Appearance; 3] = [Appearance::System, Appearance::Light, Appearance::Dark];
 
+    /// Whether this draws dark when macOS draws dark as `system_dark` says.
+    pub fn dark(self, system_dark: bool) -> bool {
+        match self {
+            Appearance::System => system_dark,
+            Appearance::Light => false,
+            Appearance::Dark => true,
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Appearance::System => "System",

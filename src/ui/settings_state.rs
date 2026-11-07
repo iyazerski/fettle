@@ -1,16 +1,90 @@
-//! What the settings page changes: where the model runs, which model, the
-//! look, the shortcut, the login item, the permission, and updates.
+//! The settings page's own state, and what the page changes: where the model
+//! runs, which model, the look, the shortcut, the login item, the permission,
+//! and updates.
 
-use rune::{Shortcut, ShortcutError, Tx};
+use std::fmt;
 
-use super::state::{FormError, Login, Menu, Models, Page, State, Update, fresh_backend};
+use rune::{Shortcut, ShortcutError, TextEdit, Tx};
+use rune_kit::ShortcutRecorderState;
+use tokio::task::JoinHandle;
+
+use super::state::{Menu, Page, State, fresh_backend};
 use crate::llm::{Backend, chatgpt};
-use crate::settings::{Appearance, ChatGptAuth, Provider, Reasoning};
+use crate::settings::{Appearance, ChatGptAuth, Provider, Reasoning, Settings};
 use crate::{login_item, mac, update};
+
+/// The settings page's own state.
+pub struct Form {
+    pub api_base: TextEdit,
+    pub api_key: TextEdit,
+    pub shortcut: ShortcutRecorderState,
+    pub models: Models,
+    pub login: Login,
+    pub at_login: bool,
+    /// A problem to show at the top of the page.
+    pub error: Option<FormError>,
+}
+
+/// A problem on the settings page, kept apart by what clears it.
+pub enum FormError {
+    /// Quill may not copy and paste: cleared once it may.
+    Accessibility,
+    /// The shortcut didn't register: cleared by one that does.
+    Shortcut(String),
+    Other(String),
+}
+
+impl fmt::Display for FormError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FormError::Accessibility => {
+                f.write_str("Allow Quill in Accessibility so it can copy the selected text.")
+            }
+            FormError::Shortcut(message) | FormError::Other(message) => f.write_str(message),
+        }
+    }
+}
+
+pub enum Models {
+    Idle,
+    Loading(JoinHandle<()>),
+    Ready(Vec<String>),
+    Failed(String),
+}
+
+pub enum Login {
+    Idle,
+    Waiting(JoinHandle<()>),
+    Failed(String),
+}
+
+/// Where checking for a new version stands.
+pub enum Update {
+    Idle,
+    Checking,
+    Latest,
+    Available(String),
+    Installing(String),
+    Failed(String),
+}
+
+impl Form {
+    pub(super) fn new(settings: &Settings) -> Self {
+        Self {
+            api_base: TextEdit::new(&settings.api_base),
+            api_key: TextEdit::new(&settings.api_key).secure(),
+            shortcut: ShortcutRecorderState::new(settings.shortcut.parse().ok()),
+            models: Models::Idle,
+            login: Login::Idle,
+            at_login: login_item::enabled(),
+            error: None,
+        }
+    }
+}
 
 impl State {
     pub fn open_settings(&mut self) {
-        self.trusted = mac::accessibility_trusted(false);
+        self.trusted = mac::accessibility_trusted();
         self.form.at_login = login_item::enabled();
         self.menu = None;
         self.page = Page::Settings;
@@ -173,14 +247,14 @@ impl State {
     }
 
     pub fn ask_accessibility(&mut self) {
-        self.trusted = mac::accessibility_trusted(true);
+        self.trusted = mac::request_accessibility();
         if !self.trusted {
             mac::open_accessibility_settings();
         }
     }
 
     pub fn recheck_accessibility(&mut self) {
-        self.trusted = mac::accessibility_trusted(false);
+        self.trusted = mac::accessibility_trusted();
         if self.trusted && matches!(self.form.error, Some(FormError::Accessibility)) {
             self.form.error = None;
         }

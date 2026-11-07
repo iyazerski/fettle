@@ -9,8 +9,9 @@ use rune_kit::{
 
 use super::buttons::{self, Tone};
 use super::icons;
-use super::state::{Login, Menu, Models, State, Update};
-use super::view::{WIDTH, divider, header, note};
+use super::settings_state::{Login, Models, Update};
+use super::state::{Menu, State};
+use super::view::{NoteKind, WIDTH, divider, header, note};
 use crate::mac;
 use crate::settings::{Appearance, Missing, Provider, Reasoning};
 
@@ -30,7 +31,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .gap(12.0)
         .child(header(k, "Settings", Some(State::back)));
     if let Some(error) = &s.form.error {
-        page = page.child(note(k, &error.to_string(), true));
+        page = page.child(note(k, &error.to_string(), NoteKind::Failure));
     }
     page.child(section(k, "Model"))
         .child(
@@ -174,7 +175,11 @@ fn footer(s: &State, k: &Kit) -> El {
             .build(k),
     );
     match &s.update {
-        Update::Failed(e) => col().w_full().gap(6.0).child(note(k, e, true)).child(bar),
+        Update::Failed(e) => col()
+            .w_full()
+            .gap(6.0)
+            .child(note(k, e, NoteKind::Failure))
+            .child(bar),
         _ => bar,
     }
 }
@@ -222,7 +227,7 @@ fn chatgpt(s: &State, k: &Kit) -> El {
                 |b| b.on_press(|s: &mut State| s.sign_in()),
             ));
             if let Login::Failed(e) = login {
-                block = block.child(note(k, e, true));
+                block = block.child(note(k, e, NoteKind::Failure));
             }
             block
         }
@@ -295,7 +300,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
                 .w_full()
                 .center_y()
                 .gap(8.0)
-                .child(note(k, e, true).grow(1.0))
+                .child(note(k, e, NoteKind::Failure).grow(1.0))
                 .child(
                     Button::new("Try again")
                         .variant(ButtonVariant::Ghost)

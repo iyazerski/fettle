@@ -2,21 +2,20 @@
 //! selection, running an action, and moving the window. The settings page's
 //! part is in [`settings_state`](super::settings_state).
 
-use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use rune::{AppHandle, Phase, ShortcutId, TextEdit, Tx};
-use rune_kit::ShortcutRecorderState;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
+use super::settings_state::{Form, FormError, Login, Update};
 use super::view::WIDTH;
 use crate::diff::{self, Piece};
 use crate::llm::{Ask, Backend, chatgpt};
+use crate::mac;
 use crate::prompts::{self, Action};
-use crate::settings::{Appearance, Settings};
-use crate::{login_item, mac};
+use crate::settings::Settings;
 
 /// How far below the top of the screen the window opens.
 const TOP_MARGIN: f32 = 120.0;
@@ -62,8 +61,24 @@ pub struct State {
     run: u64,
     /// The window's top-left in physical pixels, once Quill has placed it.
     position: Option<(i32, i32)>,
-    /// The pointer and the window's position when a drag of the window began.
-    drag: Option<((f64, f64), (i32, i32))>,
+    /// Where a drag of the window began.
+    drag: Option<Drag>,
+}
+
+/// The pointer and the window's top-left when a drag of the window began.
+#[derive(Clone, Copy)]
+struct Drag {
+    pointer: (f64, f64),
+    origin: (i32, i32),
+}
+
+/// How Quill starts.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Start {
+    /// Show the settings.
+    Shown,
+    /// Stay hidden until the shortcut (how it runs at login).
+    Hidden,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -99,61 +114,6 @@ pub enum Status {
     Failed(String),
 }
 
-/// The settings page's own state.
-pub struct Form {
-    pub api_base: TextEdit,
-    pub api_key: TextEdit,
-    pub shortcut: ShortcutRecorderState,
-    pub models: Models,
-    pub login: Login,
-    pub at_login: bool,
-    /// A problem to show at the top of the page.
-    pub error: Option<FormError>,
-}
-
-/// A problem on the settings page, kept apart by what clears it.
-pub enum FormError {
-    /// Quill may not copy and paste: cleared once it may.
-    Accessibility,
-    /// The shortcut didn't register: cleared by one that does.
-    Shortcut(String),
-    Other(String),
-}
-
-impl fmt::Display for FormError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            FormError::Accessibility => {
-                f.write_str("Allow Quill in Accessibility so it can copy the selected text.")
-            }
-            FormError::Shortcut(message) | FormError::Other(message) => f.write_str(message),
-        }
-    }
-}
-
-pub enum Models {
-    Idle,
-    Loading(JoinHandle<()>),
-    Ready(Vec<String>),
-    Failed(String),
-}
-
-pub enum Login {
-    Idle,
-    Waiting(JoinHandle<()>),
-    Failed(String),
-}
-
-/// Where checking for a new version stands.
-pub enum Update {
-    Idle,
-    Checking,
-    Latest,
-    Available(String),
-    Installing(String),
-    Failed(String),
-}
-
 impl State {
     pub fn new(
         app: AppHandle<State>,
@@ -162,15 +122,7 @@ impl State {
         settings: Settings,
         settings_path: PathBuf,
     ) -> Self {
-        let form = Form {
-            api_base: TextEdit::new(&settings.api_base),
-            api_key: TextEdit::new(&settings.api_key).secure(),
-            shortcut: ShortcutRecorderState::new(settings.shortcut.parse().ok()),
-            models: Models::Idle,
-            login: Login::Idle,
-            at_login: login_item::enabled(),
-            error: None,
-        };
+        let form = Form::new(&settings);
         Self {
             app,
             rt,
@@ -184,7 +136,7 @@ impl State {
             menu: None,
             menu_shown: false,
             notice: None,
-            trusted: mac::accessibility_trusted(false),
+            trusted: mac::accessibility_trusted(),
             form,
             update: Update::Idle,
             shortcut: None,
@@ -196,8 +148,8 @@ impl State {
         }
     }
 
-    /// Take the shortcut, and unless started in the background, show the settings.
-    pub fn started(&mut self, background: bool) {
+    /// Take the shortcut, and show the settings if `start` says so.
+    pub fn started(&mut self, start: Start) {
         self.apply_appearance();
         self.register_saved_shortcut();
         eprintln!(
@@ -205,26 +157,13 @@ impl State {
             crate::VERSION,
             self.settings.shortcut
         );
-        if !background {
+        if start == Start::Shown {
             self.open_settings();
         }
     }
 
-    /// Whether the window draws dark.
-    pub fn dark(&self, system_dark: bool) -> bool {
-        match self.settings.appearance {
-            Appearance::System => system_dark,
-            Appearance::Light => false,
-            Appearance::Dark => true,
-        }
-    }
-
     pub(super) fn apply_appearance(&self) {
-        mac::set_dark(match self.settings.appearance {
-            Appearance::System => None,
-            Appearance::Light => Some(false),
-            Appearance::Dark => Some(true),
-        });
+        mac::set_appearance(self.settings.appearance);
     }
 
     /// The shortcut: hide the window if it shows, else copy the selection
@@ -237,7 +176,7 @@ impl State {
             self.hide();
             return;
         }
-        self.trusted = mac::accessibility_trusted(false);
+        self.trusted = mac::accessibility_trusted();
         if !self.trusted {
             self.open_settings();
             self.form.error = Some(FormError::Accessibility);
@@ -295,14 +234,19 @@ impl State {
     /// `.window_drag()` can't move it.
     pub fn drag(&mut self, phase: Phase) {
         match phase {
-            Phase::Down => self.drag = mac::pointer().zip(self.position),
+            Phase::Down => {
+                self.drag = mac::pointer()
+                    .zip(self.position)
+                    .map(|(pointer, origin)| Drag { pointer, origin });
+            }
             Phase::Move => {
-                let (Some((start, origin)), Some(now)) = (self.drag, mac::pointer()) else {
+                let (Some(Drag { pointer, origin }), Some(now)) = (self.drag, mac::pointer())
+                else {
                     return;
                 };
                 let at = (
-                    origin.0 + (now.0 - start.0).round() as i32,
-                    origin.1 + (now.1 - start.1).round() as i32,
+                    origin.0 + (now.0 - pointer.0).round() as i32,
+                    origin.1 + (now.1 - pointer.1).round() as i32,
                 );
                 self.position = Some(at);
                 self.app.set_position(at);

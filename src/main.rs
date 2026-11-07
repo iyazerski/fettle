@@ -35,7 +35,9 @@ struct Cli {
 fn main() -> Result<()> {
     rune::prewarm_gpu();
     let cli = Cli::parse();
-    ui::run(ui::Opts {
-        background: cli.background,
+    ui::run(if cli.background {
+        ui::Start::Hidden
+    } else {
+        ui::Start::Shown
     })
 }

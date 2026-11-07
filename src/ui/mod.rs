@@ -14,6 +14,7 @@ use rune::{App, AppSpec, MacWindowOptions, RunOptions, WindowOptions, WindowSpec
 
 use crate::settings::Settings;
 
+pub use self::state::Start;
 use self::state::State;
 use self::view::{CORNER, WIDTH, on_key, view};
 
@@ -23,13 +24,8 @@ const FULL_SCREEN_AUXILIARY: usize = 1 << 8;
 /// NSFloatingWindowLevel: above normal windows, under menus.
 const FLOATING: isize = 3;
 
-pub struct Opts {
-    /// Start hidden, waiting for the shortcut.
-    pub background: bool,
-}
-
 /// Run the app until it quits. The window owns the main thread, as macOS needs.
-pub fn run(opts: Opts) -> Result<()> {
+pub fn run(start: Start) -> Result<()> {
     let _only = single_instance()?;
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
@@ -57,10 +53,7 @@ pub fn run(opts: Opts) -> Result<()> {
         .fit_content_height();
     let me = app.handle();
     let handle = rt.handle().clone();
-    {
-        let background = opts.background;
-        me.update(move |s, _| s.started(background));
-    }
+    me.update(move |s, _| s.started(start));
     let app = app
         .init(move || State::new(me, handle, http, settings, settings_path))
         .on_focus(|s, focused, _| {

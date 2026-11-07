@@ -23,7 +23,7 @@ pub fn load<T: DeserializeOwned>(path: &Path) -> Result<Option<T>> {
 /// Write `value` to `path` atomically, readable only by the user (some of
 /// these files hold secrets).
 pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    // Per process, so two runs (say, `--install` and the agent) can't share it.
+    // Per process, so two copies of Quill never write the same temporary file.
     let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
     // A fresh file, so the mode applies: a leftover one keeps its own.
     match std::fs::remove_file(&tmp) {
