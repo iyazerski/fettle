@@ -2,14 +2,15 @@
 //! answer at the bottom; or the settings ([`settings_view`](super::settings_view)).
 
 use rune::{
-    Color, Cursor, Cx, El, Key, KeyEvent, ScrollSpec, Span, SystemMaterial, Tx, col, el, icon,
-    rich, row, spacer, text,
+    Color, Cx, El, Key, KeyEvent, ScrollSpec, Span, SystemMaterial, Tx, col, el, icon, rich, row,
+    spacer, text,
 };
 use rune_kit::{
     Button, ButtonVariant, IconButton, IconButtonVariant, Kit, Placement, Popover, Spinner, Switch,
     TextArea,
 };
 
+use super::glass::{self, Tone};
 use super::icons;
 use super::settings_view;
 use super::state::{Answer, Menu, Page, State, Status};
@@ -40,6 +41,12 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     } else {
         Color::WHITE.alpha(0.8)
     };
+    // macOS draws dark windows' rims itself; a light line on top reads as a seam.
+    let edge = if dark {
+        Color::TRANSPARENT
+    } else {
+        k.c.border_base.alpha(0.6)
+    };
     let card = col()
         .key("card")
         .w_full()
@@ -50,7 +57,7 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
                 .w_full()
                 .radius(CORNER)
                 .fill(tint)
-                .border(1.0, k.c.border_base.alpha(0.6))
+                .border(1.0, edge)
                 .padding(14.0)
                 .gap(12.0)
                 .child(page),
@@ -99,7 +106,6 @@ pub fn header(k: &Kit, title: &str, back: Option<fn(&mut State)>) -> El {
         .w_full()
         .center_y()
         .gap(6.0)
-        .cursor(Cursor::Grab)
         .on_drag(|s: &mut State, drag, _| s.drag(drag.phase));
     if let Some(back) = back {
         bar = bar.child(
@@ -140,14 +146,16 @@ fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
         .w_full()
         .center_y()
         .gap(8.0)
-        .child(
-            Button::new("Improve")
-                .icon(&icons::SPARKLE)
-                .variant(ButtonVariant::Contrast)
-                .shortcut("⌘1")
-                .on_press(|s: &mut State| s.start(Action::Improve))
-                .build(k),
-        )
+        .child(glass::button(
+            k,
+            Tone::Tinted,
+            "Improve",
+            Some(&icons::SPARKLE),
+            |b| {
+                b.shortcut("⌘1")
+                    .on_press(|s: &mut State| s.start(Action::Improve))
+            },
+        ))
         .child(translate(s, k, layer))
         .child(spacer());
     if running {
@@ -171,7 +179,8 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
                 .variant(ButtonVariant::Ghost)
                 .help("Translation language")
                 .on_press(|s: &mut State| s.toggle_menu(Menu::Language))
-                .build(k),
+                .build(k)
+                .radius(14.0),
         )
         .open(s.menu_open(Menu::Language))
         .placement(Placement::BottomStart)
@@ -180,21 +189,22 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .on_close(|s: &mut State| s.menu = None)
         .child(languages(s, k))
         .build(k, layer);
-    row()
+    let group = row()
+        .h(28.0)
+        .px(2.0)
         .center_y()
-        .radius(k.radius.md)
-        .fill(k.c.bg_button_neutral)
-        .border(1.0, k.c.border_muted)
         .child(
             Button::new("Translate")
                 .icon(&icons::GLOBE)
                 .variant(ButtonVariant::Ghost)
                 .shortcut("⌘2")
                 .on_press(|s: &mut State| s.start(Action::Translate))
-                .build(k),
+                .build(k)
+                .radius(14.0),
         )
-        .child(el().w(1.0).h(18.0).fill(k.c.border_muted))
-        .child(picker)
+        .child(el().w(1.0).h(16.0).fill(k.c.border_muted))
+        .child(picker);
+    glass::surface(k, Tone::Clear, group)
 }
 
 /// The languages, favourites first; a star marks or unmarks one.
@@ -318,27 +328,28 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
                 .w_full()
                 .gap(8.0)
                 .child(spacer())
-                .child(
-                    Button::new(if answer.copied { "Copied" } else { "Copy" })
-                        .icon(if answer.copied {
-                            &icons::CHECK
-                        } else {
-                            &icons::COPY
-                        })
-                        .variant(ButtonVariant::Neutral)
-                        .shortcut("⇧⌘C")
-                        .on_press(|s: &mut State| s.copy())
-                        .build(k),
-                )
-                .child(
-                    Button::new("Replace")
-                        .icon(&icons::REPLACE)
-                        .variant(ButtonVariant::Submit)
-                        .shortcut("⌘↩")
-                        .help("Paste over the selected text")
-                        .on_press(|s: &mut State| s.replace())
-                        .build(k),
-                ),
+                .child(glass::button(
+                    k,
+                    Tone::Clear,
+                    if answer.copied { "Copied" } else { "Copy" },
+                    Some(if answer.copied {
+                        &icons::CHECK
+                    } else {
+                        &icons::COPY
+                    }),
+                    |b| b.shortcut("⇧⌘C").on_press(|s: &mut State| s.copy()),
+                ))
+                .child(glass::button(
+                    k,
+                    Tone::Tinted,
+                    "Replace",
+                    Some(&icons::REPLACE),
+                    |b| {
+                        b.shortcut("⌘↩")
+                            .help("Paste over the selected text")
+                            .on_press(|s: &mut State| s.replace())
+                    },
+                )),
         );
     }
     section
@@ -348,6 +359,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
 fn diff_text(answer: &Answer, k: &Kit) -> El {
     let mut content = String::new();
     let mut spans = Vec::new();
+    let mut strikes = Vec::new();
     let mut previous = Kind::Same;
     for piece in &answer.changes {
         // A thin space keeps a word from running into the one that replaces it.
@@ -360,13 +372,15 @@ fn diff_text(answer: &Answer, k: &Kit) -> El {
         let span = Span::new(start, content.len());
         match piece.kind {
             Kind::Same => {}
-            Kind::Removed => spans.push(Span {
-                color: Some(k.c.danger.fg),
-                bg: Some(k.c.danger.bg),
-                bg_pad: 1.5,
-                underline: Some(k.c.danger.icon),
-                ..span
-            }),
+            Kind::Removed => {
+                strikes.push((start, content.len(), Some(k.c.danger.icon)));
+                spans.push(Span {
+                    color: Some(k.c.danger.fg),
+                    bg: Some(k.c.danger.bg),
+                    bg_pad: 1.5,
+                    ..span
+                });
+            }
             Kind::Added => spans.push(Span {
                 color: Some(k.c.success.fg),
                 bg: Some(k.c.success.bg),
@@ -377,6 +391,7 @@ fn diff_text(answer: &Answer, k: &Kit) -> El {
         }
     }
     rich(content, spans)
+        .strikes(strikes)
         .font(k.ty.body)
         .color(k.c.text_base)
         .selectable(true)

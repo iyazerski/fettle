@@ -7,6 +7,7 @@ use rune_kit::{
     ShortcutRecorder, Spinner, Switch, TextInput, shortcut_error_message,
 };
 
+use super::glass::{self, Tone};
 use super::icons;
 use super::state::{Login, Menu, Models, State, Update};
 use super::view::{WIDTH, divider, header, note};
@@ -122,14 +123,16 @@ fn footer(s: &State, k: &Kit) -> El {
         Update::Latest => bar
             .child(icon(&icons::CHECK, 14.0).color(k.c.success.icon))
             .child(status("Up to date".into())),
-        Update::Available(version) => bar.child(
-            Button::new(format!("Update to {version}"))
-                .icon(&icons::DOWNLOAD)
-                .variant(ButtonVariant::Contrast)
-                .help("Download it, then restart Quill")
-                .on_press(|s: &mut State| s.install_update())
-                .build(k),
-        ),
+        Update::Available(version) => bar.child(glass::button(
+            k,
+            Tone::Tinted,
+            &format!("Update to {version}"),
+            Some(&icons::DOWNLOAD),
+            |b| {
+                b.help("Download it, then restart Quill")
+                    .on_press(|s: &mut State| s.install_update())
+            },
+        )),
         Update::Installing(version) => bar
             .child(Spinner::new().size(12.0).build(k))
             .child(status(format!("Updating to {version}…"))),
@@ -182,12 +185,13 @@ fn chatgpt(s: &State, k: &Kit) -> El {
                     .build(k),
             ),
         (None, login) => {
-            let mut block = col().w_full().gap(6.0).child(
-                Button::new("Sign in with ChatGPT")
-                    .variant(ButtonVariant::Contrast)
-                    .on_press(|s: &mut State| s.sign_in())
-                    .build(k),
-            );
+            let mut block = col().w_full().gap(6.0).child(glass::button(
+                k,
+                Tone::Tinted,
+                "Sign in with ChatGPT",
+                None,
+                |b| b.on_press(|s: &mut State| s.sign_in()),
+            ));
             if let Login::Failed(e) = login {
                 block = block.child(note(k, e, true));
             }
@@ -270,6 +274,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
     }
     Some(block)
 }
+
 fn accessibility(s: &State, k: &Kit) -> El {
     if s.trusted {
         return row()
@@ -281,13 +286,10 @@ fn accessibility(s: &State, k: &Kit) -> El {
     row()
         .gap(8.0)
         .center_y()
-        .child(
-            Button::new("Allow…")
-                .variant(ButtonVariant::Contrast)
-                .help("Quill copies the selection and pastes the result with ⌘C and ⌘V")
+        .child(glass::button(k, Tone::Tinted, "Allow…", None, |b| {
+            b.help("Quill copies the selection and pastes the result with ⌘C and ⌘V")
                 .on_press(|s: &mut State| s.ask_accessibility())
-                .build(k),
-        )
+        }))
         .child(
             Button::new("Check again")
                 .variant(ButtonVariant::Ghost)
