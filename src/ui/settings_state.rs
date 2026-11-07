@@ -27,7 +27,7 @@ pub struct Form {
 
 /// A problem on the settings page, kept apart by what clears it.
 pub enum FormError {
-    /// Quill may not copy and paste: cleared once it may.
+    /// Fettle may not copy and paste: cleared once it may.
     Accessibility,
     /// The shortcut didn't register: cleared by one that does.
     Shortcut(String),
@@ -38,7 +38,7 @@ impl fmt::Display for FormError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             FormError::Accessibility => {
-                f.write_str("Allow Quill in Accessibility so it can copy the selected text.")
+                f.write_str("Allow Fettle in Accessibility so it can copy the selected text.")
             }
             FormError::Shortcut(message) | FormError::Other(message) => f.write_str(message),
         }
@@ -281,7 +281,7 @@ impl State {
     /// letting go of the old, so a refused chord keeps the old working.
     pub fn change_shortcut(&mut self, shortcut: Option<&Shortcut>) -> Result<(), ShortcutError> {
         let Some(shortcut) = shortcut else {
-            // Without a shortcut Quill can't be reached at all.
+            // Without a shortcut Fettle can't be reached at all.
             return Err(ShortcutError::InvalidAccelerator("empty".into()));
         };
         let old = self.shortcut.take();

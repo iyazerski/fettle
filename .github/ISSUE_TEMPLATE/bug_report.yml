@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in Quill doesn't work as expected.
+description: Something in Fettle doesn't work as expected.
 labels: [bug]
 body:
   - type: textarea
@@ -20,7 +20,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Quill version
+      label: Fettle version
       description: Shown at the bottom of Settings.
       placeholder: "0.1.8"
     validations:
@@ -48,5 +48,5 @@ body:
     id: log
     attributes:
       label: Log
-      description: The end of `~/Library/Logs/quill.log`. Remove anything private first.
+      description: The end of `~/Library/Logs/fettle.log`. Remove anything private first.
       render: text

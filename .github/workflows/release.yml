@@ -2,9 +2,9 @@ name: Release
 
 # Every push to main that changes the app publishes a release v0.1.<run>, so
 # these links always get the newest:
-#   https://github.com/<owner>/<repo>/releases/latest/download/Quill.dmg
-#   https://github.com/<owner>/<repo>/releases/latest/download/Quill.zip
-# Quill.zip feeds install.sh and the in-app updater; Quill.dmg is for people.
+#   https://github.com/<owner>/<repo>/releases/latest/download/Fettle.dmg
+#   https://github.com/<owner>/<repo>/releases/latest/download/Fettle.zip
+# Fettle.zip feeds install.sh and the in-app updater; Fettle.dmg is for people.
 # Each release also points the Homebrew cask in iyazerski/homebrew-tap at it.
 on:
   push:
@@ -42,7 +42,7 @@ jobs:
       contents: write
     env:
       TARGET: aarch64-apple-darwin
-      ASSET: Quill.zip
+      ASSET: Fettle.zip
     steps:
       - uses: actions/checkout@v7
         with:
@@ -54,12 +54,12 @@ jobs:
       - uses: astral-sh/setup-uv@v10.3.3
       - name: Build binary
         env:
-          QUILL_VERSION: ${{ env.VERSION }}
+          FETTLE_VERSION: ${{ env.VERSION }}
         run: cargo build --release --locked --target "$TARGET"
       - name: Test binary
-        run: target/$TARGET/release/quill --version
+        run: target/$TARGET/release/fettle --version
       # A self-signed certificate, the same for every release, so macOS keeps
-      # the Accessibility grant when Quill updates.
+      # the Accessibility grant when Fettle updates.
       - name: Import signing certificate
         env:
           CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
@@ -77,17 +77,17 @@ jobs:
           rm "$RUNNER_TEMP/cert.p12"
       - name: Package app
         env:
-          QUILL_SIGN_IDENTITY: Quill Code Signing
+          FETTLE_SIGN_IDENTITY: Fettle Code Signing
         run: |
           mkdir dist
-          scripts/bundle.sh "target/$TARGET/release/quill" "$VERSION" dist
-          ditto -c -k --keepParent dist/Quill.app "dist/$ASSET"
-          uvx dmgbuild -s scripts/dmg.py -D app=dist/Quill.app Quill dist/Quill.dmg
-          codesign -dr - dist/Quill.app
-          rm -rf dist/Quill.app
+          scripts/bundle.sh "target/$TARGET/release/fettle" "$VERSION" dist
+          ditto -c -k --keepParent dist/Fettle.app "dist/$ASSET"
+          uvx dmgbuild -s scripts/dmg.py -D app=dist/Fettle.app Fettle dist/Fettle.dmg
+          codesign -dr - dist/Fettle.app
+          rm -rf dist/Fettle.app
           cd dist
           shasum -a 256 "$ASSET" > "$ASSET.sha256"
-          shasum -a 256 Quill.dmg > Quill.dmg.sha256
+          shasum -a 256 Fettle.dmg > Fettle.dmg.sha256
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -97,7 +97,7 @@ jobs:
           changes=$(git log --no-merges --format='- %s' ${previous:+"$previous..HEAD"})
           gh release create "v$VERSION" dist/* \
             --target "$GITHUB_SHA" \
-            --title "Quill v$VERSION" \
+            --title "Fettle v$VERSION" \
             --notes-file - \
             --latest <<EOF
           ## What's new
@@ -106,10 +106,10 @@ jobs:
 
           ## Install
 
-          - **Download:** get \`Quill.dmg\` below, open it, and drag Quill into Applications. The first time you open Quill, macOS blocks it because it isn't notarized: go to System Settings > Privacy & Security and click **Open Anyway**.
-          - **Homebrew:** \`brew install --cask iyazerski/tap/quill\`
+          - **Download:** get \`Fettle.dmg\` below, open it, and drag Fettle into Applications. The first time you open Fettle, macOS blocks it because it isn't notarized: go to System Settings > Privacy & Security and click **Open Anyway**.
+          - **Homebrew:** \`brew install --cask iyazerski/tap/fettle\`
           - **Terminal:** \`curl -fsSL https://raw.githubusercontent.com/$GH_REPO/main/install.sh | sh\`
-          - **Update:** click **Check for updates** in Quill's settings.
+          - **Update:** click **Check for updates** in Fettle's settings.
           EOF
       - name: Update Homebrew cask
         env:
@@ -121,8 +121,8 @@ jobs:
           chmod 600 "$RUNNER_TEMP/tap_key"
           git clone --depth 1 git@github.com:iyazerski/homebrew-tap.git "$RUNNER_TEMP/tap"
           cd "$RUNNER_TEMP/tap"
-          sed -i '' -E "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/quill.rb
+          sed -i '' -E "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/fettle.rb
           git diff --stat
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-            commit -am "Update Quill to $VERSION"
+            commit -am "Update Fettle to $VERSION"
           git push

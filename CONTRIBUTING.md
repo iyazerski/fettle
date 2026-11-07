@@ -1,17 +1,17 @@
 # Contributing
 
-Thanks for helping with Quill. Bug reports, ideas and pull requests are all welcome.
+Thanks for helping with Fettle. Bug reports, ideas and pull requests are all welcome.
 
 ## Report a bug or ask for a feature
 
-[Open an issue](https://github.com/iyazerski/quill/issues/new/choose) and pick a template. For questions, use [Discussions](https://github.com/iyazerski/quill/discussions). For security problems, follow [SECURITY.md](SECURITY.md) instead.
+[Open an issue](https://github.com/iyazerski/fettle/issues/new/choose) and pick a template. For questions, use [Discussions](https://github.com/iyazerski/fettle/discussions). For security problems, follow [SECURITY.md](SECURITY.md) instead.
 
 ## Make a change
 
 You need macOS on Apple silicon and [Rust](https://rustup.rs).
 
 ```sh
-make install   # build Quill.app and put it in /Applications
+make install   # build Fettle.app and put it in /Applications
 make test
 ```
 

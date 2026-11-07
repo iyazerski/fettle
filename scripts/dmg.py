@@ -1,5 +1,5 @@
-# dmgbuild settings for Quill.dmg: the app beside a link to Applications, with an
-# arrow between them. Run: uvx dmgbuild -s scripts/dmg.py -D app=<Quill.app> Quill <out.dmg>
+# dmgbuild settings for Fettle.dmg: the app beside a link to Applications, with an
+# arrow between them. Run: uvx dmgbuild -s scripts/dmg.py -D app=<Fettle.app> Fettle <out.dmg>
 # ruff: noqa: F821 (dmgbuild runs this file with `defines` in scope)
 import os
 
@@ -10,7 +10,7 @@ filesystem = "APFS"
 files = [app]
 symlinks = {"Applications": "/Applications"}
 # The volume's icon in Finder; run from the repo root.
-icon = "assets/Quill.icns"
+icon = "assets/Fettle.icns"
 
 # Drawn from assets/dmg-background.svg at 1x and 2x, joined with `tiffutil -cathidpicheck`.
 background = "assets/dmg-background.tiff"

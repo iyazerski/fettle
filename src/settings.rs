@@ -1,4 +1,4 @@
-//! What Quill remembers between runs: where the model runs and its
+//! What Fettle remembers between runs: where the model runs and its
 //! credentials, the model and reasoning, the translation language and the
 //! shortcut. One private JSON file, since it holds tokens.
 
@@ -190,9 +190,9 @@ pub struct ChatGptAuth {
 }
 
 impl Settings {
-    /// The settings file: `~/Library/Application Support/Quill/settings.json`.
+    /// The settings file: `~/Library/Application Support/Fettle/settings.json`.
     pub fn path() -> PathBuf {
-        home().join("Library/Application Support/Quill/settings.json")
+        home().join("Library/Application Support/Fettle/settings.json")
     }
 
     /// Load the settings at `path`; a missing file gives the defaults, and a

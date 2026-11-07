@@ -2,11 +2,11 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Quill</string>
-  <key>CFBundleDisplayName</key><string>Quill</string>
-  <key>CFBundleIdentifier</key><string>dev.iyazerski.quill</string>
-  <key>CFBundleExecutable</key><string>quill</string>
-  <key>CFBundleIconFile</key><string>Quill</string>
+  <key>CFBundleName</key><string>Fettle</string>
+  <key>CFBundleDisplayName</key><string>Fettle</string>
+  <key>CFBundleIdentifier</key><string>dev.iyazerski.fettle</string>
+  <key>CFBundleExecutable</key><string>fettle</string>
+  <key>CFBundleIconFile</key><string>Fettle</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>@VERSION@</string>
   <key>CFBundleVersion</key><string>@VERSION@</string>

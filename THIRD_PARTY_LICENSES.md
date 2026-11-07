@@ -1,6 +1,6 @@
 # Third-party licenses
 
-Quill is built from the open-source software below. Each entry gives the
+Fettle is built from the open-source software below. Each entry gives the
 license and the packages that use it.
 
 ## BSD Zero Clause License
@@ -7190,7 +7190,7 @@ the following restrictions:
 
 ## Fonts
 
-Quill's interface embeds Inter and IBM Plex Mono, through Rune. Both are under the SIL Open Font License 1.1.
+Fettle's interface embeds Inter and IBM Plex Mono, through Rune. Both are under the SIL Open Font License 1.1.
 
 ### Inter
 

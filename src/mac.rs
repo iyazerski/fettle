@@ -38,13 +38,13 @@ unsafe extern "C" {
     fn AXIsProcessTrustedWithOptions(options: *const NSDictionary<NSString, NSNumber>) -> bool;
 }
 
-/// Whether Quill may send keys to other apps.
+/// Whether Fettle may send keys to other apps.
 pub fn accessibility_trusted() -> bool {
     check_accessibility(false)
 }
 
-/// Whether Quill may send keys to other apps; if not, macOS asks the user to
-/// allow it (once per launch) and lists Quill in the settings.
+/// Whether Fettle may send keys to other apps; if not, macOS asks the user to
+/// allow it (once per launch) and lists Fettle in the settings.
 pub fn request_accessibility() -> bool {
     check_accessibility(true)
 }
@@ -227,7 +227,7 @@ impl Saved {
     }
 
     /// Put the saved items back, unless someone wrote to the pasteboard after
-    /// Quill's own write, which left it at change count `written`.
+    /// Fettle's own write, which left it at change count `written`.
     fn restore(self, written: isize) {
         autoreleasepool(|_| {
             let pasteboard = NSPasteboard::generalPasteboard();

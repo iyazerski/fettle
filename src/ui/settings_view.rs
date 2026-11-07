@@ -17,9 +17,9 @@ use crate::settings::{Appearance, Missing, Provider, Reasoning};
 
 const AUTHOR: &str = "Ihar Yazerski";
 const AUTHOR_URL: &str = "https://github.com/iyazerski";
-const REPO_URL: &str = "https://github.com/iyazerski/quill";
-const LICENSE_URL: &str = "https://github.com/iyazerski/quill/blob/main/LICENSE";
-const NOTICES_URL: &str = "https://github.com/iyazerski/quill/blob/main/THIRD_PARTY_LICENSES.md";
+const REPO_URL: &str = "https://github.com/iyazerski/fettle";
+const LICENSE_URL: &str = "https://github.com/iyazerski/fettle/blob/main/LICENSE";
+const NOTICES_URL: &str = "https://github.com/iyazerski/fettle/blob/main/THIRD_PARTY_LICENSES.md";
 
 /// The label column's width.
 const LABEL: f32 = 110.0;
@@ -89,7 +89,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             ShortcutRecorder::new("shortcut", &s.form.shortcut, |s: &mut State| {
                 &mut s.form.shortcut
             })
-            .label("Open Quill")
+            .label("Open Fettle")
             .on_change(|s: &mut State, shortcut, _| s.change_shortcut(shortcut))
             .error_message(shortcut_error_message)
             .width(200.0)
@@ -110,7 +110,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .child(credits(k))
 }
 
-/// Who made Quill, its license, the licenses of what it's built from, and its
+/// Who made Fettle, its license, the licenses of what it's built from, and its
 /// source, each a link.
 fn credits(k: &Kit) -> El {
     let faint = |label: &str| text(label).font(k.ty.text_small).color(k.c.text_faint);
@@ -138,7 +138,7 @@ fn credits(k: &Kit) -> El {
 /// The version, the update button, and Quit.
 fn footer(s: &State, k: &Kit) -> El {
     let mut bar = row().w_full().center_y().gap(8.0).child(
-        text(format!("Quill {}", crate::VERSION))
+        text(format!("Fettle {}", crate::VERSION))
             .font(k.ty.text_small)
             .color(k.c.text_faint),
     );
@@ -163,7 +163,7 @@ fn footer(s: &State, k: &Kit) -> El {
             &format!("Update to {version}"),
             Some(&icons::DOWNLOAD),
             |b| {
-                b.help("Download it, then restart Quill")
+                b.help("Download it, then restart Fettle")
                     .on_press(|s: &mut State| s.install_update())
             },
         )),
@@ -172,7 +172,7 @@ fn footer(s: &State, k: &Kit) -> El {
             .child(status(format!("Updating to {version}…"))),
     };
     bar = bar.child(spacer()).child(
-        Button::new("Quit Quill")
+        Button::new("Quit Fettle")
             .variant(ButtonVariant::GhostMuted)
             .shortcut("⌘Q")
             .on_press_tx(|s: &mut State, tx| s.quit(tx))
@@ -328,7 +328,7 @@ fn accessibility(s: &State, k: &Kit) -> El {
         .gap(8.0)
         .center_y()
         .child(buttons::button(k, Tone::Primary, "Allow…", None, |b| {
-            b.help("Quill copies the selection and pastes the result with ⌘C and ⌘V")
+            b.help("Fettle copies the selection and pastes the result with ⌘C and ⌘V")
                 .on_press(|s: &mut State| s.ask_accessibility())
         }))
         .child(

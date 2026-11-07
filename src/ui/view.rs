@@ -78,7 +78,7 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let mut page = col()
         .w_full()
         .gap(12.0)
-        .child(header(k, "Quill", None))
+        .child(header(k, "Fettle", None))
         .child(
             TextArea::new(&s.source)
                 .label("Text")

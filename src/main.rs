@@ -1,4 +1,4 @@
-//! Quill: select text in any Mac app, press a shortcut, and fix or
+//! Fettle: select text in any Mac app, press a shortcut, and fix or
 //! translate it in a small floating window.
 //!
 //! The window ([`ui`]) grabs the selection through the pasteboard ([`mac`]),
@@ -19,7 +19,7 @@ use anyhow::Result;
 use clap::Parser;
 
 /// The release (CI sets it), else the crate version.
-pub const VERSION: &str = match option_env!("QUILL_VERSION") {
+pub const VERSION: &str = match option_env!("FETTLE_VERSION") {
     Some(version) => version,
     None => env!("CARGO_PKG_VERSION"),
 };

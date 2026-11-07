@@ -47,7 +47,7 @@ pub struct State {
     pub menu_shown: bool,
     /// A one-line note under the text: nothing selected, copied, a save error.
     pub notice: Option<String>,
-    /// Whether Quill may copy and paste in other apps.
+    /// Whether Fettle may copy and paste in other apps.
     pub trusted: bool,
     pub form: Form,
     pub update: Update,
@@ -59,7 +59,7 @@ pub struct State {
     pending_save: Option<JoinHandle<()>>,
     /// Counts runs, so a late piece of an old answer is dropped.
     run: u64,
-    /// The window's top-left in physical pixels, once Quill has placed it.
+    /// The window's top-left in physical pixels, once Fettle has placed it.
     position: Option<(i32, i32)>,
     /// Where a drag of the window began.
     drag: Option<Drag>,
@@ -72,7 +72,7 @@ struct Drag {
     origin: (i32, i32),
 }
 
-/// How Quill starts.
+/// How Fettle starts.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Start {
     /// Show the settings.
@@ -153,7 +153,7 @@ impl State {
         self.apply_appearance();
         self.register_saved_shortcut();
         eprintln!(
-            "quill {} is running; {} opens it",
+            "fettle {} is running; {} opens it",
             crate::VERSION,
             self.settings.shortcut
         );

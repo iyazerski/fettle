@@ -1,10 +1,10 @@
 [package]
-name = "quill"
+name = "fettle"
 version = "0.1.8"
 edition = "2024"
 publish = false
 license = "MIT"
-repository = "https://github.com/iyazerski/quill"
+repository = "https://github.com/iyazerski/fettle"
 description = "Fix grammar and translate the text selected in any Mac app with one shortcut"
 
 [dependencies]

@@ -80,7 +80,7 @@ impl Backend {
 /// give up on connecting.
 pub fn http() -> Result<reqwest::Client> {
     reqwest::Client::builder()
-        .user_agent(format!("quill/{}", crate::VERSION))
+        .user_agent(format!("fettle/{}", crate::VERSION))
         .connect_timeout(Duration::from_secs(10))
         .read_timeout(Duration::from_secs(120))
         .build()

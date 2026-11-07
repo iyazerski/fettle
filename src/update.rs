@@ -1,5 +1,5 @@
 //! Self-update: find the latest GitHub release, and swap the running
-//! Quill.app for it.
+//! Fettle.app for it.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -7,12 +7,12 @@ use std::process::Command;
 use anyhow::{Context, Result, bail, ensure};
 use serde::Deserialize;
 
-const REPO: &str = "iyazerski/quill";
-const ASSET: &str = "Quill.zip";
-const BUNDLE_ID: &str = "dev.iyazerski.quill";
-/// The code requirement every release meets: Quill's bundle ID, signed with the
+const REPO: &str = "iyazerski/fettle";
+const ASSET: &str = "Fettle.zip";
+const BUNDLE_ID: &str = "dev.iyazerski.fettle";
+/// The code requirement every release meets: Fettle's bundle ID, signed with the
 /// release certificate (`MACOS_CERT_P12` in CI). A new certificate needs a new hash here.
-const SIGNER: &str = r#"=identifier "dev.iyazerski.quill" and certificate leaf = H"777f4422da3703fbf64916ee0909d0b3eaf0b37c""#;
+const SIGNER: &str = r#"=identifier "dev.iyazerski.fettle" and certificate leaf = H"d92f0c1f8b4c244056244514e6e27e95cc431234""#;
 
 /// The version of the latest release, like `0.1.7`.
 pub async fn latest(http: &reqwest::Client) -> Result<String> {
@@ -40,7 +40,7 @@ pub fn newer(candidate: &str, current: &str) -> bool {
     parts(candidate) > parts(current)
 }
 
-/// Download release `version` and put it in place of the running Quill.app.
+/// Download release `version` and put it in place of the running Fettle.app.
 /// Returns the app's path, to start it again.
 pub async fn install(http: &reqwest::Client, version: &str) -> Result<PathBuf> {
     let app = running_app()?;
@@ -83,15 +83,15 @@ pub fn relaunch(app: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The Quill.app this binary runs from.
+/// The Fettle.app this binary runs from.
 fn running_app() -> Result<PathBuf> {
     let exe = std::env::current_exe()?.canonicalize()?;
-    // Quill.app/Contents/MacOS/quill
+    // Fettle.app/Contents/MacOS/fettle
     exe.ancestors()
         .nth(3)
         .filter(|p| p.extension().is_some_and(|e| e == "app"))
         .map(Path::to_path_buf)
-        .context("Quill isn't running from Quill.app, so it can't update itself")
+        .context("Fettle isn't running from Fettle.app, so it can't update itself")
 }
 
 /// Unpack `zip` next to `app` and swap the two, keeping the old app if the
@@ -99,10 +99,10 @@ fn running_app() -> Result<PathBuf> {
 fn swap(app: &Path, zip: &[u8]) -> Result<()> {
     let parent = app.parent().context("the app has no folder")?;
     // Beside the app, so the swap is a rename on one volume.
-    let work = parent.join(format!(".quill-update-{}", std::process::id()));
+    let work = parent.join(format!(".fettle-update-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir(&work)
-        .with_context(|| format!("Quill can't write to {}", parent.display()))?;
+        .with_context(|| format!("Fettle can't write to {}", parent.display()))?;
     let result = (|| {
         let archive = work.join(ASSET);
         std::fs::write(&archive, zip)?;
@@ -111,14 +111,14 @@ fn swap(app: &Path, zip: &[u8]) -> Result<()> {
             .arg("-k")
             .arg(&archive)
             .arg(&work))?;
-        let new = work.join("Quill.app");
-        ensure!(new.is_dir(), "the download has no Quill.app");
+        let new = work.join("Fettle.app");
+        ensure!(new.is_dir(), "the download has no Fettle.app");
         // The checksum comes from the same release, so it only catches damage. The
-        // signature shows the app is Quill's own.
+        // signature shows the app is Fettle's own.
         run(Command::new("/usr/bin/codesign")
             .args(["--verify", "--strict", "-R", SIGNER])
             .arg(&new))
-        .context("the download isn't signed by Quill's release certificate")?;
+        .context("the download isn't signed by Fettle's release certificate")?;
         let adhoc = adhoc_signed(app);
         let old = work.join("old.app");
         std::fs::rename(app, &old).context("moving the old version away")?;

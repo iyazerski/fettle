@@ -6,7 +6,7 @@ use anyhow::{Context, Result};
 
 use crate::settings::home;
 
-const LABEL: &str = "dev.iyazerski.quill";
+const LABEL: &str = "dev.iyazerski.fettle";
 
 fn plist_path() -> PathBuf {
     home().join(format!("Library/LaunchAgents/{LABEL}.plist"))
@@ -19,8 +19,8 @@ pub fn enabled() -> bool {
 /// Start this executable, hidden, at every login. It takes effect from the
 /// next login: the running copy is already the one in the background.
 pub fn enable() -> Result<()> {
-    let exe = std::env::current_exe().context("finding Quill's executable")?;
-    // From a bundle, start through LaunchServices, so opening Quill.app later
+    let exe = std::env::current_exe().context("finding Fettle's executable")?;
+    // From a bundle, start through LaunchServices, so opening Fettle.app later
     // reaches this copy instead of starting another.
     let bundle = exe
         .ancestors()
@@ -41,7 +41,7 @@ pub fn enable() -> Result<()> {
         .iter()
         .map(|a| format!("\n    <string>{}</string>", xml_escape(a)))
         .collect();
-    let log = home().join("Library/Logs/quill.log");
+    let log = home().join("Library/Logs/fettle.log");
     let plist = format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">

@@ -16,5 +16,5 @@ accepted = [
 targets = ["aarch64-apple-darwin"]
 ignore-build-dependencies = true
 ignore-dev-dependencies = true
-# Quill itself (publish = false) is under LICENSE.
+# Fettle itself (publish = false) is under LICENSE.
 private = { ignore = true }

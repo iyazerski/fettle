@@ -41,7 +41,7 @@ pub fn run(start: Start) -> Result<()> {
         families: rune_theme_opencode::FAMILIES,
         on_key: Some(on_key),
         ..AppSpec::new(
-            "Quill",
+            "Fettle",
             (WIDTH, 240.0),
             || unreachable!("init() below builds the state"),
             view,
@@ -81,17 +81,17 @@ pub fn run(start: Start) -> Result<()> {
                 .collection_behavior(ALL_SPACES | FULL_SCREEN_AUXILIARY)
                 .corner_radius(CORNER),
         );
-        vec![WindowSpec::from_app("quill", app).configured_options(options)]
+        vec![WindowSpec::from_app("fettle", app).configured_options(options)]
     });
     drop(rt);
     Ok(())
 }
 
-/// Hold a lock for as long as Quill runs, so a second copy (the login item and
+/// Hold a lock for as long as Fettle runs, so a second copy (the login item and
 /// a manual start) quits instead of fighting over the shortcut.
 fn single_instance() -> Result<std::fs::File> {
     use std::os::fd::AsRawFd;
-    let path = Settings::path().with_file_name("quill.lock");
+    let path = Settings::path().with_file_name("fettle.lock");
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -99,7 +99,7 @@ fn single_instance() -> Result<std::fs::File> {
         std::fs::File::create(&path).with_context(|| format!("opening {}", path.display()))?;
     // SAFETY: flock on a descriptor this function owns.
     if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-        anyhow::bail!("Quill is already running");
+        anyhow::bail!("Fettle is already running");
     }
     Ok(file)
 }

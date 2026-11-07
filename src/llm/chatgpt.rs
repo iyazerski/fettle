@@ -51,7 +51,7 @@ pub async fn login(http: &reqwest::Client, open: impl FnOnce(&str)) -> Result<Ch
         .append_pair("state", &state)
         .append_pair("id_token_add_organizations", "true")
         .append_pair("codex_cli_simplified_flow", "true")
-        .append_pair("originator", "quill");
+        .append_pair("originator", "fettle");
     let listener = TcpListener::bind(("127.0.0.1", 1455)).await.context(
         "port 1455 is busy: close other apps that are signing in to OpenAI and try again",
     )?;
@@ -117,7 +117,7 @@ pub async fn stream(
         .post(format!("{CODEX_URL}/responses"))
         .bearer_auth(&auth.access)
         .header("chatgpt-account-id", &auth.account_id)
-        .header("originator", "quill")
+        .header("originator", "fettle")
         .header("OpenAI-Beta", "responses=experimental")
         .header("accept", "text/event-stream")
         .json(&body);
@@ -167,7 +167,7 @@ pub async fn models(http: &reqwest::Client, auth: &ChatGptAuth) -> Result<Vec<St
         .query(&[("client_version", "1.0.0")])
         .bearer_auth(&auth.access)
         .header("chatgpt-account-id", &auth.account_id)
-        .header("originator", "quill");
+        .header("originator", "fettle");
     let list: List = check(request.send().await?).await?.json().await?;
     Ok(list
         .models
@@ -297,11 +297,11 @@ async fn finish_sign_in(mut socket: TcpStream, url: &url::Url, state: &str) -> R
         )),
     };
     let page = match &result {
-        Ok(_) => "Signed in to Quill. You can close this tab.".to_owned(),
-        Err(e) => format!("Quill couldn't sign in: {e}"),
+        Ok(_) => "Signed in to Fettle. You can close this tab.".to_owned(),
+        Err(e) => format!("Fettle couldn't sign in: {e}"),
     };
     let html = format!(
-        "<!doctype html><meta charset=utf-8><title>Quill</title>\
+        "<!doctype html><meta charset=utf-8><title>Fettle</title>\
          <body style=\"font:16px -apple-system;padding:48px;text-align:center\">{page}</body>"
     );
     let reply = format!(

@@ -6,7 +6,7 @@
     </linearGradient>
   </defs>
   <rect width="540" height="360" fill="url(#bg)"/>
-  <text x="270" y="62" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#2b2b33">Drag Quill into Applications</text>
+  <text x="270" y="62" text-anchor="middle" font-family="-apple-system, Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" font-weight="600" fill="#2b2b33">Drag Fettle into Applications</text>
   <path d="M222 170 H312" stroke="#6b63f0" stroke-width="3" stroke-linecap="round" fill="none"/>
   <path d="M302 159 L316 170 L302 181" stroke="#6b63f0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 </svg>

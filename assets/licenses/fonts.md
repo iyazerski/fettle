@@ -1,6 +1,6 @@
 ## Fonts
 
-Quill's interface embeds Inter and IBM Plex Mono, through Rune. Both are under the SIL Open Font License 1.1.
+Fettle's interface embeds Inter and IBM Plex Mono, through Rune. Both are under the SIL Open Font License 1.1.
 
 ### Inter
 
