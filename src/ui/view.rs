@@ -86,7 +86,9 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
                 .width(None)
                 .auto_grow(2, 8)
                 .on_edit(|s: &mut State| &mut s.source)
-                .build(k),
+                .build(k)
+                // Kit tints fields under the pointer like buttons; a text box shouldn't.
+                .hover(Color::TRANSPARENT),
         );
     if let Some(notice) = &s.notice {
         page = page.child(note(k, notice, NoteKind::Info));

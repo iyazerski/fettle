@@ -27,6 +27,7 @@ const LABEL: f32 = 110.0;
 const CONTROL: f32 = WIDTH - 2.0 * 14.0 - LABEL - 12.0;
 
 pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
+    let sk = segmented_kit(k);
     let mut page = col()
         .w_full()
         .gap(12.0)
@@ -48,7 +49,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
                     Provider::Api
                 })
             })
-            .build(k),
+            .build(&sk),
         )
         .child(match s.settings.provider {
             Provider::ChatGpt => chatgpt(s, k),
@@ -66,7 +67,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             )
             .width(None)
             .on_pick(|s: &mut State, i, _| s.set_reasoning(Reasoning::ALL[i]))
-            .build(k),
+            .build(&sk),
         ))
         .child(divider(k))
         .child(section(k, "General"))
@@ -81,7 +82,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             )
             .width(None)
             .on_pick(|s: &mut State, i, _| s.set_appearance(Appearance::ALL[i]))
-            .build(k),
+            .build(&sk),
         ))
         .child(labeled(
             k,
@@ -112,6 +113,17 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
 
 /// Who made Fettle, its license, the licenses of what it's built from, and its
 /// source, each a link.
+/// Return the kit for segmented controls. In light mode, their track is grey so the
+/// white selected segment stands out from the rest.
+fn segmented_kit(k: &Kit) -> Kit {
+    let mut sk = k.clone();
+    if !k.dark {
+        // The default track is nearly as white as the selected segment on the light glass.
+        sk.c.layer_01 = k.dark_a(0.07);
+    }
+    sk
+}
+
 fn credits(k: &Kit) -> El {
     let faint = |label: &str| text(label).font(k.ty.text_small).color(k.c.text_faint);
     let link = |label: &str, url: &'static str| {
