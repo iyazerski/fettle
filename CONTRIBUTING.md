@@ -32,4 +32,4 @@ Before you open a pull request:
 
 Every merge to `main` that changes the app ships a release to all users, so `main` must always work.
 
-By contributing, you agree that your work is released under the [MIT License](LICENSE).
+By contributing, you agree that your work is released under the [MIT License](LICENSE). Please follow the [Code of Conduct](CODE_OF_CONDUCT.md).
