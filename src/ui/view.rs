@@ -149,11 +149,11 @@ fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
         .child(buttons::button(
             k,
             Tone::Primary,
-            "Proofread",
+            "Fix",
             Some(&icons::SPARKLE),
             |b| {
                 b.shortcut("⌘1")
-                    .on_press(|s: &mut State| s.start(Action::Proofread))
+                    .on_press(|s: &mut State| s.start(Action::Fix))
             },
         ))
         .child(translate(s, k, layer))
@@ -285,8 +285,8 @@ fn language(s: &State, k: &Kit, name: &'static str) -> El {
 fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     let running = answer.status == Status::Running;
     let title = match answer.action {
-        Action::Proofread if running => "Proofreading…".to_owned(),
-        Action::Proofread => "Proofread".to_owned(),
+        Action::Fix if running => "Fixing…".to_owned(),
+        Action::Fix => "Fixed".to_owned(),
         Action::Translate if running => format!("Translating to {}…", s.settings.language),
         Action::Translate => format!("{} translation", s.settings.language),
     };
@@ -300,7 +300,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         top = top.child(Spinner::new().size(12.0).build(k));
     }
     top = top.child(spacer());
-    if answer.status == Status::Done && answer.action == Action::Proofread && changed {
+    if answer.status == Status::Done && answer.action == Action::Fix && changed {
         top = top.child(
             Switch::new(s.show_changes)
                 .label("Show changes")
@@ -310,10 +310,10 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     }
     let body = match &answer.status {
         Status::Failed(e) => note(k, e, true),
-        Status::Done if answer.action == Action::Proofread && !changed => {
+        Status::Done if answer.action == Action::Fix && !changed => {
             note(k, "Looks good. Nothing to fix.", false)
         }
-        Status::Done if answer.action == Action::Proofread && s.show_changes => {
+        Status::Done if answer.action == Action::Fix && s.show_changes => {
             scroll_box(k, diff_text(answer, k))
         }
         _ if answer.text.is_empty() => text("Thinking…").font(k.ty.body).color(k.c.text_faint),
@@ -360,7 +360,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     section
 }
 
-/// The proofread text with removed words struck in red and added ones in green.
+/// The fixed text with removed words struck in red and added ones in green.
 fn diff_text(answer: &Answer, k: &Kit) -> El {
     let mut content = String::new();
     let mut spans = Vec::new();
@@ -378,19 +378,19 @@ fn diff_text(answer: &Answer, k: &Kit) -> El {
         match piece.kind {
             Kind::Same => {}
             Kind::Removed => {
-                strikes.push((start, content.len(), Some(k.c.danger.icon)));
+                strikes.push((start, content.len(), Some(k.c.danger.icon.alpha(0.6))));
                 spans.push(Span {
-                    color: Some(k.c.danger.fg),
-                    bg: Some(k.c.danger.bg),
+                    color: Some(k.c.danger.fg.mix(k.c.text_muted, 0.45)),
+                    bg: Some(k.c.danger.bg.alpha(0.45)),
                     bg_pad: 1.5,
                     ..span
                 });
             }
             Kind::Added => spans.push(Span {
-                color: Some(k.c.success.fg),
-                bg: Some(k.c.success.bg),
+                color: Some(k.c.success.fg.mix(k.c.text_base, 0.35)),
+                bg: Some(k.c.success.bg.alpha(0.55)),
                 bg_pad: 1.5,
-                weight: Some(560.0),
+                weight: Some(520.0),
                 ..span
             }),
         }
@@ -455,7 +455,7 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
         return true;
     }
     if key.is_command('1') {
-        s.start(Action::Proofread);
+        s.start(Action::Fix);
     } else if key.is_command('2') {
         s.start(Action::Translate);
     } else if key.is_command('c') && key.mods.shift {

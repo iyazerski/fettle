@@ -35,7 +35,7 @@ pub struct State {
     /// The text to work on: the selection, editable.
     pub source: TextEdit,
     pub answer: Option<Answer>,
-    /// Show the proofread text as a word diff rather than plain text.
+    /// Show the fixed text as a word diff rather than plain text.
     pub show_changes: bool,
     /// The dropdown that's open.
     pub menu: Option<Menu>,
@@ -77,7 +77,7 @@ pub struct Answer {
     pub original: String,
     pub text: String,
     pub status: Status,
-    /// For Proofread, once done: the word diff from `original` to `text`.
+    /// For Fix, once done: the word diff from `original` to `text`.
     pub changes: Vec<Piece>,
     pub copied: bool,
 }
@@ -371,7 +371,7 @@ impl State {
                 let kept = answer.original.len() - answer.original.trim_end().len();
                 let end = &answer.original[answer.original.len() - kept..];
                 answer.text = format!("{}{end}", answer.text.trim_end());
-                if answer.action == Action::Proofread {
+                if answer.action == Action::Fix {
                     answer.changes = diff::words(&answer.original, &answer.text);
                 }
                 answer.status = Status::Done;

@@ -1,7 +1,7 @@
 //! The settings page: where the model runs, which model, how hard it thinks,
-//! the look, the shortcut, login item and permission, and updates.
+//! the look, the shortcut, login item and permission, updates, and credits.
 
-use rune::{El, col, icon, row, spacer, text};
+use rune::{Cursor, El, col, icon, row, spacer, text};
 use rune_kit::{
     Button, ButtonVariant, Kit, Placement, SegmentedControl, Select, SelectAppearance,
     ShortcutRecorder, Spinner, Switch, TextInput, shortcut_error_message,
@@ -11,7 +11,13 @@ use super::buttons::{self, Tone};
 use super::icons;
 use super::state::{Login, Menu, Models, State, Update};
 use super::view::{WIDTH, divider, header, note};
+use crate::mac;
 use crate::settings::{Appearance, Provider, Reasoning};
+
+const AUTHOR: &str = "Ihar Yazerski";
+const AUTHOR_URL: &str = "https://github.com/iyazerski";
+const REPO_URL: &str = "https://github.com/iyazerski/quill";
+const LICENSE_URL: &str = "https://github.com/iyazerski/quill/blob/main/LICENSE";
 
 /// The label column's width.
 const LABEL: f32 = 110.0;
@@ -99,6 +105,29 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .child(labeled(k, "Accessibility", accessibility(s, k)))
         .child(divider(k))
         .child(footer(s, k))
+        .child(credits(k))
+}
+
+/// Who made Quill, its license, and its source, each a link.
+fn credits(k: &Kit) -> El {
+    let faint = |label: &str| text(label).font(k.ty.text_small).color(k.c.text_faint);
+    let link = |label: &str, url: &'static str| {
+        text(label)
+            .font(k.ty.text_small)
+            .color(k.c.text_muted)
+            .cursor(Cursor::Pointer)
+            .on_press(move |_: &mut State| mac::open_url(url))
+    };
+    row()
+        .w_full()
+        .center_y()
+        .gap(5.0)
+        .child(faint("Made by"))
+        .child(link(AUTHOR, AUTHOR_URL))
+        .child(faint("·"))
+        .child(link("MIT License", LICENSE_URL))
+        .child(faint("·"))
+        .child(link("Source on GitHub", REPO_URL))
 }
 
 /// The version, the update button, and Quit.

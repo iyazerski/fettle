@@ -1,7 +1,7 @@
 //! The system prompts for the two actions. The selected text goes in the user
 //! message, untouched.
 
-const PROOFREAD: &str = "\
+const FIX: &str = "\
 You are a proofreader. Fix grammar, spelling, punctuation, and word usage. Also make the text sound natural to a native English speaker.
 
 Rules:
@@ -27,14 +27,14 @@ Rules:
 /// What the window can do with the text.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Action {
-    Proofread,
+    Fix,
     Translate,
 }
 
 /// The system prompt for `action`; `language` is the translation's target.
 pub fn system(action: Action, language: &str) -> String {
     match action {
-        Action::Proofread => PROOFREAD.to_owned(),
+        Action::Fix => FIX.to_owned(),
         Action::Translate => TRANSLATE.replace("<language>", language),
     }
 }
