@@ -14,10 +14,7 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange?logo=rust)](https://www.rust-lang.org)
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/fix-dark.png">
-  <img src="docs/screenshots/fix-light.png" width="540" alt="Fettle fixing the grammar of an email, with removed words struck through in red and new words in green">
-</picture>
+<img src="docs/demo/fix.gif" width="600" alt="Selecting a Gmail draft, pressing the shortcut, and clicking Fix: Fettle shows each change, with removed words struck through in red and new words in green, then Replace puts the fixed text back into Gmail">
 
 </div>
 
@@ -35,10 +32,7 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
 ## Translate
 
 <div align="center">
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/translate-dark.png">
-  <img src="docs/screenshots/translate-light.png" width="540" alt="Fettle translating a short English message into Spanish">
-</picture>
+<img src="docs/demo/translate.gif" width="600" alt="Selecting a Gmail draft, pressing the shortcut, and clicking Translate: Fettle translates the English reply into Spanish, then Replace puts it back into Gmail">
 </div>
 
 Pick a language from the list next to **Translate**. Fettle asks the model to keep the tone, formatting, names, links and code, and to leave text alone if it's already in that language.
