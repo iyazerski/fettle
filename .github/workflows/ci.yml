@@ -5,6 +5,8 @@ on:
     branches:
       - main
   pull_request:
+  # The release runs these checks first.
+  workflow_call:
 
 jobs:
   rust:
@@ -22,3 +24,13 @@ jobs:
         run: cargo clippy --all-targets --locked -- -D warnings
       - name: Test
         run: cargo test --locked
+      - uses: taiki-e/install-action@v2.90.2
+        with:
+          tool: cargo-about
+      - name: Third-party licenses are current
+        run: |
+          make licenses
+          git diff --exit-code THIRD_PARTY_LICENSES.md || {
+            echo "::error::THIRD_PARTY_LICENSES.md is stale: run make licenses and commit it"
+            exit 1
+          }

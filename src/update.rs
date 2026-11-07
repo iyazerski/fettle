@@ -10,6 +10,9 @@ use serde::Deserialize;
 const REPO: &str = "iyazerski/quill";
 const ASSET: &str = "Quill.zip";
 const BUNDLE_ID: &str = "dev.iyazerski.quill";
+/// The code requirement every release meets: Quill's bundle ID, signed with the
+/// release certificate (`MACOS_CERT_P12` in CI). A new certificate needs a new hash here.
+const SIGNER: &str = r#"=identifier "dev.iyazerski.quill" and certificate leaf = H"777f4422da3703fbf64916ee0909d0b3eaf0b37c""#;
 
 /// The version of the latest release, like `0.1.7`.
 pub async fn latest(http: &reqwest::Client) -> Result<String> {
@@ -110,6 +113,12 @@ fn swap(app: &Path, zip: &[u8]) -> Result<()> {
             .arg(&work))?;
         let new = work.join("Quill.app");
         ensure!(new.is_dir(), "the download has no Quill.app");
+        // The checksum comes from the same release, so it only catches damage. The
+        // signature shows the app is Quill's own.
+        run(Command::new("/usr/bin/codesign")
+            .args(["--verify", "--strict", "-R", SIGNER])
+            .arg(&new))
+        .context("the download isn't signed by Quill's release certificate")?;
         let adhoc = adhoc_signed(app);
         let old = work.join("old.app");
         std::fs::rename(app, &old).context("moving the old version away")?;

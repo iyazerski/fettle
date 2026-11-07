@@ -1,0 +1,21 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      # Each update also needs `make licenses`, so batch them.
+      interval: monthly
+    # Rune is pinned to one tested revision on purpose.
+    ignore:
+      - dependency-name: "rune*"
+    groups:
+      cargo:
+        patterns: ["*"]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

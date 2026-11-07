@@ -109,6 +109,17 @@ Not yet. Quill is built for macOS on Apple silicon.
 **Is it safe to grant Accessibility?**
 Quill uses it only to press <kbd>⌘</kbd><kbd>C</kbd> and <kbd>⌘</kbd><kbd>V</kbd> when you call it. The code is open, so you can check.
 
+## Uninstall
+
+- **Homebrew:** `brew uninstall --zap --cask quill` removes the app, its settings and its login item.
+- **Otherwise:** turn off **Start at login** in Quill's settings, click **Quit Quill**, and drag Quill from Applications to the Trash. To remove its settings and log too, run:
+
+  ```sh
+  rm -rf ~/Library/Application\ Support/Quill ~/Library/Logs/quill.log
+  ```
+
+To drop Quill from the Accessibility list, select it in **System Settings > Privacy & Security > Accessibility** and click **−**.
+
 ## Build from source
 
 Quill is a native Rust app built on the [Rune](https://github.com/anomalyco/rune) UI framework.
@@ -122,4 +133,6 @@ Pre-commit hooks run with [prek](https://github.com/j178/prek): `prek install`.
 
 ## License
 
-[MIT](LICENSE) © Ihar Yazerski. Issues and pull requests are welcome.
+[MIT](LICENSE) © Ihar Yazerski. Quill includes open-source software under its own licenses: see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). Issues and pull requests are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Quill isn't affiliated with or endorsed by OpenAI or Grammarly. ChatGPT and Grammarly are trademarks of their owners. Signing in with ChatGPT uses the same sign-in as OpenAI's Codex, so it may stop working if OpenAI changes it. An API key works either way.

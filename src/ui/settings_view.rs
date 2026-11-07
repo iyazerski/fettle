@@ -19,6 +19,7 @@ const AUTHOR: &str = "Ihar Yazerski";
 const AUTHOR_URL: &str = "https://github.com/iyazerski";
 const REPO_URL: &str = "https://github.com/iyazerski/quill";
 const LICENSE_URL: &str = "https://github.com/iyazerski/quill/blob/main/LICENSE";
+const NOTICES_URL: &str = "https://github.com/iyazerski/quill/blob/main/THIRD_PARTY_LICENSES.md";
 
 /// The label column's width.
 const LABEL: f32 = 110.0;
@@ -109,7 +110,8 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .child(credits(k))
 }
 
-/// Who made Quill, its license, and its source, each a link.
+/// Who made Quill, its license, the licenses of what it's built from, and its
+/// source, each a link.
 fn credits(k: &Kit) -> El {
     let faint = |label: &str| text(label).font(k.ty.text_small).color(k.c.text_faint);
     let link = |label: &str, url: &'static str| {
@@ -128,7 +130,9 @@ fn credits(k: &Kit) -> El {
         .child(faint("·"))
         .child(link("MIT License", LICENSE_URL))
         .child(faint("·"))
-        .child(link("Source on GitHub", REPO_URL))
+        .child(link("Open-source licenses", NOTICES_URL))
+        .child(faint("·"))
+        .child(link("GitHub", REPO_URL))
 }
 
 /// The version, the update button, and Quit.

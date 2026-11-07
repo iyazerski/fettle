@@ -13,3 +13,7 @@ install:
 
 test:
 	cargo test --locked
+
+# Regenerate THIRD_PARTY_LICENSES.md after changing dependencies; CI checks it's current.
+licenses:
+	{ cargo about generate --fail about.hbs; cat assets/licenses/fonts.md; } > THIRD_PARTY_LICENSES.md

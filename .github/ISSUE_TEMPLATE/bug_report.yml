@@ -1,0 +1,52 @@
+name: Bug report
+description: Something in Quill doesn't work as expected.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Select text in Mail
+        2. Press ⌃⌥E
+        3. Click Fix
+  - type: input
+    id: version
+    attributes:
+      label: Quill version
+      description: Shown at the bottom of Settings.
+      placeholder: "0.1.8"
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: "26.1"
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Model provider
+      options:
+        - ChatGPT plan
+        - OpenAI-compatible API
+  - type: input
+    id: app
+    attributes:
+      label: App you selected text in
+      placeholder: Slack, Safari, Notes…
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: The end of `~/Library/Logs/quill.log`. Remove anything private first.
+      render: text

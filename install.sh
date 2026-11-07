@@ -6,6 +6,8 @@ set -eu
 repo="iyazerski/quill"
 asset="Quill.zip"
 id="dev.iyazerski.quill"
+# Every release is signed with this certificate; the checksum only catches damage.
+signer="=identifier \"$id\" and certificate leaf = H\"777f4422da3703fbf64916ee0909d0b3eaf0b37c\""
 
 if [ "$(uname -s)-$(uname -m)" != "Darwin-arm64" ]; then
   echo "Quill supports macOS on Apple silicon only." >&2
@@ -25,6 +27,10 @@ curl -fsSL "$download_url" -o "$install_tmp/$asset"
 curl -fsSL "$download_url.sha256" -o "$install_tmp/$asset.sha256"
 (cd "$install_tmp" && shasum -a 256 -c "$asset.sha256")
 ditto -x -k "$install_tmp/$asset" "$install_tmp"
+if ! codesign --verify --strict -R "$signer" "$install_tmp/Quill.app"; then
+  echo "The download isn't signed by Quill's release certificate. Not installing it." >&2
+  exit 1
+fi
 
 # /Applications when it's writable without sudo, else ~/Applications.
 apps="/Applications"

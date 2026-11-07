@@ -30,7 +30,12 @@ env:
   VERSION: 0.1.${{ github.run_number }}
 
 jobs:
+  # A release reaches every user through the updater, so it ships only what passes CI.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   release:
+    needs: ci
     # Apple silicon only, like the Macs it runs on.
     runs-on: macos-15
     permissions:
@@ -40,6 +45,9 @@ jobs:
       ASSET: Quill.zip
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The whole history and tags, to list the changes since the last release.
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ env.TARGET }}
@@ -85,20 +93,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
+          previous=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          changes=$(git log --no-merges --format='- %s' ${previous:+"$previous..HEAD"})
           gh release create "v$VERSION" dist/* \
             --target "$GITHUB_SHA" \
             --title "Quill v$VERSION" \
             --notes-file - \
             --latest <<EOF
-          Build from ${GITHUB_SHA::7}.
+          ## What's new
 
-          **Install:** download \`Quill.dmg\`, open it, and drag Quill into Applications. The first time you open Quill, macOS blocks it because it isn't notarized: go to System Settings > Privacy & Security and click **Open Anyway**.
+          $changes
 
-          **Homebrew:** \`brew install --cask iyazerski/tap/quill\`
+          ## Install
 
-          **Terminal:** \`curl -fsSL https://raw.githubusercontent.com/$GH_REPO/main/install.sh | sh\`
-
-          **Update:** click **Check for updates** in Quill's settings.
+          - **Download:** get \`Quill.dmg\` below, open it, and drag Quill into Applications. The first time you open Quill, macOS blocks it because it isn't notarized: go to System Settings > Privacy & Security and click **Open Anyway**.
+          - **Homebrew:** \`brew install --cask iyazerski/tap/quill\`
+          - **Terminal:** \`curl -fsSL https://raw.githubusercontent.com/$GH_REPO/main/install.sh | sh\`
+          - **Update:** click **Check for updates** in Quill's settings.
           EOF
       - name: Update Homebrew cask
         env:
