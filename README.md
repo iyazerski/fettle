@@ -9,7 +9,7 @@
 Select text, press <kbd>⌃</kbd><kbd>⌥</kbd><kbd>E</kbd>, and click **Fix** or **Translate**.<br>
 A free, open-source AI writing assistant for macOS, and a lightweight alternative to Grammarly.
 
-[![Latest release](https://img.shields.io/github/v/release/iyazerski/quill?label=download&color=3b6cf6)](https://github.com/iyazerski/quill/releases/latest)
+[![Download Quill.dmg](https://img.shields.io/github/v/release/iyazerski/quill?label=download&color=3b6cf6)](https://github.com/iyazerski/quill/releases/latest/download/Quill.dmg)
 [![macOS](https://img.shields.io/badge/macOS-13%2B%20·%20Apple%20silicon-black?logo=apple)](#install)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-orange?logo=rust)](https://www.rust-lang.org)
@@ -56,15 +56,21 @@ You can also type or paste text straight into the window.
 
 ## Install
 
-For macOS 13 or later on Apple silicon (M1 and newer). Run this in Terminal:
+For macOS 13 or later on Apple silicon (M1 and newer). Pick one:
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/iyazerski/quill/main/install.sh | sh
-```
+- **Download:** get [**Quill.dmg**](https://github.com/iyazerski/quill/releases/latest/download/Quill.dmg), open it, and drag Quill into Applications.
+- **Homebrew:** `brew install --cask iyazerski/tap/quill`
+- **Terminal:** `curl -fsSL https://raw.githubusercontent.com/iyazerski/quill/main/install.sh | sh`. This installs Quill into `/Applications` and starts it, and skips the step below. To pin a release, set `QUILL_VERSION=v0.1.N`.
 
-This installs `Quill.app` into `/Applications` and starts it. To pin a release, set `QUILL_VERSION=v0.1.N`.
+### First launch
 
-You can also download `Quill.zip` from the [latest release](https://github.com/iyazerski/quill/releases/latest). The app isn't notarized yet, so macOS blocks a copy downloaded in a browser. To allow it, run `xattr -dr com.apple.quarantine /Applications/Quill.app`.
+Quill isn't notarized by Apple yet, so macOS blocks it the first time you open it. To allow it:
+
+1. Open Quill from Applications. macOS says it can't verify the app. Click **Done**.
+2. Open **System Settings > Privacy & Security** and scroll down to **Security**.
+3. Click **Open Anyway** next to the message about Quill, and confirm.
+
+You only do this once. Quill is open source, so you can [read the code](src) or [build it yourself](#build-from-source).
 
 **Updates:** click **Check for updates** in Settings. Quill downloads the new version, checks it, and restarts. Every release is signed with the same certificate, so macOS keeps the Accessibility permission after an update.
 

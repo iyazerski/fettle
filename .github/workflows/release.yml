@@ -1,8 +1,11 @@
 name: Release
 
 # Every push to main that changes the app publishes a release v0.1.<run>, so
-# this link always gets the newest:
+# these links always get the newest:
+#   https://github.com/<owner>/<repo>/releases/latest/download/Quill.dmg
 #   https://github.com/<owner>/<repo>/releases/latest/download/Quill.zip
+# Quill.zip feeds install.sh and the in-app updater; Quill.dmg is for people.
+# Each release also points the Homebrew cask in iyazerski/homebrew-tap at it.
 on:
   push:
     branches: [main]
@@ -10,6 +13,7 @@ on:
       - "src/**"
       - "assets/**"
       - "scripts/bundle.sh"
+      - "scripts/dmg.py"
       - "Cargo.toml"
       - "Cargo.lock"
       - ".github/workflows/release.yml"
@@ -39,6 +43,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ env.TARGET }}
+      - uses: astral-sh/setup-uv@v10
       - name: Build binary
         env:
           QUILL_VERSION: ${{ env.VERSION }}
@@ -69,10 +74,12 @@ jobs:
           mkdir dist
           scripts/bundle.sh "target/$TARGET/release/quill" "$VERSION" dist
           ditto -c -k --keepParent dist/Quill.app "dist/$ASSET"
+          uvx dmgbuild -s scripts/dmg.py -D app=dist/Quill.app Quill dist/Quill.dmg
           codesign -dr - dist/Quill.app
           rm -rf dist/Quill.app
           cd dist
           shasum -a 256 "$ASSET" > "$ASSET.sha256"
+          shasum -a 256 Quill.dmg > Quill.dmg.sha256
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -81,5 +88,30 @@ jobs:
           gh release create "v$VERSION" dist/* \
             --target "$GITHUB_SHA" \
             --title "Quill v$VERSION" \
-            --notes "Build from ${GITHUB_SHA::7}. Install or update: \`curl -fsSL https://raw.githubusercontent.com/$GH_REPO/main/install.sh | sh\`" \
-            --latest
+            --notes-file - \
+            --latest <<EOF
+          Build from ${GITHUB_SHA::7}.
+
+          **Install:** download \`Quill.dmg\`, open it, and drag Quill into Applications. The first time you open Quill, macOS blocks it because it isn't notarized: go to System Settings > Privacy & Security and click **Open Anyway**.
+
+          **Homebrew:** \`brew install --cask iyazerski/tap/quill\`
+
+          **Terminal:** \`curl -fsSL https://raw.githubusercontent.com/$GH_REPO/main/install.sh | sh\`
+
+          **Update:** click **Check for updates** in Quill's settings.
+          EOF
+      - name: Update Homebrew cask
+        env:
+          DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
+        run: |
+          sha=$(cut -d' ' -f1 "dist/$ASSET.sha256")
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          echo "$DEPLOY_KEY" > "$RUNNER_TEMP/tap_key"
+          chmod 600 "$RUNNER_TEMP/tap_key"
+          git clone --depth 1 git@github.com:iyazerski/homebrew-tap.git "$RUNNER_TEMP/tap"
+          cd "$RUNNER_TEMP/tap"
+          sed -i '' -E "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/quill.rb
+          git diff --stat
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -am "Update Quill to $VERSION"
+          git push
