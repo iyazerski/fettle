@@ -1,12 +1,11 @@
 name: CI
 
+# Not on push: every push to main that changes the app runs these checks
+# through the release.
 on:
-  push:
-    branches:
-      - main
   pull_request:
-  # The release runs these checks first.
   workflow_call:
+  workflow_dispatch:
 
 jobs:
   rust:
