@@ -14,7 +14,7 @@ use super::buttons::{self, Tone};
 use super::icons;
 use super::settings_view;
 use super::state::{Answer, Menu, Page, State, Status};
-use crate::diff::{self, Kind};
+use crate::diff::{self, Kind, Piece};
 use crate::prompts::Action;
 
 /// The window's corner radius.
@@ -74,7 +74,7 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let running = s
         .answer
         .as_ref()
-        .is_some_and(|a| a.status == Status::Running);
+        .is_some_and(|a| matches!(a.status, Status::Running { .. }));
     let mut page = col()
         .w_full()
         .gap(12.0)
@@ -283,14 +283,15 @@ fn language(s: &State, k: &Kit, name: &'static str) -> El {
 }
 
 fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
-    let running = answer.status == Status::Running;
+    let running = matches!(answer.status, Status::Running { .. });
     let title = match answer.action {
         Action::Fix if running => "Fixing…".to_owned(),
         Action::Fix => "Fixed".to_owned(),
         Action::Translate if running => format!("Translating to {}…", s.settings.language),
         Action::Translate => format!("{} translation", s.settings.language),
     };
-    let changed = diff::changed(&answer.changes);
+    // Only a Fix answer has changes.
+    let changed = matches!(&answer.status, Status::Done { changes, .. } if diff::changed(changes));
     let mut top = row().w_full().center_y().gap(8.0).child(
         text(title)
             .font(k.ty.text_small_medium)
@@ -300,7 +301,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         top = top.child(Spinner::new().size(12.0).build(k));
     }
     top = top.child(spacer());
-    if answer.status == Status::Done && answer.action == Action::Fix && changed {
+    if changed {
         top = top.child(
             Switch::new(s.show_changes)
                 .label("Show changes")
@@ -308,26 +309,32 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
                 .build(k),
         );
     }
-    let body = match &answer.status {
-        Status::Failed(e) => note(k, e, true),
-        Status::Done if answer.action == Action::Fix && !changed => {
-            note(k, "Looks good. Nothing to fix.", false)
-        }
-        Status::Done if answer.action == Action::Fix && s.show_changes => {
-            scroll_box(k, diff_text(answer, k))
-        }
-        _ if answer.text.is_empty() => text("Thinking…").font(k.ty.body).color(k.c.text_faint),
-        _ => scroll_box(
+    let plain = |content: &str| {
+        scroll_box(
             k,
-            text(answer.text.clone())
+            text(content)
                 .font(k.ty.body)
                 .color(k.c.text_base)
                 .wrap()
                 .selectable(true),
-        ),
+        )
+    };
+    let body = match &answer.status {
+        Status::Failed(e) => note(k, e, true),
+        Status::Running { text: partial, .. } if partial.is_empty() => {
+            text("Thinking…").font(k.ty.body).color(k.c.text_faint)
+        }
+        Status::Running { text: partial, .. } => plain(partial),
+        Status::Done { .. } if answer.action == Action::Fix && !changed => {
+            note(k, "Looks good. Nothing to fix.", false)
+        }
+        Status::Done { changes, .. } if changed && s.show_changes => {
+            scroll_box(k, diff_text(changes, k))
+        }
+        Status::Done { text: done, .. } => plain(done),
     };
     let mut section = col().w_full().gap(8.0).child(top).child(body);
-    if answer.status == Status::Done {
+    if let Status::Done { copied, .. } = answer.status {
         section = section.child(
             row()
                 .w_full()
@@ -336,12 +343,8 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
                 .child(buttons::button(
                     k,
                     Tone::Secondary,
-                    if answer.copied { "Copied" } else { "Copy" },
-                    Some(if answer.copied {
-                        &icons::CHECK
-                    } else {
-                        &icons::COPY
-                    }),
+                    if copied { "Copied" } else { "Copy" },
+                    Some(if copied { &icons::CHECK } else { &icons::COPY }),
                     |b| b.shortcut("⇧⌘C").on_press(|s: &mut State| s.copy()),
                 ))
                 .child(buttons::button(
@@ -361,12 +364,12 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
 }
 
 /// The fixed text with removed words struck in red and added ones in green.
-fn diff_text(answer: &Answer, k: &Kit) -> El {
+fn diff_text(changes: &[Piece], k: &Kit) -> El {
     let mut content = String::new();
     let mut spans = Vec::new();
     let mut strikes = Vec::new();
     let mut previous = Kind::Same;
-    for piece in &answer.changes {
+    for piece in changes {
         // A thin space keeps a word from running into the one that replaces it.
         if previous == Kind::Removed && piece.kind == Kind::Added {
             content.push('\u{2009}');

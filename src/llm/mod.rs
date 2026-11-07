@@ -11,7 +11,7 @@ use std::time::Duration;
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
-use crate::settings::{ChatGptAuth, Provider, Settings};
+use crate::settings::{ChatGptAuth, Missing, Provider, Settings};
 
 /// One request: the system prompt and the text it applies to.
 pub struct Ask {
@@ -30,13 +30,24 @@ pub enum Backend {
 }
 
 impl Backend {
-    pub fn of(settings: &Settings) -> Option<Self> {
+    /// Where `settings` send requests, or what they lack to send any.
+    pub fn of(settings: &Settings) -> Result<Self, Missing> {
         match settings.provider {
-            Provider::ChatGpt => settings.chatgpt.clone().map(Backend::ChatGpt),
-            Provider::Api => Some(Backend::Api {
-                base: settings.api_base.trim().trim_end_matches('/').to_owned(),
-                key: settings.api_key.trim().to_owned(),
-            }),
+            Provider::ChatGpt => settings
+                .chatgpt
+                .clone()
+                .map(Backend::ChatGpt)
+                .ok_or(Missing::SignIn),
+            Provider::Api => {
+                let base = settings.api_base.trim().trim_end_matches('/');
+                if base.is_empty() {
+                    return Err(Missing::ApiUrl);
+                }
+                Ok(Backend::Api {
+                    base: base.to_owned(),
+                    key: settings.api_key.trim().to_owned(),
+                })
+            }
         }
     }
 

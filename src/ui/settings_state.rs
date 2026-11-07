@@ -3,7 +3,7 @@
 
 use rune::{Shortcut, ShortcutError, Tx};
 
-use super::state::{Login, Menu, Models, Page, State, Update, fresh_backend};
+use super::state::{FormError, Login, Menu, Models, Page, State, Update, fresh_backend};
 use crate::llm::{Backend, chatgpt};
 use crate::settings::{Appearance, ChatGptAuth, Provider, Reasoning};
 use crate::{login_item, mac, update};
@@ -14,7 +14,7 @@ impl State {
         self.form.at_login = login_item::enabled();
         self.menu = None;
         self.page = Page::Settings;
-        if matches!(self.form.models, Models::Idle) && self.settings.missing().is_none() {
+        if matches!(self.form.models, Models::Idle) && Backend::of(&self.settings).is_ok() {
             self.load_models();
         }
         self.show();
@@ -31,9 +31,9 @@ impl State {
             return;
         }
         self.settings.provider = provider;
-        self.form.models = Models::Idle;
+        self.set_models(Models::Idle);
         self.save();
-        if Backend::of(&self.settings).is_some() {
+        if Backend::of(&self.settings).is_ok() {
             self.load_models();
         }
     }
@@ -53,14 +53,16 @@ impl State {
     pub fn api_edited(&mut self) {
         self.settings.api_base = self.form.api_base.text.trim().to_owned();
         self.settings.api_key = self.form.api_key.text.trim().to_owned();
-        self.form.models = Models::Idle;
+        self.set_models(Models::Idle);
         self.save();
     }
 
     /// Open or close the model list, loading it first if needed.
     pub fn toggle_models(&mut self) {
         self.toggle_menu(Menu::Model);
-        if self.menu == Some(Menu::Model) && !matches!(self.form.models, Models::Ready(_)) {
+        if self.menu == Some(Menu::Model)
+            && !matches!(self.form.models, Models::Ready(_) | Models::Loading(_))
+        {
             self.load_models();
         }
     }
@@ -71,13 +73,21 @@ impl State {
         self.save();
     }
 
+    /// Replace the model list, stopping a load the new list supersedes, so
+    /// a list for an old backend can't arrive late.
+    fn set_models(&mut self, models: Models) {
+        if let Models::Loading(job) = &self.form.models {
+            job.abort();
+        }
+        self.form.models = models;
+    }
+
     pub fn load_models(&mut self) {
-        let Some(backend) = Backend::of(&self.settings) else {
+        let Ok(backend) = Backend::of(&self.settings) else {
             return;
         };
-        self.form.models = Models::Loading;
         let (app, http) = (self.app.clone(), self.http.clone());
-        self.rt.spawn(async move {
+        let job = self.rt.spawn(async move {
             let result = async {
                 let backend = fresh_backend(&app, &http, backend).await?;
                 backend.models(&http).await
@@ -94,6 +104,7 @@ impl State {
                 }
             });
         });
+        self.set_models(Models::Loading(job));
     }
 
     pub fn sign_in(&mut self) {
@@ -138,7 +149,7 @@ impl State {
 
     pub fn sign_out(&mut self) {
         self.settings.chatgpt = None;
-        self.form.models = Models::Idle;
+        self.set_models(Models::Idle);
         self.menu = None;
         self.save();
     }
@@ -156,7 +167,7 @@ impl State {
         };
         match result {
             Ok(()) => self.form.at_login = !self.form.at_login,
-            Err(e) => self.form.error = Some(format!("{e:#}")),
+            Err(e) => self.form.error = Some(FormError::Other(format!("{e:#}"))),
         }
     }
 
@@ -169,13 +180,7 @@ impl State {
 
     pub fn recheck_accessibility(&mut self) {
         self.trusted = mac::accessibility_trusted(false);
-        if self.trusted
-            && self
-                .form
-                .error
-                .as_deref()
-                .is_some_and(|n| n.contains("Accessibility"))
-        {
+        if self.trusted && matches!(self.form.error, Some(FormError::Accessibility)) {
             self.form.error = None;
         }
     }
@@ -185,10 +190,15 @@ impl State {
             Ok(shortcut) => {
                 if let Err(e) = self.register(shortcut.clone()) {
                     self.form.shortcut.mark_unregistered();
-                    self.form.error = Some(self.shortcut_message(&e, &shortcut));
+                    self.form.error =
+                        Some(FormError::Shortcut(self.shortcut_message(&e, &shortcut)));
                 }
             }
-            Err(e) => self.form.error = Some(format!("The saved shortcut is broken: {e}")),
+            Err(e) => {
+                self.form.error = Some(FormError::Shortcut(format!(
+                    "The saved shortcut is broken: {e}"
+                )))
+            }
         }
     }
 
@@ -209,12 +219,7 @@ impl State {
         }
         self.settings.shortcut = shortcut.to_string();
         self.save();
-        if self
-            .form
-            .error
-            .as_deref()
-            .is_some_and(|n| n.contains("shortcut"))
-        {
+        if matches!(self.form.error, Some(FormError::Shortcut(_))) {
             self.form.error = None;
         }
         Ok(())

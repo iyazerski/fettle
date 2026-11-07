@@ -2,6 +2,7 @@
 //! selection, running an action, and moving the window. The settings page's
 //! part is in [`settings_state`](super::settings_state).
 
+use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -53,7 +54,6 @@ pub struct State {
     /// Whether the selection is being copied, so a second press can't copy
     /// over the first one's borrowed pasteboard.
     capturing: bool,
-    job: Option<JoinHandle<()>>,
     /// Counts runs, so a late piece of an old answer is dropped.
     run: u64,
     /// The window's top-left in physical pixels, once Quill has placed it.
@@ -78,17 +78,22 @@ pub struct Answer {
     pub action: Action,
     /// The text the action ran on.
     pub original: String,
-    pub text: String,
     pub status: Status,
-    /// For Fix, once done: the word diff from `original` to `text`.
-    pub changes: Vec<Piece>,
-    pub copied: bool,
 }
 
-#[derive(Clone, PartialEq, Eq)]
 pub enum Status {
-    Running,
-    Done,
+    /// Streaming run `run`'s answer into `text`.
+    Running {
+        run: u64,
+        job: JoinHandle<()>,
+        text: String,
+    },
+    Done {
+        text: String,
+        /// For Fix: the word diff from the original to `text`.
+        changes: Vec<Piece>,
+        copied: bool,
+    },
     Failed(String),
 }
 
@@ -101,12 +106,32 @@ pub struct Form {
     pub login: Login,
     pub at_login: bool,
     /// A problem to show at the top of the page.
-    pub error: Option<String>,
+    pub error: Option<FormError>,
+}
+
+/// A problem on the settings page, kept apart by what clears it.
+pub enum FormError {
+    /// Quill may not copy and paste: cleared once it may.
+    Accessibility,
+    /// The shortcut didn't register: cleared by one that does.
+    Shortcut(String),
+    Other(String),
+}
+
+impl fmt::Display for FormError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FormError::Accessibility => {
+                f.write_str("Allow Quill in Accessibility so it can copy the selected text.")
+            }
+            FormError::Shortcut(message) | FormError::Other(message) => f.write_str(message),
+        }
+    }
 }
 
 pub enum Models {
     Idle,
-    Loading,
+    Loading(JoinHandle<()>),
     Ready(Vec<String>),
     Failed(String),
 }
@@ -162,7 +187,6 @@ impl State {
             update: Update::Idle,
             shortcut: None,
             capturing: false,
-            job: None,
             run: 0,
             position: None,
             drag: None,
@@ -213,8 +237,7 @@ impl State {
         self.trusted = mac::accessibility_trusted(false);
         if !self.trusted {
             self.open_settings();
-            self.form.error =
-                Some("Allow Quill in Accessibility so it can copy the selected text.".into());
+            self.form.error = Some(FormError::Accessibility);
             return;
         }
         self.capturing = true;
@@ -313,34 +336,30 @@ impl State {
         }
         self.notice = None;
         self.cancel();
-        self.run += 1;
-        let run = self.run;
-        let mut answer = Answer {
-            action,
-            original: original.clone(),
-            text: String::new(),
-            status: Status::Running,
-            changes: Vec::new(),
-            copied: false,
+        let backend = match self.settings.missing() {
+            Some(missing) => Err(missing),
+            None => Backend::of(&self.settings),
         };
-        let backend = match (self.settings.missing(), Backend::of(&self.settings)) {
-            (None, Some(backend)) => backend,
-            (missing, _) => {
-                answer.status =
-                    Status::Failed(missing.unwrap_or("Set up a model in Settings").into());
-                self.answer = Some(answer);
+        let backend = match backend {
+            Ok(backend) => backend,
+            Err(missing) => {
+                self.answer = Some(Answer {
+                    action,
+                    original,
+                    status: Status::Failed(missing.to_string()),
+                });
                 return;
             }
         };
-        self.answer = Some(answer);
+        let run = self.run;
         let ask = Ask {
             system: prompts::system(action, &self.settings.language),
-            text: original,
+            text: original.clone(),
             model: self.settings.model().trim().to_owned(),
             effort: self.settings.reasoning.effort(),
         };
         let (app, http) = (self.app.clone(), self.http.clone());
-        self.job = Some(self.rt.spawn(async move {
+        let job = self.rt.spawn(async move {
             let result = async {
                 let backend = fresh_backend(&app, &http, backend).await?;
                 let to_ui = app.clone();
@@ -354,47 +373,69 @@ impl State {
             .await
             .map_err(|e| format!("{e:#}"));
             app.update(move |s, _| s.finished(run, result));
-        }));
+        });
+        self.answer = Some(Answer {
+            action,
+            original,
+            status: Status::Running {
+                run,
+                job,
+                text: String::new(),
+            },
+        });
+    }
+
+    /// The text run `run` is streaming into, if it's still the one running.
+    fn running_text(&mut self, run: u64) -> Option<&mut String> {
+        match &mut self.answer.as_mut()?.status {
+            Status::Running {
+                run: current, text, ..
+            } if *current == run => Some(text),
+            _ => None,
+        }
     }
 
     fn delta(&mut self, run: u64, delta: &str) {
-        if let Some(answer) = self.answer.as_mut().filter(|_| run == self.run) {
-            answer.text.push_str(delta);
+        if let Some(text) = self.running_text(run) {
+            text.push_str(delta);
         }
     }
 
     fn finished(&mut self, run: u64, result: Result<(), String>) {
-        if run != self.run {
+        let Some(text) = self.running_text(run).map(std::mem::take) else {
             return;
-        }
-        self.job = None;
+        };
         let Some(answer) = self.answer.as_mut() else {
             return;
         };
-        match result {
-            Ok(()) if answer.text.trim().is_empty() => {
-                answer.status = Status::Failed("The model returned nothing.".into())
+        answer.status = match result {
+            Ok(()) if text.trim().is_empty() => {
+                Status::Failed("The model returned nothing.".into())
             }
             Ok(()) => {
                 // Models often add or drop a final newline; keep the selection's.
-                let kept = answer.original.len() - answer.original.trim_end().len();
-                let end = &answer.original[answer.original.len() - kept..];
-                answer.text = format!("{}{end}", answer.text.trim_end());
-                if answer.action == Action::Fix {
-                    answer.changes = diff::words(&answer.original, &answer.text);
+                let end = &answer.original[answer.original.trim_end().len()..];
+                let text = format!("{}{end}", text.trim_end());
+                let changes = match answer.action {
+                    Action::Fix => diff::words(&answer.original, &text),
+                    Action::Translate => Vec::new(),
+                };
+                Status::Done {
+                    text,
+                    changes,
+                    copied: false,
                 }
-                answer.status = Status::Done;
             }
-            Err(e) => answer.status = Status::Failed(e),
-        }
+            Err(e) => Status::Failed(e),
+        };
     }
 
     fn cancel(&mut self) {
-        if let Some(job) = self.job.take() {
-            job.abort();
-        }
         self.run += 1;
-        if let Some(answer) = self.answer.as_mut().filter(|a| a.status == Status::Running) {
+        if let Some(answer) = self.answer.as_mut()
+            && let Status::Running { job, .. } = &answer.status
+        {
+            job.abort();
             answer.status = Status::Failed("Stopped.".into());
         }
     }
@@ -405,10 +446,10 @@ impl State {
 
     /// The finished answer's text.
     pub fn result(&self) -> Option<&str> {
-        self.answer
-            .as_ref()
-            .filter(|a| a.status == Status::Done)
-            .map(|a| a.text.as_str())
+        match &self.answer.as_ref()?.status {
+            Status::Done { text, .. } => Some(text),
+            _ => None,
+        }
     }
 
     /// Hide the window and paste the answer over the selection.
@@ -428,8 +469,12 @@ impl State {
             return;
         };
         mac::copy(&text);
-        if let Some(answer) = self.answer.as_mut() {
-            answer.copied = true;
+        if let Some(Answer {
+            status: Status::Done { copied, .. },
+            ..
+        }) = self.answer.as_mut()
+        {
+            *copied = true;
         }
     }
 
@@ -461,7 +506,7 @@ impl State {
     pub(super) fn report(&mut self, message: String) {
         match self.page {
             Page::Main => self.notice = Some(message),
-            Page::Settings => self.form.error = Some(message),
+            Page::Settings => self.form.error = Some(FormError::Other(message)),
         }
     }
 }

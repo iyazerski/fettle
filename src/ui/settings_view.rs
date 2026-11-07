@@ -12,7 +12,7 @@ use super::icons;
 use super::state::{Login, Menu, Models, State, Update};
 use super::view::{WIDTH, divider, header, note};
 use crate::mac;
-use crate::settings::{Appearance, Provider, Reasoning};
+use crate::settings::{Appearance, Missing, Provider, Reasoning};
 
 const AUTHOR: &str = "Ihar Yazerski";
 const AUTHOR_URL: &str = "https://github.com/iyazerski";
@@ -30,7 +30,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .gap(12.0)
         .child(header(k, "Settings", Some(State::back)));
     if let Some(error) = &s.form.error {
-        page = page.child(note(k, error, true));
+        page = page.child(note(k, &error.to_string(), true));
     }
     page.child(section(k, "Model"))
         .child(
@@ -260,10 +260,13 @@ fn api(s: &State, k: &Kit) -> El {
 
 /// The model dropdown, once the provider can list its models.
 fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
-    if s.settings.missing().is_some_and(|m| !m.contains("model")) {
+    if matches!(
+        s.settings.missing(),
+        Some(Missing::SignIn | Missing::ApiUrl)
+    ) {
         return None;
     }
-    let loading = matches!(s.form.models, Models::Loading);
+    let loading = matches!(s.form.models, Models::Loading(_));
     let models: &[String] = match &s.form.models {
         Models::Ready(models) => models,
         _ => &[],

@@ -2,6 +2,7 @@
 //! credentials, the model and reasoning, the translation language and the
 //! shortcut. One private JSON file, since it holds tokens.
 
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
@@ -241,13 +242,31 @@ impl Settings {
     }
 
     /// Why the model can't be called yet, if it can't.
-    pub fn missing(&self) -> Option<&'static str> {
+    pub fn missing(&self) -> Option<Missing> {
         match self.provider {
-            Provider::ChatGpt if self.chatgpt.is_none() => Some("Sign in with ChatGPT in Settings"),
-            Provider::Api if self.api_base.trim().is_empty() => Some("Set the API URL in Settings"),
-            _ if self.model().trim().is_empty() => Some("Pick a model in Settings"),
+            Provider::ChatGpt if self.chatgpt.is_none() => Some(Missing::SignIn),
+            Provider::Api if self.api_base.trim().is_empty() => Some(Missing::ApiUrl),
+            _ if self.model().trim().is_empty() => Some(Missing::Model),
             _ => None,
         }
+    }
+}
+
+/// What the settings lack before the model can be called.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Missing {
+    SignIn,
+    ApiUrl,
+    Model,
+}
+
+impl fmt::Display for Missing {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Missing::SignIn => "Sign in with ChatGPT in Settings",
+            Missing::ApiUrl => "Set the API URL in Settings",
+            Missing::Model => "Pick a model in Settings",
+        })
     }
 }
 
@@ -282,7 +301,7 @@ mod tests {
         assert_eq!(loaded.shortcut, DEFAULT_SHORTCUT);
         settings.provider = Provider::ChatGpt;
         settings.chatgpt = None;
-        assert_eq!(settings.missing(), Some("Sign in with ChatGPT in Settings"));
+        assert_eq!(settings.missing(), Some(Missing::SignIn));
     }
 
     #[test]
