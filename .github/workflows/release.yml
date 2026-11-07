@@ -1,0 +1,65 @@
+name: Release
+
+# Every push to main that changes the app publishes a release v0.1.<run>, so
+# this link always gets the newest:
+#   https://github.com/<owner>/<repo>/releases/latest/download/Quill.zip
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "assets/**"
+      - "scripts/bundle.sh"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  VERSION: 0.1.${{ github.run_number }}
+
+jobs:
+  release:
+    # Apple silicon only, like the Macs it runs on.
+    runs-on: macos-15
+    permissions:
+      contents: write
+    env:
+      TARGET: aarch64-apple-darwin
+      ASSET: Quill.zip
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET }}
+      - name: Build binary
+        env:
+          QUILL_VERSION: ${{ env.VERSION }}
+        run: cargo build --release --locked --target "$TARGET"
+      - name: Test binary
+        run: target/$TARGET/release/quill --version
+      - name: Package app
+        run: |
+          mkdir dist
+          scripts/bundle.sh "target/$TARGET/release/quill" "$VERSION" dist
+          ditto -c -k --keepParent dist/Quill.app "dist/$ASSET"
+          rm -rf dist/Quill.app
+          cd dist
+          shasum -a 256 "$ASSET" > "$ASSET.sha256"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "v$VERSION" dist/* \
+            --target "$GITHUB_SHA" \
+            --title "Quill v$VERSION" \
+            --notes "Build from ${GITHUB_SHA::7}. Install or update: \`curl -fsSL https://raw.githubusercontent.com/$GH_REPO/main/install.sh | sh\`" \
+            --latest

@@ -1,0 +1,30 @@
+repos:
+  - repo: builtin
+    hooks:
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-yaml
+      - id: check-toml
+
+  - repo: local
+    hooks:
+      - id: cargo-fmt
+        name: cargo fmt
+        entry: cargo fmt --all
+        language: system
+        pass_filenames: false
+        files: \.rs$
+
+      - id: cargo-check
+        name: cargo check
+        entry: cargo check --locked
+        language: system
+        pass_filenames: false
+        files: ^(src/|Cargo\.(toml|lock))
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --locked -- -D warnings
+        language: system
+        pass_filenames: false
+        files: ^(src/|Cargo\.(toml|lock))

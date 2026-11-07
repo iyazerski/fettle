@@ -1,0 +1,47 @@
+[package]
+name = "quill"
+version = "0.1.0"
+edition = "2024"
+publish = false
+description = "Improve or translate the text selected in any Mac app from a floating window"
+
+[dependencies]
+anyhow = "1"
+base64 = "0.22"
+clap = { version = "4", features = ["derive"] }
+futures-util = "0.3"
+libc = "0.2"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "NSAppearance", "NSApplication", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSEvent", "NSScreen", "NSRunningApplication", "NSWorkspace"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSGeometry", "NSString", "NSURL", "NSValue"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+ring = "0.17"
+# Rune is pre-release and changes often: keep one tested revision (the one
+# zeron-tools uses).
+rune = { git = "https://github.com/anomalyco/rune", rev = "d03349e25189ce1edc8c26ada6bf6d4aac72c826" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "d03349e25189ce1edc8c26ada6bf6d4aac72c826" }
+rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "d03349e25189ce1edc8c26ada6bf6d4aac72c826" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+similar = "2"
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+url = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+allow_attributes_without_reason = "warn"
+undocumented_unsafe_blocks = "warn"
+
+# A panic exits the app at once rather than leaving it running with a
+# poisoned lock. LTO and stripping keep the app small.
+[profile.release]
+panic = "abort"
+lto = "thin"
+strip = true

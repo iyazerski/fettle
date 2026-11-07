@@ -1,0 +1,69 @@
+//! An OpenAI-compatible API: streamed chat completions and the model list.
+
+use anyhow::{Result, bail};
+use serde::Deserialize;
+use serde_json::{Value, json};
+
+use super::sse::{self, Flow};
+use super::{Ask, check, error_message};
+
+pub async fn stream(
+    http: &reqwest::Client,
+    base: &str,
+    key: &str,
+    ask: &Ask,
+    mut on_delta: impl FnMut(&str),
+) -> Result<()> {
+    let mut body = json!({
+        "model": ask.model,
+        "stream": true,
+        "messages": [
+            { "role": "system", "content": ask.system },
+            { "role": "user", "content": ask.text },
+        ],
+    });
+    if let Some(effort) = ask.effort {
+        body["reasoning_effort"] = json!(effort);
+    }
+    let mut request = http.post(format!("{base}/chat/completions")).json(&body);
+    if !key.is_empty() {
+        request = request.bearer_auth(key);
+    }
+    let response = check(request.send().await?).await?;
+    // Some servers end the stream without `[DONE]`; the answer is complete then too.
+    sse::each(response, |data| {
+        if data == "[DONE]" {
+            return Ok(Flow::Done);
+        }
+        let event: Value = serde_json::from_str(data)?;
+        if event.get("error").is_some() {
+            bail!("{}", error_message(data));
+        }
+        if let Some(delta) = event
+            .pointer("/choices/0/delta/content")
+            .and_then(Value::as_str)
+        {
+            on_delta(delta);
+        }
+        Ok(Flow::More)
+    })
+    .await?;
+    Ok(())
+}
+
+pub async fn models(http: &reqwest::Client, base: &str, key: &str) -> Result<Vec<String>> {
+    #[derive(Deserialize)]
+    struct List {
+        data: Vec<Model>,
+    }
+    #[derive(Deserialize)]
+    struct Model {
+        id: String,
+    }
+    let mut request = http.get(format!("{base}/models"));
+    if !key.is_empty() {
+        request = request.bearer_auth(key);
+    }
+    let list: List = check(request.send().await?).await?.json().await?;
+    Ok(list.data.into_iter().map(|m| m.id).collect())
+}
