@@ -39,8 +39,6 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/translate-dark.png">
   <img src="docs/screenshots/translate-light.png" width="540" alt="Quill translating a short English message into Spanish">
 </picture>
-&nbsp;
-<img src="docs/screenshots/languages-light.png" width="540" alt="Quill's language list, with favourite languages starred at the top">
 </div>
 
 Pick a language from the list next to **Translate**. Quill asks the model to keep the tone, formatting, names, links and code, and to leave text alone if it's already in that language.
