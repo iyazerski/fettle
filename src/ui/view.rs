@@ -10,7 +10,7 @@ use rune_kit::{
     TextArea,
 };
 
-use super::glass::{self, Tone};
+use super::buttons::{self, Tone};
 use super::icons;
 use super::settings_view;
 use super::state::{Answer, Menu, Page, State, Status};
@@ -146,14 +146,14 @@ fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
         .w_full()
         .center_y()
         .gap(8.0)
-        .child(glass::button(
+        .child(buttons::button(
             k,
-            Tone::Tinted,
-            "Improve",
+            Tone::Primary,
+            "Proofread",
             Some(&icons::SPARKLE),
             |b| {
                 b.shortcut("⌘1")
-                    .on_press(|s: &mut State| s.start(Action::Improve))
+                    .on_press(|s: &mut State| s.start(Action::Proofread))
             },
         ))
         .child(translate(s, k, layer))
@@ -180,7 +180,8 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
                 .help("Translation language")
                 .on_press(|s: &mut State| s.toggle_menu(Menu::Language))
                 .build(k)
-                .radius(14.0),
+                .radius(14.0)
+                .hover(Color::TRANSPARENT),
         )
         .open(s.menu_open(Menu::Language))
         .placement(Placement::BottomStart)
@@ -200,11 +201,12 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
                 .shortcut("⌘2")
                 .on_press(|s: &mut State| s.start(Action::Translate))
                 .build(k)
-                .radius(14.0),
+                .radius(14.0)
+                .hover(Color::TRANSPARENT),
         )
         .child(el().w(1.0).h(16.0).fill(k.c.border_muted))
         .child(picker);
-    glass::surface(k, Tone::Clear, group)
+    buttons::surface(k, Tone::Secondary, group)
 }
 
 /// The languages, favourites first; a star marks or unmarks one.
@@ -281,8 +283,11 @@ fn language(s: &State, k: &Kit, name: &'static str) -> El {
 }
 
 fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
+    let running = answer.status == Status::Running;
     let title = match answer.action {
-        Action::Improve => "Improved".to_owned(),
+        Action::Proofread if running => "Proofreading…".to_owned(),
+        Action::Proofread => "Proofread".to_owned(),
+        Action::Translate if running => format!("Translating to {}…", s.settings.language),
         Action::Translate => format!("{} translation", s.settings.language),
     };
     let changed = diff::changed(&answer.changes);
@@ -291,11 +296,11 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
             .font(k.ty.text_small_medium)
             .color(k.c.text_muted),
     );
-    if answer.status == Status::Running {
+    if running {
         top = top.child(Spinner::new().size(12.0).build(k));
     }
     top = top.child(spacer());
-    if answer.status == Status::Done && answer.action == Action::Improve && changed {
+    if answer.status == Status::Done && answer.action == Action::Proofread && changed {
         top = top.child(
             Switch::new(s.show_changes)
                 .label("Show changes")
@@ -305,10 +310,10 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     }
     let body = match &answer.status {
         Status::Failed(e) => note(k, e, true),
-        Status::Done if answer.action == Action::Improve && !changed => {
+        Status::Done if answer.action == Action::Proofread && !changed => {
             note(k, "Looks good. Nothing to fix.", false)
         }
-        Status::Done if answer.action == Action::Improve && s.show_changes => {
+        Status::Done if answer.action == Action::Proofread && s.show_changes => {
             scroll_box(k, diff_text(answer, k))
         }
         _ if answer.text.is_empty() => text("Thinking…").font(k.ty.body).color(k.c.text_faint),
@@ -328,9 +333,9 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
                 .w_full()
                 .gap(8.0)
                 .child(spacer())
-                .child(glass::button(
+                .child(buttons::button(
                     k,
-                    Tone::Clear,
+                    Tone::Secondary,
                     if answer.copied { "Copied" } else { "Copy" },
                     Some(if answer.copied {
                         &icons::CHECK
@@ -339,9 +344,9 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
                     }),
                     |b| b.shortcut("⇧⌘C").on_press(|s: &mut State| s.copy()),
                 ))
-                .child(glass::button(
+                .child(buttons::button(
                     k,
-                    Tone::Tinted,
+                    Tone::Primary,
                     "Replace",
                     Some(&icons::REPLACE),
                     |b| {
@@ -355,7 +360,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     section
 }
 
-/// The improvement with removed words struck in red and added ones in green.
+/// The proofread text with removed words struck in red and added ones in green.
 fn diff_text(answer: &Answer, k: &Kit) -> El {
     let mut content = String::new();
     let mut spans = Vec::new();
@@ -450,7 +455,7 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
         return true;
     }
     if key.is_command('1') {
-        s.start(Action::Improve);
+        s.start(Action::Proofread);
     } else if key.is_command('2') {
         s.start(Action::Translate);
     } else if key.is_command('c') && key.mods.shift {

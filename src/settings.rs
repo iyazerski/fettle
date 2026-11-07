@@ -14,28 +14,42 @@ pub const DEFAULT_API_BASE: &str = "https://api.openai.com/v1";
 /// A small, fast model that ChatGPT sign-in serves.
 pub const DEFAULT_CHATGPT_MODEL: &str = "gpt-6-luna";
 
-/// The languages Translate offers, alphabetical: the 20 with the most
-/// speakers (Ethnologue), counting Chinese and Arabic once each and
-/// leaving out Nigerian Pidgin.
+/// The languages Translate offers, alphabetical: the 30 with the most first-
+/// and second-language speakers (Ethnologue 2026), counting Chinese and Arabic
+/// once each and leaving out Nigerian Pidgin, plus Belarusian, Polish and
+/// Ukrainian.
 pub const LANGUAGES: &[&str] = &[
+    "Amharic",
     "Arabic",
+    "Belarusian",
     "Bengali",
     "Chinese (Simplified)",
     "English",
     "French",
     "German",
+    "Gujarati",
+    "Hausa",
     "Hindi",
     "Indonesian",
+    "Italian",
     "Japanese",
+    "Javanese",
+    "Kannada",
     "Korean",
     "Marathi",
+    "Persian",
+    "Polish",
     "Portuguese",
+    "Punjabi",
     "Russian",
     "Spanish",
+    "Swahili",
     "Tagalog",
     "Tamil",
     "Telugu",
+    "Thai",
     "Turkish",
+    "Ukrainian",
     "Urdu",
     "Vietnamese",
 ];

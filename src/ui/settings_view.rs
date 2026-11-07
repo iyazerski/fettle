@@ -7,7 +7,7 @@ use rune_kit::{
     ShortcutRecorder, Spinner, Switch, TextInput, shortcut_error_message,
 };
 
-use super::glass::{self, Tone};
+use super::buttons::{self, Tone};
 use super::icons;
 use super::state::{Login, Menu, Models, State, Update};
 use super::view::{WIDTH, divider, header, note};
@@ -123,9 +123,9 @@ fn footer(s: &State, k: &Kit) -> El {
         Update::Latest => bar
             .child(icon(&icons::CHECK, 14.0).color(k.c.success.icon))
             .child(status("Up to date".into())),
-        Update::Available(version) => bar.child(glass::button(
+        Update::Available(version) => bar.child(buttons::button(
             k,
-            Tone::Tinted,
+            Tone::Primary,
             &format!("Update to {version}"),
             Some(&icons::DOWNLOAD),
             |b| {
@@ -185,9 +185,9 @@ fn chatgpt(s: &State, k: &Kit) -> El {
                     .build(k),
             ),
         (None, login) => {
-            let mut block = col().w_full().gap(6.0).child(glass::button(
+            let mut block = col().w_full().gap(6.0).child(buttons::button(
                 k,
-                Tone::Tinted,
+                Tone::Primary,
                 "Sign in with ChatGPT",
                 None,
                 |b| b.on_press(|s: &mut State| s.sign_in()),
@@ -286,7 +286,7 @@ fn accessibility(s: &State, k: &Kit) -> El {
     row()
         .gap(8.0)
         .center_y()
-        .child(glass::button(k, Tone::Tinted, "Allow…", None, |b| {
+        .child(buttons::button(k, Tone::Primary, "Allow…", None, |b| {
             b.help("Quill copies the selection and pastes the result with ⌘C and ⌘V")
                 .on_press(|s: &mut State| s.ask_accessibility())
         }))

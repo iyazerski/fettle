@@ -1,4 +1,4 @@
-//! The model behind Improve and Translate: a ChatGPT plan through the sign-in
+//! The model behind Proofread and Translate: a ChatGPT plan through the sign-in
 //! Codex uses ([`chatgpt`]), or any OpenAI-compatible API ([`compat`]). Both
 //! stream the answer.
 

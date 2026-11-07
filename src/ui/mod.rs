@@ -2,7 +2,7 @@
 //! stays active and can take the result back. A global shortcut copies the
 //! selection and opens it; model calls run on a small tokio runtime beside it.
 
-mod glass;
+mod buttons;
 mod icons;
 mod settings_state;
 mod settings_view;

@@ -3,7 +3,7 @@ name = "quill"
 version = "0.1.0"
 edition = "2024"
 publish = false
-description = "Improve or translate the text selected in any Mac app from a floating window"
+description = "Proofread or translate the text selected in any Mac app from a floating window"
 
 [dependencies]
 anyhow = "1"

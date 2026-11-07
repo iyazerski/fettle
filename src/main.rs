@@ -1,9 +1,9 @@
-//! Quill: select text in any Mac app, press a shortcut, and improve or
+//! Quill: select text in any Mac app, press a shortcut, and proofread or
 //! translate it in a small floating window.
 //!
 //! The window ([`ui`]) grabs the selection through the pasteboard ([`mac`]),
 //! asks the configured model ([`llm`]) with the [`prompts`], and shows the
-//! answer, with a word diff ([`diff`]) for improvements.
+//! answer, with a word diff ([`diff`]) for proofreading.
 
 mod diff;
 mod json_file;

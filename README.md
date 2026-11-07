@@ -1,9 +1,9 @@
 # Quill
 
-Select text in any Mac app, press a shortcut, and **improve** or **translate** it in a small floating window.
+Select text in any Mac app, press a shortcut, and **proofread** or **translate** it in a small floating window.
 
-- **Improve** fixes grammar, spelling and awkward phrasing, and shows what changed word by word.
-- **Translate** writes the text in the language you pick. Star the languages you use most to keep them at the top of the list.
+- **Proofread** fixes grammar, spelling and awkward phrasing, and shows what changed word by word.
+- **Translate** writes the text in one of 33 languages. Star the languages you use most to keep them at the top of the list.
 - **Replace** pastes the result over the selection. **Copy** puts it on the clipboard.
 
 Quill is a native Rust app built on [Rune](https://github.com/anomalyco/rune). It's small, starts fast, and sits hidden until you press the shortcut.
@@ -42,7 +42,7 @@ Select text and press the shortcut. Drag the window by its title row. In the win
 
 | Key | Action |
 | --- | --- |
-| ⌘1 | Improve |
+| ⌘1 | Proofread |
 | ⌘2 | Translate |
 | ⌘↩ | Replace the selection with the result |
 | ⇧⌘C | Copy the result |

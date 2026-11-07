@@ -1,4 +1,4 @@
-//! The word diff between the selected text and its improved version, as
+//! The word diff between the selected text and its proofread version, as
 //! Grammarly shows it: removed words, then the words that replace them.
 
 use similar::{ChangeTag, TextDiff};
