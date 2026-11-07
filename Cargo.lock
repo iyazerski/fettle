@@ -2683,7 +2683,7 @@ dependencies = [
 
 [[package]]
 name = "quill"
-version = "0.1.0"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "base64 0.22.1",

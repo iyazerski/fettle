@@ -1,6 +1,6 @@
 [package]
 name = "quill"
-version = "0.1.0"
+version = "0.1.8"
 edition = "2024"
 publish = false
 description = "Fix grammar and translate the text selected in any Mac app with one shortcut"
