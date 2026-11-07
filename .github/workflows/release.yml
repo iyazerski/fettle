@@ -43,7 +43,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ env.TARGET }}
-      - uses: astral-sh/setup-uv@v10
+      - uses: astral-sh/setup-uv@v10.3.3
       - name: Build binary
         env:
           QUILL_VERSION: ${{ env.VERSION }}
