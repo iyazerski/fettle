@@ -21,6 +21,7 @@ impl State {
     }
 
     pub fn back(&mut self) {
+        self.flush_save();
         self.page = Page::Main;
         self.menu = None;
         self.form.error = None;
@@ -54,7 +55,7 @@ impl State {
         self.settings.api_base = self.form.api_base.text.trim().to_owned();
         self.settings.api_key = self.form.api_key.text.trim().to_owned();
         self.set_models(Models::Idle);
-        self.save();
+        self.save_soon();
     }
 
     /// Open or close the model list, loading it first if needed.

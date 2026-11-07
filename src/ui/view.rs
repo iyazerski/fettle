@@ -172,7 +172,8 @@ fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
 
 /// Translate and the language it writes in, joined in one control.
 fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
-    let picker = Popover::new("languages")
+    let open = s.menu_open(Menu::Language);
+    let mut picker = Popover::new("languages")
         .trigger(
             Button::new(s.settings.language.clone())
                 .icon(&icons::CHEV_DOWN)
@@ -183,13 +184,16 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
                 .radius(14.0)
                 .hover(Color::TRANSPARENT),
         )
-        .open(s.menu_open(Menu::Language))
+        .open(open)
         .placement(Placement::BottomStart)
         .label("Translation language")
         .padding(4.0)
-        .on_close(|s: &mut State| s.menu = None)
-        .child(languages(s, k))
-        .build(k, layer);
+        .on_close(|s: &mut State| s.menu = None);
+    // A closed popover drops its content, so skip building the list.
+    if open {
+        picker = picker.child(languages(s, k));
+    }
+    let picker = picker.build(k, layer);
     let group = row()
         .h(28.0)
         .px(2.0)
@@ -468,7 +472,7 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     } else if key.is_command('w') {
         s.hide();
     } else if key.is_command('q') {
-        tx.quit();
+        s.quit(tx);
     } else {
         return false;
     }

@@ -1,7 +1,13 @@
 //! The word diff between the selected text and its fixed version, as
 //! Grammarly shows it: removed words, then the words that replace them.
 
+use std::time::Duration;
+
 use similar::{ChangeTag, TextDiff};
+
+/// How long the diff may search for the smallest edit before it settles for
+/// a coarser one: a long, heavily rewritten text could take far longer.
+const DIFF_TIMEOUT: Duration = Duration::from_secs(1);
 
 /// Split `text` into words (letters, digits and inner apostrophes), runs of
 /// whitespace, and single other characters, so punctuation diffs on its own.
@@ -50,7 +56,9 @@ pub struct Piece {
 /// rather than word against word.
 pub fn words(old: &str, new: &str) -> Vec<Piece> {
     let (old, new) = (tokens(old), tokens(new));
-    let diff = TextDiff::configure().diff_slices(&old, &new);
+    let diff = TextDiff::configure()
+        .timeout(DIFF_TIMEOUT)
+        .diff_slices(&old, &new);
     let tokens: Vec<(ChangeTag, &str)> = diff
         .iter_all_changes()
         .map(|c| (c.tag(), c.value()))

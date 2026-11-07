@@ -170,7 +170,7 @@ fn footer(s: &State, k: &Kit) -> El {
         Button::new("Quit Quill")
             .variant(ButtonVariant::GhostMuted)
             .shortcut("⌘Q")
-            .on_press_tx(|_: &mut State, tx| tx.quit())
+            .on_press_tx(|s: &mut State, tx| s.quit(tx))
             .build(k),
     );
     match &s.update {

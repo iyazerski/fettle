@@ -6,7 +6,7 @@ use std::fmt;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use rune::{AppHandle, Phase, ShortcutId, TextEdit};
+use rune::{AppHandle, Phase, ShortcutId, TextEdit, Tx};
 use rune_kit::ShortcutRecorderState;
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
@@ -25,6 +25,8 @@ const TOP_MARGIN: f32 = 120.0;
 const PASTE_DELAY: Duration = Duration::from_millis(120);
 /// How long the window takes to grow for a dropdown.
 const MENU_DELAY: Duration = Duration::from_millis(200);
+/// How long typing in a settings field must pause before the settings are saved.
+const SAVE_DELAY: Duration = Duration::from_millis(500);
 
 pub struct State {
     pub app: AppHandle<State>,
@@ -54,6 +56,8 @@ pub struct State {
     /// Whether the selection is being copied, so a second press can't copy
     /// over the first one's borrowed pasteboard.
     capturing: bool,
+    /// A save waiting for typing to pause.
+    pending_save: Option<JoinHandle<()>>,
     /// Counts runs, so a late piece of an old answer is dropped.
     run: u64,
     /// The window's top-left in physical pixels, once Quill has placed it.
@@ -76,8 +80,6 @@ pub enum Menu {
 
 pub struct Answer {
     pub action: Action,
-    /// The text the action ran on.
-    pub original: String,
     pub status: Status,
 }
 
@@ -187,6 +189,7 @@ impl State {
             update: Update::Idle,
             shortcut: None,
             capturing: false,
+            pending_save: None,
             run: 0,
             position: None,
             drag: None,
@@ -243,7 +246,7 @@ impl State {
         self.capturing = true;
         let app = self.app.clone();
         // Copying waits for the other app, off the UI thread.
-        std::thread::spawn(move || {
+        self.rt.spawn_blocking(move || {
             let text = mac::copy_selection();
             app.update(move |s, _| s.show_text(text));
         });
@@ -275,6 +278,7 @@ impl State {
     }
 
     pub fn hide(&mut self) {
+        self.flush_save();
         self.cancel();
         self.menu = None;
         self.app.hide();
@@ -315,8 +319,8 @@ impl State {
         self.menu = Some(menu);
         self.menu_shown = false;
         let app = self.app.clone();
-        std::thread::spawn(move || {
-            std::thread::sleep(MENU_DELAY);
+        self.rt.spawn(async move {
+            tokio::time::sleep(MENU_DELAY).await;
             app.update(move |s, _| s.menu_shown = s.menu == Some(menu));
         });
     }
@@ -345,7 +349,6 @@ impl State {
             Err(missing) => {
                 self.answer = Some(Answer {
                     action,
-                    original,
                     status: Status::Failed(missing.to_string()),
                 });
                 return;
@@ -354,29 +357,37 @@ impl State {
         let run = self.run;
         let ask = Ask {
             system: prompts::system(action, &self.settings.language),
-            text: original.clone(),
+            text: original,
             model: self.settings.model().trim().to_owned(),
             effort: self.settings.reasoning.effort(),
         };
         let (app, http) = (self.app.clone(), self.http.clone());
         let job = self.rt.spawn(async move {
+            let mut streamed = String::new();
             let result = async {
                 let backend = fresh_backend(&app, &http, backend).await?;
-                let to_ui = app.clone();
                 backend
-                    .stream(&http, &ask, move |delta| {
+                    .stream(&http, &ask, |delta| {
+                        streamed.push_str(delta);
                         let delta = delta.to_owned();
-                        to_ui.update(move |s, _| s.delta(run, &delta));
+                        app.update(move |s, _| s.delta(run, &delta));
                     })
                     .await
             }
-            .await
-            .map_err(|e| format!("{e:#}"));
-            app.update(move |s, _| s.finished(run, result));
+            .await;
+            let status = match result {
+                // The diff can take a while on a long text: keep it off the UI thread.
+                Ok(()) => {
+                    tokio::task::spawn_blocking(move || complete(action, &ask.text, &streamed))
+                        .await
+                        .unwrap_or_else(|e| Status::Failed(e.to_string()))
+                }
+                Err(e) => Status::Failed(format!("{e:#}")),
+            };
+            app.update(move |s, _| s.finished(run, status));
         });
         self.answer = Some(Answer {
             action,
-            original,
             status: Status::Running {
                 run,
                 job,
@@ -401,33 +412,13 @@ impl State {
         }
     }
 
-    fn finished(&mut self, run: u64, result: Result<(), String>) {
-        let Some(text) = self.running_text(run).map(std::mem::take) else {
+    fn finished(&mut self, run: u64, status: Status) {
+        if self.running_text(run).is_none() {
             return;
-        };
-        let Some(answer) = self.answer.as_mut() else {
-            return;
-        };
-        answer.status = match result {
-            Ok(()) if text.trim().is_empty() => {
-                Status::Failed("The model returned nothing.".into())
-            }
-            Ok(()) => {
-                // Models often add or drop a final newline; keep the selection's.
-                let end = &answer.original[answer.original.trim_end().len()..];
-                let text = format!("{}{end}", text.trim_end());
-                let changes = match answer.action {
-                    Action::Fix => diff::words(&answer.original, &text),
-                    Action::Translate => Vec::new(),
-                };
-                Status::Done {
-                    text,
-                    changes,
-                    copied: false,
-                }
-            }
-            Err(e) => Status::Failed(e),
-        };
+        }
+        if let Some(answer) = self.answer.as_mut() {
+            answer.status = status;
+        }
     }
 
     fn cancel(&mut self) {
@@ -458,7 +449,7 @@ impl State {
             return;
         };
         self.hide();
-        std::thread::spawn(move || {
+        self.rt.spawn_blocking(move || {
             std::thread::sleep(PASTE_DELAY);
             mac::paste(&text);
         });
@@ -497,9 +488,40 @@ impl State {
     }
 
     pub(super) fn save(&mut self) {
+        if let Some(job) = self.pending_save.take() {
+            job.abort();
+        }
         if let Err(e) = self.settings.save(&self.settings_path) {
             self.report(format!("Couldn't save the settings: {e:#}"));
         }
+    }
+
+    /// Save the settings once typing pauses, rather than on every keystroke.
+    pub(super) fn save_soon(&mut self) {
+        if let Some(job) = self.pending_save.take() {
+            job.abort();
+        }
+        let app = self.app.clone();
+        self.pending_save = Some(self.rt.spawn(async move {
+            tokio::time::sleep(SAVE_DELAY).await;
+            app.update(|s, _| {
+                s.pending_save = None;
+                s.save();
+            });
+        }));
+    }
+
+    /// Save now if a save is waiting.
+    pub(super) fn flush_save(&mut self) {
+        if self.pending_save.is_some() {
+            self.save();
+        }
+    }
+
+    /// Quit, saving what's unsaved first.
+    pub fn quit(&mut self, tx: &mut Tx) {
+        self.flush_save();
+        tx.quit();
     }
 
     /// Show `message` on the page that's open.
@@ -508,6 +530,26 @@ impl State {
             Page::Main => self.notice = Some(message),
             Page::Settings => self.form.error = Some(FormError::Other(message)),
         }
+    }
+}
+
+/// The status of an `action` on `original` whose answer streamed in full as
+/// `text`: done, with Fix's word diff, unless the model returned nothing.
+fn complete(action: Action, original: &str, text: &str) -> Status {
+    if text.trim().is_empty() {
+        return Status::Failed("The model returned nothing.".into());
+    }
+    // Models often add or drop a final newline; keep the selection's.
+    let end = &original[original.trim_end().len()..];
+    let text = format!("{}{end}", text.trim_end());
+    let changes = match action {
+        Action::Fix => diff::words(original, &text),
+        Action::Translate => Vec::new(),
+    };
+    Status::Done {
+        text,
+        changes,
+        copied: false,
     }
 }
 

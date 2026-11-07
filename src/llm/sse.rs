@@ -7,8 +7,10 @@ use futures_util::StreamExt;
 /// Splits a byte stream into the `data` of each event.
 #[derive(Default)]
 pub struct Decoder {
+    /// Bytes after the last complete line.
     buf: Vec<u8>,
-    data: Vec<String>,
+    /// The current event's `data` lines, joined; `None` before its first one.
+    data: Option<String>,
 }
 
 impl Decoder {
@@ -16,20 +18,26 @@ impl Decoder {
     pub fn push(&mut self, bytes: &[u8]) -> Vec<String> {
         self.buf.extend_from_slice(bytes);
         let mut events = Vec::new();
-        while let Some(end) = self.buf.iter().position(|b| *b == b'\n') {
-            let line: Vec<u8> = self.buf.drain(..=end).collect();
-            let line = String::from_utf8_lossy(&line);
-            let line = line.trim_end_matches(['\r', '\n']);
+        let mut start = 0;
+        while let Some(len) = self.buf[start..].iter().position(|b| *b == b'\n') {
+            let line = &self.buf[start..start + len];
+            start += len + 1;
+            let line = line.strip_suffix(b"\r").unwrap_or(line);
             if line.is_empty() {
-                if !self.data.is_empty() {
-                    events.push(self.data.join("\n"));
-                    self.data.clear();
+                events.extend(self.data.take());
+            } else if let Some(value) = line.strip_prefix(b"data:") {
+                let value = String::from_utf8_lossy(value.strip_prefix(b" ").unwrap_or(value));
+                match &mut self.data {
+                    Some(data) => {
+                        data.push('\n');
+                        data.push_str(&value);
+                    }
+                    None => self.data = Some(value.into_owned()),
                 }
-            } else if let Some(value) = line.strip_prefix("data:") {
-                self.data
-                    .push(value.strip_prefix(' ').unwrap_or(value).to_owned());
             }
         }
+        // Drop the lines read in one go, rather than shifting the buffer per line.
+        self.buf.drain(..start);
         events
     }
 
