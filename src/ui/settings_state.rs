@@ -84,7 +84,7 @@ impl Form {
 
 impl State {
     pub fn open_settings(&mut self) {
-        self.trusted = mac::accessibility_trusted();
+        self.set_trusted(mac::accessibility_trusted());
         self.form.at_login = login_item::enabled();
         self.menu = None;
         self.page = Page::Settings;
@@ -200,6 +200,9 @@ impl State {
             app.update(move |s, _| s.signed_in(result.map_err(|e| format!("{e:#}"))));
         });
         self.form.login = Login::Waiting(job);
+        // The window floats above every app, so it would cover the browser's sign-in
+        // page. It comes back with the result.
+        self.hide();
     }
 
     fn signed_in(&mut self, result: Result<ChatGptAuth, String>) {
@@ -211,7 +214,10 @@ impl State {
                 self.load_models();
                 self.open_settings();
             }
-            Err(e) => self.form.login = Login::Failed(e),
+            Err(e) => {
+                self.form.login = Login::Failed(e);
+                self.open_settings();
+            }
         }
     }
 
@@ -247,15 +253,22 @@ impl State {
     }
 
     pub fn ask_accessibility(&mut self) {
-        self.trusted = mac::request_accessibility();
-        if !self.trusted {
+        let trusted = mac::request_accessibility();
+        self.set_trusted(trusted);
+        if !trusted {
             mac::open_accessibility_settings();
         }
     }
 
     pub fn recheck_accessibility(&mut self) {
-        self.trusted = mac::accessibility_trusted();
-        if self.trusted && matches!(self.form.error, Some(FormError::Accessibility)) {
+        self.set_trusted(mac::accessibility_trusted());
+    }
+
+    /// Record whether macOS lets Fettle press keys, and drop the request to
+    /// allow it once it does.
+    pub(super) fn set_trusted(&mut self, trusted: bool) {
+        self.trusted = trusted;
+        if trusted && matches!(self.form.error, Some(FormError::Accessibility)) {
             self.form.error = None;
         }
     }

@@ -9,7 +9,7 @@ use rune::{AppHandle, Phase, ShortcutId, TextEdit, Tx};
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
-use super::settings_state::{Form, FormError, Login, Update};
+use super::settings_state::{Form, FormError, Update};
 use super::view::WIDTH;
 use crate::diff::{self, Piece};
 use crate::llm::{Ask, Backend, chatgpt};
@@ -176,7 +176,7 @@ impl State {
             self.hide();
             return;
         }
-        self.trusted = mac::accessibility_trusted();
+        self.set_trusted(mac::accessibility_trusted());
         if !self.trusted {
             self.open_settings();
             self.form.error = Some(FormError::Accessibility);
@@ -223,9 +223,9 @@ impl State {
         self.app.hide();
     }
 
-    /// The window lost focus: hide it, unless the browser took focus for the sign-in.
+    /// The window lost focus: hide it.
     pub fn blurred(&mut self) {
-        if !matches!(self.form.login, Login::Waiting(_)) && !self.form.shortcut.is_recording() {
+        if !self.form.shortcut.is_recording() {
             self.hide();
         }
     }

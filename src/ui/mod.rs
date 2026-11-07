@@ -57,7 +57,10 @@ pub fn run(start: Start) -> Result<()> {
     let app = app
         .init(move || State::new(me, handle, http, settings, settings_path))
         .on_focus(|s, focused, _| {
-            if !focused {
+            if focused {
+                // Back from System Settings, where Accessibility may have just been allowed.
+                s.recheck_accessibility();
+            } else {
                 s.blurred();
             }
         })
