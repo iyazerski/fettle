@@ -32,7 +32,7 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
 ## Translate
 
 <div align="center">
-<img src="docs/demo/translate.gif" width="600" alt="Selecting a Gmail draft, pressing the shortcut, and clicking Translate: Fettle translates the English reply into Spanish, then Replace puts it back into Gmail">
+<img src="docs/demo/translate.gif" width="600" alt="Selecting a Gmail draft, pressing the shortcut, and picking Spanish next to Translate: Fettle translates the English reply, then Replace puts it back into Gmail">
 </div>
 
 Pick a language from the list next to **Translate**. Fettle asks the model to keep the tone, formatting, names, links and code, and to leave text alone if it's already in that language.
