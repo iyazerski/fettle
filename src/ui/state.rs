@@ -97,6 +97,7 @@ pub enum Menu {
     Language,
     Model,
     AppLanguage,
+    Rewrite,
 }
 
 pub struct Answer {
@@ -517,7 +518,7 @@ fn complete(action: Action, original: &str, text: &str, empty: &str) -> Status {
     let text = format!("{}{end}", text.trim_end());
     let changes = match action {
         Action::Fix => diff::words(original, &text),
-        Action::Translate => Vec::new(),
+        Action::Translate | Action::Rewrite(_) => Vec::new(),
     };
     Status::Done {
         text,

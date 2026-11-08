@@ -51,6 +51,10 @@ pub static ALERT: Icon = icon(
     "alert",
     r#"<circle cx="12" cy="12" r="8.75" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M12 7.75v5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="12" cy="16.25" r="1.1" fill="currentColor"/>"#,
 );
+pub static PEN: Icon = icon(
+    "pen",
+    r#"<path d="M4.75 19.25h4l10-10a2.12 2.12 0 0 0-3-3l-10 10zM13.75 8.25l2 2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>"#,
+);
 pub static PIN: Icon = icon(
     "pin",
     r#"<path d="M8.5 3.75h7M9.75 3.75v5.5L6.5 13.5h11l-3.25-4.25v-5.5M12 13.5v6.75" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>"#,

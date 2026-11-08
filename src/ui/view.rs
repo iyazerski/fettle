@@ -18,7 +18,7 @@ use super::settings_view;
 use super::state::{Answer, Menu, Page, State, Status};
 use crate::diff::{self, Kind, Piece};
 use crate::i18n::fill;
-use crate::prompts::Action;
+use crate::prompts::{Action, Style};
 
 /// The window's corner radius.
 pub const CORNER: f32 = 16.0;
@@ -102,10 +102,6 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
 }
 
 fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
-    let running = s
-        .answer
-        .as_ref()
-        .is_some_and(|a| matches!(a.status, Status::Running { .. }));
     let mut page = col()
         .w_full()
         .gap(12.0)
@@ -114,7 +110,7 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     if let Some(notice) = &s.notice {
         page = page.child(note(k, notice, NoteKind::Info));
     }
-    page = page.child(actions(s, k, running, layer));
+    page = page.child(actions(s, k, layer));
     if let Some(answer) = &s.answer {
         page = page.child(answer_view(s, answer, k));
     }
@@ -204,10 +200,12 @@ pub fn header(s: &State, k: &Kit, title: &str, back: Option<fn(&mut State)>) -> 
     )
 }
 
-fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
+fn actions(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
-    let mut bar = row()
+    row()
         .w_full()
+        // Long labels and language names don't fit one line in some languages.
+        .flex_wrap()
         .center_y()
         .gap(8.0)
         .child(buttons::button(
@@ -221,17 +219,41 @@ fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
             },
         ))
         .child(translate(s, k, layer))
-        .child(spacer());
-    if running {
-        bar = bar.child(
-            Button::new(t.stop)
-                .icon(&icons::STOP)
-                .variant(ButtonVariant::GhostMuted)
-                .on_press(|s: &mut State| s.stop())
-                .build(k),
-        );
+        .child(rewrite(s, k, layer))
+}
+
+/// Rewrite, with the styles to rewrite in as its menu.
+fn rewrite(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
+    let t = s.t();
+    let open = s.menu_open(Menu::Rewrite);
+    let mut menu = Popover::new("styles")
+        .trigger(buttons::menu_button(k, t.rewrite, &icons::PEN, |b| {
+            b.shortcut("⌘3")
+                .on_press(|s: &mut State| s.toggle_menu(Menu::Rewrite))
+        }))
+        .open(open)
+        .placement(Placement::BottomStart)
+        .label(t.rewrite)
+        .padding(4.0)
+        .on_close(|s: &mut State| s.menu = None);
+    // A closed popover drops its content, so skip building the list.
+    if open {
+        menu = menu.child(col().w(200.0).gap(2.0).children(Style::ALL.map(|style| {
+            row()
+                .key(format!("style-{style:?}"))
+                .role("menuitem")
+                .label(t.style(style))
+                .w_full()
+                .h(30.0)
+                .px(8.0)
+                .center_y()
+                .radius(6.0)
+                .hover(k.c.hover)
+                .on_press(move |s: &mut State| s.start(Action::Rewrite(style)))
+                .child(text(t.style(style)).font(k.ty.ui).color(k.c.text_base))
+        })));
     }
-    bar
+    menu.build(k, layer)
 }
 
 /// Translate and the language it writes in, joined in one control.
@@ -369,16 +391,19 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         Action::Fix => t.fixed.to_owned(),
         Action::Translate if running => fill(t.translating, language),
         Action::Translate => fill(t.translation, language),
+        Action::Rewrite(_) if running => t.rewriting.to_owned(),
+        Action::Rewrite(style) => fill(t.rewritten, t.style(style)),
     };
     // Only a Fix answer has changes.
     let changed = matches!(&answer.status, Status::Done { changes, .. } if diff::changed(changes));
     let glyph = match answer.action {
         Action::Fix => &icons::SPARKLE,
         Action::Translate => &icons::GLOBE,
+        Action::Rewrite(_) => &icons::PEN,
     };
     let mut top = row()
         .w_full()
-        .h(24.0)
+        .h(28.0)
         .center_y()
         .gap(8.0)
         .child(icon(glyph, 15.0).color(k.c.icon_accent))
@@ -387,6 +412,15 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         top = top.child(Spinner::new().size(12.0).build(k));
     }
     top = top.child(spacer());
+    if running {
+        top = top.child(
+            Button::new(t.stop)
+                .icon(&icons::STOP)
+                .variant(ButtonVariant::GhostMuted)
+                .on_press(|s: &mut State| s.stop())
+                .build(k),
+        );
+    }
     if changed {
         top = top.child(
             Switch::new(s.show_changes)
@@ -557,6 +591,8 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
         s.start(Action::Fix);
     } else if key.is_command('2') {
         s.start(Action::Translate);
+    } else if key.is_command('3') {
+        s.toggle_menu(Menu::Rewrite);
     } else if key.is_command('c') && key.mods.shift {
         s.copy();
     } else if key.is_command(',') {

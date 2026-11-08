@@ -4,6 +4,8 @@
 use rune::{Color, El, Icon, Shadow, icon, row, text};
 use rune_kit::{Button, ButtonVariant, ControlSize, Kit};
 
+use super::icons;
+
 /// The capsule's height, as a large push button's, and so its corner radius.
 const HEIGHT: f32 = 28.0;
 
@@ -24,6 +26,36 @@ pub fn button(
     glyph: Option<&'static Icon>,
     configure: impl FnOnce(Button) -> Button,
 ) -> El {
+    capsule(k, tone, label, glyph, None, configure)
+}
+
+/// A quiet capsule button that opens a menu: `label` with `glyph` before it
+/// and a chevron after.
+pub fn menu_button(
+    k: &Kit,
+    label: &str,
+    glyph: &'static Icon,
+    configure: impl FnOnce(Button) -> Button,
+) -> El {
+    capsule(
+        k,
+        Tone::Secondary,
+        label,
+        Some(glyph),
+        Some(&icons::CHEV_DOWN),
+        configure,
+    )
+}
+
+/// Build a capsule button with optional icons before and after `label`.
+fn capsule(
+    k: &Kit,
+    tone: Tone,
+    label: &str,
+    glyph: Option<&'static Icon>,
+    trailing: Option<&'static Icon>,
+    configure: impl FnOnce(Button) -> Button,
+) -> El {
     let ink = match tone {
         Tone::Primary => Color::WHITE,
         Tone::Secondary => k.c.text_base,
@@ -38,6 +70,7 @@ pub fn button(
                 .center_y()
                 .children(glyph.map(|g| icon(g, 15.0).color(ink)))
                 .child(text(caption).font(font).color(ink))
+                .children(trailing.map(|g| icon(g, 13.0).color(ink)))
         });
     surface(k, tone, configure(button).build(k).px(14.0)).press_scale(0.98)
 }

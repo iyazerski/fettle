@@ -16,6 +16,7 @@ mod zh;
 
 use serde::{Deserialize, Serialize};
 
+use crate::prompts::Style;
 use crate::settings::{LANGUAGES, Missing};
 
 /// A language the window can be shown in.
@@ -139,6 +140,12 @@ pub struct Strings {
     pub translating: &'static str,
     /// `{}`: the language.
     pub translation: &'static str,
+    pub rewrite: &'static str,
+    pub rewriting: &'static str,
+    /// `{}`: the style.
+    pub rewritten: &'static str,
+    /// Formal, Friendly, Shorter, Clearer, as [`Style::ALL`](crate::prompts::Style::ALL).
+    pub styles: [&'static str; 4],
     pub show_changes: &'static str,
     pub thinking: &'static str,
     pub nothing_to_fix: &'static str,
@@ -229,6 +236,11 @@ impl Strings {
             Missing::ApiUrl => self.missing_api_url,
             Missing::Model => self.missing_model,
         }
+    }
+
+    /// Return the name of `style` in this language.
+    pub fn style(&self, style: Style) -> &'static str {
+        self.styles[style as usize]
     }
 
     /// Return the name of `language`, one of [`LANGUAGES`], in this language.
