@@ -63,10 +63,12 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
         Page::Main => main(s, k, &mut layer),
         Page::Settings => settings_view::view(s, k, &mut layer),
     };
+    // Light enough over the glass that what's behind tints the window, while the
+    // blur keeps the text readable.
     let tint = if dark {
         k.c.bg_base.alpha(0.72)
     } else {
-        Color::WHITE.alpha(0.8)
+        Color::WHITE.alpha(0.4)
     };
     // macOS draws dark windows' rims itself; a light line on top reads as a seam.
     let edge = if dark {
@@ -78,7 +80,8 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
         .key("card")
         .w_full()
         .radius(CORNER)
-        .system_material(SystemMaterial::Popover)
+        // Liquid Glass on macOS 26 and later; Rune uses the popover blur before that.
+        .system_material(SystemMaterial::Glass)
         .child(
             col()
                 .w_full()
