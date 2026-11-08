@@ -34,36 +34,63 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
-  release:
-    needs: ci
+  # Builds while CI runs; only the release job below waits for CI.
+  build:
     # Apple silicon only, like the Macs it runs on, with the macOS 26 SDK the
     # Swift bridge to Apple's on-device model needs.
+    runs-on: macos-26
+    env:
+      TARGET: aarch64-apple-darwin
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The tags, to count the earlier releases.
+          fetch-depth: 0
+      - name: Pick version
+        id: version
+        run: |
+          minor=$(sed -nE 's/^version = "([0-9]+\.[0-9]+)\..*"/\1/p' Cargo.toml)
+          patch=$(git tag --list "v$minor.*" | wc -l | tr -d ' ')
+          echo "version=$minor.$patch" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET }}
+      - uses: Swatinem/rust-cache@v2.9.3
+      - name: Build binary
+        env:
+          FETTLE_VERSION: ${{ steps.version.outputs.version }}
+        run: cargo build --release --locked --target "$TARGET"
+      - name: Test binary
+        run: target/$TARGET/release/fettle --version
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: fettle
+          path: target/${{ env.TARGET }}/release/fettle
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    needs: [ci, build]
     runs-on: macos-26
     permissions:
       contents: write
     env:
-      TARGET: aarch64-apple-darwin
       ASSET: Fettle.zip
+      VERSION: ${{ needs.build.outputs.version }}
     steps:
       - uses: actions/checkout@v7
         with:
           # The whole history and tags, to list the changes since the last release.
           fetch-depth: 0
-      - name: Pick version
-        run: |
-          minor=$(sed -nE 's/^version = "([0-9]+\.[0-9]+)\..*"/\1/p' Cargo.toml)
-          patch=$(git tag --list "v$minor.*" | wc -l | tr -d ' ')
-          echo "VERSION=$minor.$patch" >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ env.TARGET }}
       - uses: astral-sh/setup-uv@v10.3.3
-      - name: Build binary
-        env:
-          FETTLE_VERSION: ${{ env.VERSION }}
-        run: cargo build --release --locked --target "$TARGET"
-      - name: Test binary
-        run: target/$TARGET/release/fettle --version
+      - uses: actions/download-artifact@v8.0.2
+        with:
+          name: fettle
+          path: build
+      # Artifacts don't keep file modes.
+      - run: chmod +x build/fettle
       # A self-signed certificate, the same for every release, so macOS keeps
       # the Accessibility grant when Fettle updates.
       - name: Import signing certificate
@@ -86,7 +113,7 @@ jobs:
           FETTLE_SIGN_IDENTITY: Fettle Code Signing
         run: |
           mkdir dist
-          scripts/bundle.sh "target/$TARGET/release/fettle" "$VERSION" dist
+          scripts/bundle.sh build/fettle "$VERSION" dist
           ditto -c -k --keepParent dist/Fettle.app "dist/$ASSET"
           uvx dmgbuild -s scripts/dmg.py -D app=dist/Fettle.app Fettle dist/Fettle.dmg
           codesign -dr - dist/Fettle.app
