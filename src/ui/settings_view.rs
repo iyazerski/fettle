@@ -12,6 +12,7 @@ use super::icons;
 use super::settings_state::{Login, Models, Update};
 use super::state::{Menu, State};
 use super::view::{NoteKind, WIDTH, divider, header, note};
+use crate::i18n::{Locale, fill};
 use crate::mac;
 use crate::settings::{Appearance, Missing, Provider, Reasoning};
 
@@ -27,18 +28,19 @@ const LABEL: f32 = 110.0;
 const CONTROL: f32 = WIDTH - 2.0 * 14.0 - LABEL - 12.0;
 
 pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
+    let t = s.t();
     let sk = segmented_kit(k);
     let mut page = col()
         .w_full()
         .gap(12.0)
-        .child(header(s, k, "Settings", Some(State::back)));
+        .child(header(s, k, t.settings, Some(State::back)));
     if let Some(error) = &s.form.error {
-        page = page.child(note(k, &error.to_string(), NoteKind::Failure));
+        page = page.child(note(k, error.message(t), NoteKind::Failure));
     }
-    page.child(section(k, "Model"))
+    page.child(section(k, t.model))
         .child(
             SegmentedControl::new(
-                &["ChatGPT plan", "OpenAI-compatible API"],
+                &[t.chatgpt_plan, t.compatible_api],
                 Some(usize::from(s.settings.provider == Provider::Api)),
             )
             .width(None)
@@ -58,9 +60,9 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .children(model(s, k, layer))
         .child(labeled(
             k,
-            "Reasoning",
+            t.reasoning,
             SegmentedControl::new(
-                &Reasoning::ALL.map(Reasoning::label),
+                &t.reasoning_levels,
                 Reasoning::ALL
                     .iter()
                     .position(|r| *r == s.settings.reasoning),
@@ -70,12 +72,12 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             .build(&sk),
         ))
         .child(divider(k))
-        .child(section(k, "General"))
+        .child(section(k, t.general))
         .child(labeled(
             k,
-            "Appearance",
+            t.appearance,
             SegmentedControl::new(
-                &Appearance::ALL.map(Appearance::label),
+                &t.appearances,
                 Appearance::ALL
                     .iter()
                     .position(|a| *a == s.settings.appearance),
@@ -84,13 +86,14 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             .on_pick(|s: &mut State, i, _| s.set_appearance(Appearance::ALL[i]))
             .build(&sk),
         ))
+        .child(labeled(k, t.app_language, app_language(s, k, layer)))
         .child(labeled(
             k,
-            "Shortcut",
+            t.shortcut,
             ShortcutRecorder::new("shortcut", &s.form.shortcut, |s: &mut State| {
                 &mut s.form.shortcut
             })
-            .label("Open Fettle")
+            .label(t.open_fettle)
             .on_change(|s: &mut State, shortcut, _| s.change_shortcut(shortcut))
             .error_message(shortcut_error_message)
             .width(200.0)
@@ -98,21 +101,42 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         ))
         .child(labeled(
             k,
-            "Start at login",
+            t.start_at_login,
             Switch::new(s.form.at_login)
                 .hide_label()
-                .label("Start at login")
+                .label(t.start_at_login)
                 .on_toggle(|s: &mut State| s.toggle_at_login())
                 .build(k),
         ))
-        .child(labeled(k, "Accessibility", accessibility(s, k)))
+        .child(labeled(k, t.accessibility, accessibility(s, k)))
         .child(divider(k))
         .child(footer(s, k))
-        .child(credits(k))
+        .child(credits(s, k))
 }
 
-/// Who made Fettle, its license, the licenses of what it's built from, and its
-/// source, each a link.
+/// The window's language: System, then each language in its own name.
+fn app_language(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
+    let t = s.t();
+    let options: Vec<&str> = std::iter::once(t.system_language)
+        .chain(Locale::ALL.map(Locale::native_name))
+        .collect();
+    let current = s
+        .settings
+        .app_language
+        .map_or(t.system_language, Locale::native_name);
+    Select::new("app-language", &options)
+        .label(t.app_language)
+        .appearance(SelectAppearance::Field)
+        .width(200.0)
+        .current(Some(current))
+        .placement(Placement::BottomStart)
+        .open(s.menu_open(Menu::AppLanguage))
+        .on_toggle(|s: &mut State| s.toggle_menu(Menu::AppLanguage))
+        .on_close(|s: &mut State| s.menu = None)
+        .on_choose(|s: &mut State, name, _| s.pick_app_language(name))
+        .build(k, layer)
+}
+
 /// Return the kit for segmented controls. In light mode, their track is grey so the
 /// white selected segment stands out from the rest.
 fn segmented_kit(k: &Kit) -> Kit {
@@ -124,7 +148,10 @@ fn segmented_kit(k: &Kit) -> Kit {
     sk
 }
 
-fn credits(k: &Kit) -> El {
+/// Who made Fettle, its license, the licenses of what it's built from, and its
+/// source, each a link.
+fn credits(s: &State, k: &Kit) -> El {
+    let t = s.t();
     let faint = |label: &str| text(label).font(k.ty.text_small).color(k.c.text_faint);
     let link = |label: &str, url: &'static str| {
         text(label)
@@ -137,18 +164,19 @@ fn credits(k: &Kit) -> El {
         .w_full()
         .center_y()
         .gap(5.0)
-        .child(faint("Made by"))
-        .child(link(AUTHOR, AUTHOR_URL).help("Buy me a coffee"))
+        .child(faint(t.made_by))
+        .child(link(AUTHOR, AUTHOR_URL).help(t.buy_coffee))
         .child(faint("·"))
-        .child(link("MIT License", LICENSE_URL))
+        .child(link(t.mit_license, LICENSE_URL))
         .child(faint("·"))
-        .child(link("Open-source licenses", NOTICES_URL))
+        .child(link(t.notices, NOTICES_URL))
         .child(faint("·"))
         .child(link("GitHub", REPO_URL))
 }
 
 /// The version, the update button, and Quit.
 fn footer(s: &State, k: &Kit) -> El {
+    let t = s.t();
     let mut bar = row().w_full().center_y().gap(8.0).child(
         text(format!("Fettle {}", crate::VERSION))
             .font(k.ty.text_small)
@@ -156,7 +184,7 @@ fn footer(s: &State, k: &Kit) -> El {
     );
     let status = |label: String| text(label).font(k.ty.text_small).color(k.c.text_muted);
     let check = || {
-        Button::new("Check for updates")
+        Button::new(t.check_updates)
             .variant(ButtonVariant::Ghost)
             .on_press(|s: &mut State| s.check_update())
             .build(k)
@@ -165,26 +193,26 @@ fn footer(s: &State, k: &Kit) -> El {
         Update::Idle | Update::Failed(_) => bar.child(check()),
         Update::Checking => bar
             .child(Spinner::new().size(12.0).build(k))
-            .child(status("Checking…".into())),
+            .child(status(t.checking.into())),
         Update::Latest => bar
             .child(icon(&icons::CHECK, 14.0).color(k.c.success.icon))
-            .child(status("Up to date".into())),
+            .child(status(t.up_to_date.into())),
         Update::Available(version) => bar.child(buttons::button(
             k,
             Tone::Primary,
-            &format!("Update to {version}"),
+            &fill(t.update_to, version),
             Some(&icons::DOWNLOAD),
             |b| {
-                b.help("Download it, then restart Fettle")
+                b.help(t.update_help)
                     .on_press(|s: &mut State| s.install_update())
             },
         )),
         Update::Installing(version) => bar
             .child(Spinner::new().size(12.0).build(k))
-            .child(status(format!("Updating to {version}…"))),
+            .child(status(fill(t.updating, version))),
     };
     bar = bar.child(spacer()).child(
-        Button::new("Quit Fettle")
+        Button::new(t.quit)
             .variant(ButtonVariant::GhostMuted)
             .shortcut("⌘Q")
             .on_press_tx(|s: &mut State, tx| s.quit(tx))
@@ -201,17 +229,14 @@ fn footer(s: &State, k: &Kit) -> El {
 }
 
 fn chatgpt(s: &State, k: &Kit) -> El {
+    let t = s.t();
     let line = row().w_full().center_y().gap(8.0);
     match (&s.settings.chatgpt, &s.form.login) {
         (_, Login::Waiting(_)) => line
-            .child(
-                text("Finish signing in in your browser…")
-                    .font(k.ty.ui)
-                    .color(k.c.text_muted),
-            )
+            .child(text(t.finish_sign_in).font(k.ty.ui).color(k.c.text_muted))
             .child(spacer())
             .child(
-                Button::new("Cancel")
+                Button::new(t.cancel)
                     .variant(ButtonVariant::Ghost)
                     .on_press(|s: &mut State| s.cancel_sign_in())
                     .build(k),
@@ -219,9 +244,9 @@ fn chatgpt(s: &State, k: &Kit) -> El {
         (Some(auth), _) => line
             .child(icon(&icons::CHECK, 14.0).color(k.c.success.icon))
             .child(
-                text(format!(
-                    "Signed in as {}",
-                    auth.email.as_deref().unwrap_or("a ChatGPT user")
+                text(fill(
+                    t.signed_in_as,
+                    auth.email.as_deref().unwrap_or(t.chatgpt_user),
                 ))
                 .font(k.ty.ui)
                 .color(k.c.text_base)
@@ -229,7 +254,7 @@ fn chatgpt(s: &State, k: &Kit) -> El {
                 .grow(1.0),
             )
             .child(
-                Button::new("Sign out")
+                Button::new(t.sign_out)
                     .variant(ButtonVariant::Ghost)
                     .on_press(|s: &mut State| s.sign_out())
                     .build(k),
@@ -238,7 +263,7 @@ fn chatgpt(s: &State, k: &Kit) -> El {
             let mut block = col().w_full().gap(6.0).child(buttons::button(
                 k,
                 Tone::Primary,
-                "Sign in with ChatGPT",
+                t.sign_in,
                 None,
                 |b| b.on_press(|s: &mut State| s.sign_in()),
             ));
@@ -251,14 +276,15 @@ fn chatgpt(s: &State, k: &Kit) -> El {
 }
 
 fn api(s: &State, k: &Kit) -> El {
+    let t = s.t();
     col()
         .w_full()
         .gap(8.0)
         .child(labeled(
             k,
-            "API URL",
+            t.api_url,
             TextInput::new(&s.form.api_base)
-                .label("API URL")
+                .label(t.api_url)
                 .placeholder("https://api.openai.com/v1")
                 .width(None)
                 .on_edit(|s: &mut State| &mut s.form.api_base)
@@ -267,11 +293,11 @@ fn api(s: &State, k: &Kit) -> El {
         ))
         .child(labeled(
             k,
-            "API key",
+            t.api_key,
             TextInput::new(&s.form.api_key)
                 .secure()
-                .label("API key")
-                .placeholder("sk-…, or empty for none")
+                .label(t.api_key)
+                .placeholder(t.api_key_placeholder)
                 .width(None)
                 .on_edit(|s: &mut State| &mut s.form.api_key)
                 .on_change(|s: &mut State, _| s.api_edited())
@@ -281,6 +307,7 @@ fn api(s: &State, k: &Kit) -> El {
 
 /// The model dropdown, once the provider can list its models.
 fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
+    let t = s.t();
     if matches!(
         s.settings.missing(),
         Some(Missing::SignIn | Missing::ApiUrl)
@@ -294,14 +321,14 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
     };
     let current = Some(s.settings.model()).filter(|m| !m.is_empty());
     let select = Select::new("model", models)
-        .label("Model")
+        .label(t.model)
         .appearance(SelectAppearance::Field)
         .width(CONTROL)
         .current(current)
         .placeholder(if loading {
-            "Loading models…"
+            t.loading_models
         } else {
-            "Choose a model"
+            t.choose_model
         })
         .placement(Placement::BottomStart)
         .open(s.menu_open(Menu::Model) && !models.is_empty())
@@ -309,7 +336,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
         .on_close(|s: &mut State| s.menu = None)
         .on_choose(|s: &mut State, model, _| s.pick_model(model))
         .build(k, layer);
-    let mut block = col().w_full().gap(6.0).child(labeled(k, "Model", select));
+    let mut block = col().w_full().gap(6.0).child(labeled(k, t.model, select));
     if let Models::Failed(e) = &s.form.models {
         block = block.child(
             row()
@@ -318,7 +345,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
                 .gap(8.0)
                 .child(note(k, e, NoteKind::Failure).grow(1.0))
                 .child(
-                    Button::new("Try again")
+                    Button::new(t.try_again)
                         .variant(ButtonVariant::Ghost)
                         .on_press(|s: &mut State| s.load_models())
                         .build(k),
@@ -329,22 +356,23 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
 }
 
 fn accessibility(s: &State, k: &Kit) -> El {
+    let t = s.t();
     if s.trusted {
         return row()
             .gap(6.0)
             .center_y()
             .child(icon(&icons::CHECK, 14.0).color(k.c.success.icon))
-            .child(text("Allowed").font(k.ty.ui).color(k.c.text_base));
+            .child(text(t.allowed).font(k.ty.ui).color(k.c.text_base));
     }
     row()
         .gap(8.0)
         .center_y()
-        .child(buttons::button(k, Tone::Primary, "Allow…", None, |b| {
-            b.help("Fettle copies the selection and pastes the result with ⌘C and ⌘V")
+        .child(buttons::button(k, Tone::Primary, t.allow, None, |b| {
+            b.help(t.allow_help)
                 .on_press(|s: &mut State| s.ask_accessibility())
         }))
         .child(
-            Button::new("Check again")
+            Button::new(t.check_again)
                 .variant(ButtonVariant::Ghost)
                 .on_press(|s: &mut State| s.recheck_accessibility())
                 .build(k),
@@ -367,6 +395,8 @@ fn labeled(k: &Kit, label: &str, control: El) -> El {
             text(label.to_owned())
                 .font(k.ty.ui)
                 .color(k.c.text_base)
+                // Some languages need two lines for a label.
+                .wrap()
                 .w(LABEL),
         )
         .child(col().grow(1.0).child(control))

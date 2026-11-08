@@ -1,0 +1,302 @@
+//! The languages Fettle's own window speaks, and its text in each. Prompts to
+//! the model stay in English; only what the user reads changes.
+
+mod ar;
+mod de;
+mod en;
+mod es;
+mod fr;
+mod hi;
+mod ja;
+mod ko;
+mod pl;
+mod pt;
+mod ru;
+mod zh;
+
+use serde::{Deserialize, Serialize};
+
+use crate::settings::{LANGUAGES, Missing};
+
+/// A language the window can be shown in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Locale {
+    English,
+    Spanish,
+    Chinese,
+    Hindi,
+    French,
+    Russian,
+    Arabic,
+    Portuguese,
+    German,
+    Japanese,
+    Polish,
+    Korean,
+}
+
+impl Locale {
+    pub const ALL: [Locale; 12] = [
+        Locale::English,
+        Locale::Spanish,
+        Locale::Chinese,
+        Locale::Hindi,
+        Locale::French,
+        Locale::Russian,
+        Locale::Arabic,
+        Locale::Portuguese,
+        Locale::German,
+        Locale::Japanese,
+        Locale::Polish,
+        Locale::Korean,
+    ];
+
+    /// Return the language's name in itself, as the picker lists it.
+    pub fn native_name(self) -> &'static str {
+        match self {
+            Locale::English => "English",
+            Locale::Spanish => "Español",
+            Locale::Chinese => "中文",
+            Locale::Hindi => "हिन्दी",
+            Locale::French => "Français",
+            Locale::Russian => "Русский",
+            Locale::Arabic => "العربية",
+            Locale::Portuguese => "Português",
+            Locale::German => "Deutsch",
+            Locale::Japanese => "日本語",
+            Locale::Polish => "Polski",
+            Locale::Korean => "한국어",
+        }
+    }
+
+    /// Return the first of `preferred` (BCP 47 tags like `pt-BR`, most
+    /// preferred first) that Fettle speaks, or English.
+    pub fn from_preferred<S: AsRef<str>>(preferred: &[S]) -> Locale {
+        preferred
+            .iter()
+            .find_map(|tag| {
+                let code = tag.as_ref().split(['-', '_']).next().unwrap_or_default();
+                Some(match code {
+                    "en" => Locale::English,
+                    "es" => Locale::Spanish,
+                    "zh" => Locale::Chinese,
+                    "hi" => Locale::Hindi,
+                    "fr" => Locale::French,
+                    "ru" => Locale::Russian,
+                    "ar" => Locale::Arabic,
+                    "pt" => Locale::Portuguese,
+                    "de" => Locale::German,
+                    "ja" => Locale::Japanese,
+                    "pl" => Locale::Polish,
+                    "ko" => Locale::Korean,
+                    _ => return None,
+                })
+            })
+            .unwrap_or(Locale::English)
+    }
+
+    /// Return the window's text in this language.
+    pub fn strings(self) -> &'static Strings {
+        match self {
+            Locale::English => &en::STRINGS,
+            Locale::Spanish => &es::STRINGS,
+            Locale::Chinese => &zh::STRINGS,
+            Locale::Hindi => &hi::STRINGS,
+            Locale::French => &fr::STRINGS,
+            Locale::Russian => &ru::STRINGS,
+            Locale::Arabic => &ar::STRINGS,
+            Locale::Portuguese => &pt::STRINGS,
+            Locale::German => &de::STRINGS,
+            Locale::Japanese => &ja::STRINGS,
+            Locale::Polish => &pl::STRINGS,
+            Locale::Korean => &ko::STRINGS,
+        }
+    }
+}
+
+/// Everything the window says, in one language. A `{}` marks where a value
+/// goes; fill it with [`fill`].
+pub struct Strings {
+    // The main window.
+    pub text: &'static str,
+    pub placeholder: &'static str,
+    pub clear: &'static str,
+    pub back: &'static str,
+    pub settings: &'static str,
+    pub pin: &'static str,
+    pub unpin: &'static str,
+    pub hide: &'static str,
+    pub fix: &'static str,
+    pub stop: &'static str,
+    pub translate: &'static str,
+    pub translation_language: &'static str,
+    pub add_favourite: &'static str,
+    pub remove_favourite: &'static str,
+    pub fixing: &'static str,
+    pub fixed: &'static str,
+    /// `{}`: the language.
+    pub translating: &'static str,
+    /// `{}`: the language.
+    pub translation: &'static str,
+    pub show_changes: &'static str,
+    pub thinking: &'static str,
+    pub nothing_to_fix: &'static str,
+    pub copy: &'static str,
+    pub copied: &'static str,
+    pub replace: &'static str,
+    pub replace_help: &'static str,
+    pub no_selection: &'static str,
+    pub no_text: &'static str,
+    pub stopped: &'static str,
+    pub empty_answer: &'static str,
+    /// `{}`: the error.
+    pub save_failed: &'static str,
+    pub missing_sign_in: &'static str,
+    pub missing_api_url: &'static str,
+    pub missing_model: &'static str,
+    // Settings.
+    pub model: &'static str,
+    pub chatgpt_plan: &'static str,
+    pub compatible_api: &'static str,
+    pub reasoning: &'static str,
+    /// Default, Off, Low, Medium, High.
+    pub reasoning_levels: [&'static str; 5],
+    pub general: &'static str,
+    pub appearance: &'static str,
+    /// System, Light, Dark.
+    pub appearances: [&'static str; 3],
+    pub app_language: &'static str,
+    /// The language picker's choice to follow macOS.
+    pub system_language: &'static str,
+    pub shortcut: &'static str,
+    pub open_fettle: &'static str,
+    pub start_at_login: &'static str,
+    pub accessibility: &'static str,
+    pub allowed: &'static str,
+    pub allow: &'static str,
+    pub allow_help: &'static str,
+    pub check_again: &'static str,
+    pub accessibility_needed: &'static str,
+    pub made_by: &'static str,
+    pub buy_coffee: &'static str,
+    pub mit_license: &'static str,
+    pub notices: &'static str,
+    pub check_updates: &'static str,
+    pub checking: &'static str,
+    pub up_to_date: &'static str,
+    /// `{}`: the version.
+    pub update_to: &'static str,
+    pub update_help: &'static str,
+    /// `{}`: the version.
+    pub updating: &'static str,
+    pub quit: &'static str,
+    pub finish_sign_in: &'static str,
+    pub cancel: &'static str,
+    /// `{}`: the email.
+    pub signed_in_as: &'static str,
+    pub chatgpt_user: &'static str,
+    pub sign_out: &'static str,
+    pub sign_in: &'static str,
+    pub api_url: &'static str,
+    pub api_key: &'static str,
+    pub api_key_placeholder: &'static str,
+    pub loading_models: &'static str,
+    pub choose_model: &'static str,
+    pub try_again: &'static str,
+    pub no_models: &'static str,
+    /// `{}`: the error.
+    pub list_models_failed: &'static str,
+    /// `{}`: the error.
+    pub shortcut_broken: &'static str,
+    /// `{}`: the app that has the shortcut.
+    pub shortcut_taken: &'static str,
+    /// `{}`: the error.
+    pub shortcut_failed: &'static str,
+    /// `{}`: the error.
+    pub check_failed: &'static str,
+    /// `{}`: the error.
+    pub update_failed: &'static str,
+    /// The names of [`LANGUAGES`], in its order.
+    pub languages: [&'static str; LANGUAGES.len()],
+}
+
+impl Strings {
+    /// Return what to do about `missing`.
+    pub fn missing(&self, missing: Missing) -> &'static str {
+        match missing {
+            Missing::SignIn => self.missing_sign_in,
+            Missing::ApiUrl => self.missing_api_url,
+            Missing::Model => self.missing_model,
+        }
+    }
+
+    /// Return the name of `language`, one of [`LANGUAGES`], in this language.
+    pub fn language(&self, language: &str) -> &'static str {
+        LANGUAGES
+            .iter()
+            .position(|l| *l == language)
+            .map_or("?", |i| self.languages[i])
+    }
+
+    /// Sort `languages`, from [`LANGUAGES`], by their names in this language.
+    pub fn sort_languages(&self, languages: &mut [&'static str]) {
+        languages.sort_by_cached_key(|l| sort_key(self.language(l)));
+    }
+}
+
+/// Put `value` in place of the `{}` in `template`.
+pub fn fill(template: &str, value: impl std::fmt::Display) -> String {
+    template.replacen("{}", &value.to_string(), 1)
+}
+
+/// `name` lowercased with Latin accents dropped, so "Árabe" sorts with the a's.
+fn sort_key(name: &str) -> String {
+    name.to_lowercase()
+        .chars()
+        .map(|c| match c {
+            'á' | 'à' | 'â' | 'ä' | 'ã' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'í' | 'î' | 'ï' => 'i',
+            'ó' | 'ô' | 'ö' | 'õ' => 'o',
+            'ú' | 'û' | 'ü' => 'u',
+            'ç' => 'c',
+            'ñ' | 'ń' => 'n',
+            'ą' => 'a',
+            'ć' => 'c',
+            'ę' => 'e',
+            'ł' => 'l',
+            'ś' => 's',
+            'ź' | 'ż' => 'z',
+            _ => c,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn picks_the_first_preferred_language_fettle_speaks() {
+        let cases: &[(&[&str], Locale)] = &[
+            (&["pt-BR", "en-US"], Locale::Portuguese),
+            (&["uk-UA", "ru-RU", "en"], Locale::Russian),
+            (&["zh-Hans-CN"], Locale::Chinese),
+            (&["ko-KR"], Locale::Korean),
+            (&["it-IT", "nl-NL"], Locale::English),
+            (&[], Locale::English),
+        ];
+        for (preferred, want) in cases {
+            assert_eq!(Locale::from_preferred(preferred), *want, "{preferred:?}");
+        }
+    }
+
+    #[test]
+    fn sorts_translation_languages_by_their_local_names() {
+        let mut languages = vec!["Vietnamese", "Arabic", "German", "Amharic"];
+        Locale::Spanish.strings().sort_languages(&mut languages);
+        // Alemán, Amárico, Árabe, Vietnamita.
+        assert_eq!(languages, ["German", "Amharic", "Arabic", "Vietnamese"]);
+    }
+}

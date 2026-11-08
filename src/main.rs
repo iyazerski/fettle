@@ -6,6 +6,7 @@
 //! answer, with a word diff ([`diff`]) for fixes.
 
 mod diff;
+mod i18n;
 mod json_file;
 mod llm;
 mod login_item;

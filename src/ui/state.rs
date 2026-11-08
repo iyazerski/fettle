@@ -12,6 +12,7 @@ use tokio::task::JoinHandle;
 use super::settings_state::{Form, FormError, Update};
 use super::view::WIDTH;
 use crate::diff::{self, Piece};
+use crate::i18n::{Locale, Strings, fill};
 use crate::llm::{Ask, Backend, chatgpt};
 use crate::mac;
 use crate::prompts::{self, Action};
@@ -41,6 +42,8 @@ pub struct State {
     pub show_changes: bool,
     /// Keep the window open when another app takes focus.
     pub pinned: bool,
+    /// The language macOS prefers, of those the window speaks.
+    system_locale: Locale,
     /// The dropdown that's open.
     pub menu: Option<Menu>,
     /// Whether the open dropdown's list shows yet: it waits for the window to
@@ -93,6 +96,7 @@ pub enum Page {
 pub enum Menu {
     Language,
     Model,
+    AppLanguage,
 }
 
 pub struct Answer {
@@ -136,6 +140,7 @@ impl State {
             answer: None,
             show_changes: true,
             pinned: false,
+            system_locale: Locale::from_preferred(&mac::preferred_languages()),
             menu: None,
             menu_shown: false,
             notice: None,
@@ -202,7 +207,7 @@ impl State {
         self.menu = None;
         self.notice = match &text {
             Some(_) => None,
-            None => Some("No text selected. Type or paste it here.".into()),
+            None => Some(self.t().no_selection.into()),
         };
         self.source.replace_text(text.unwrap_or_default());
         self.show();
@@ -231,6 +236,16 @@ impl State {
         if !self.pinned && !self.form.shortcut.is_recording() {
             self.hide();
         }
+    }
+
+    /// Return the window's text in the language it speaks.
+    pub fn t(&self) -> &'static Strings {
+        self.locale().strings()
+    }
+
+    /// Return the language the window speaks: the chosen one, or macOS's.
+    pub fn locale(&self) -> Locale {
+        self.settings.app_language.unwrap_or(self.system_locale)
     }
 
     pub fn toggle_pin(&mut self) {
@@ -290,7 +305,7 @@ impl State {
         self.menu = None;
         let original = self.source.text.clone();
         if original.trim().is_empty() {
-            self.notice = Some("There's no text to work on.".into());
+            self.notice = Some(self.t().no_text.into());
             return;
         }
         self.notice = None;
@@ -304,7 +319,7 @@ impl State {
             Err(missing) => {
                 self.answer = Some(Answer {
                     action,
-                    status: Status::Failed(missing.to_string()),
+                    status: Status::Failed(self.t().missing(missing).into()),
                 });
                 return;
             }
@@ -317,6 +332,7 @@ impl State {
             effort: self.settings.reasoning.effort(),
         };
         let (app, http) = (self.app.clone(), self.http.clone());
+        let empty = self.t().empty_answer;
         let job = self.rt.spawn(async move {
             let mut streamed = String::new();
             let result = async {
@@ -332,11 +348,11 @@ impl State {
             .await;
             let status = match result {
                 // The diff can take a while on a long text: keep it off the UI thread.
-                Ok(()) => {
-                    tokio::task::spawn_blocking(move || complete(action, &ask.text, &streamed))
-                        .await
-                        .unwrap_or_else(|e| Status::Failed(e.to_string()))
-                }
+                Ok(()) => tokio::task::spawn_blocking(move || {
+                    complete(action, &ask.text, &streamed, empty)
+                })
+                .await
+                .unwrap_or_else(|e| Status::Failed(e.to_string())),
                 Err(e) => Status::Failed(format!("{e:#}")),
             };
             app.update(move |s, _| s.finished(run, status));
@@ -378,11 +394,12 @@ impl State {
 
     fn cancel(&mut self) {
         self.run += 1;
+        let stopped = self.t().stopped;
         if let Some(answer) = self.answer.as_mut()
             && let Status::Running { job, .. } = &answer.status
         {
             job.abort();
-            answer.status = Status::Failed("Stopped.".into());
+            answer.status = Status::Failed(stopped.into());
         }
     }
 
@@ -447,7 +464,7 @@ impl State {
             job.abort();
         }
         if let Err(e) = self.settings.save(&self.settings_path) {
-            self.report(format!("Couldn't save the settings: {e:#}"));
+            self.report(fill(self.t().save_failed, format_args!("{e:#}")));
         }
     }
 
@@ -489,10 +506,11 @@ impl State {
 }
 
 /// The status of an `action` on `original` whose answer streamed in full as
-/// `text`: done, with Fix's word diff, unless the model returned nothing.
-fn complete(action: Action, original: &str, text: &str) -> Status {
+/// `text`: done, with Fix's word diff, unless the model returned nothing, which
+/// fails with `empty`.
+fn complete(action: Action, original: &str, text: &str, empty: &str) -> Status {
     if text.trim().is_empty() {
-        return Status::Failed("The model returned nothing.".into());
+        return Status::Failed(empty.into());
     }
     // Models often add or drop a final newline; keep the selection's.
     let end = &original[original.trim_end().len()..];

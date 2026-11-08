@@ -27,7 +27,7 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
 
 - **Works in every app.** Mail, Slack, Notes, your browser, your code editor. If you can select the text, Fettle can fix it.
 - **See every change.** Fixes show up word by word, like track changes.
-- **Translate into 33 languages.** Fettle keeps the tone, formatting, names, links and code. Star the languages you use most to keep them at the top.
+- **Translate into 40 languages.** Fettle keeps the tone, formatting, names, links and code. Star the languages you use most to keep them at the top.
 - **Paste it back in one keystroke.** <kbd>⌘</kbd><kbd>↩</kbd> replaces your selection with the result. Your clipboard stays as it was.
 - **Use your ChatGPT plan or your own API.** Sign in with ChatGPT, or point Fettle at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
 - **Native and tiny.** Written in Rust, a 10 MB download, about 12 MB of memory when idle, and no CPU use until you call it.

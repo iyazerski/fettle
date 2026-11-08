@@ -17,6 +17,7 @@ use super::icons;
 use super::settings_view;
 use super::state::{Answer, Menu, Page, State, Status};
 use crate::diff::{self, Kind, Piece};
+use crate::i18n::fill;
 use crate::prompts::Action;
 
 /// The window's corner radius.
@@ -122,9 +123,10 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
 
 /// The editable text, with a button in its corner that clears it.
 fn source(s: &State, k: &Kit) -> El {
+    let t = s.t();
     let field = TextArea::new(&s.source)
-        .label("Text")
-        .placeholder("Select text in any app and press the shortcut, or type here")
+        .label(t.text)
+        .placeholder(t.placeholder)
         .width(None)
         .auto_grow(2, 8)
         .on_edit(|s: &mut State| &mut s.source)
@@ -136,7 +138,7 @@ fn source(s: &State, k: &Kit) -> El {
     }
     let clear = IconButton::new(&icons::CLOSE)
         .variant(IconButtonVariant::GhostMuted)
-        .label("Clear")
+        .label(t.clear)
         .on_press(|s: &mut State| s.clear_source())
         .build(k)
         .pin(None, Some(6.0), Some(6.0), None);
@@ -147,6 +149,7 @@ fn source(s: &State, k: &Kit) -> El {
 /// The title row, with a back button on sub-pages and the hide button. It
 /// moves the window when dragged.
 pub fn header(s: &State, k: &Kit, title: &str, back: Option<fn(&mut State)>) -> El {
+    let t = s.t();
     let mut bar = row()
         .key("header")
         .w_full()
@@ -157,7 +160,7 @@ pub fn header(s: &State, k: &Kit, title: &str, back: Option<fn(&mut State)>) -> 
         bar = bar.child(
             IconButton::new(&icons::BACK)
                 .variant(IconButtonVariant::GhostMuted)
-                .label("Back")
+                .label(t.back)
                 .on_press(back)
                 .build(k),
         );
@@ -171,7 +174,7 @@ pub fn header(s: &State, k: &Kit, title: &str, back: Option<fn(&mut State)>) -> 
         bar = bar.child(
             IconButton::new(&icons::GEAR)
                 .variant(IconButtonVariant::GhostMuted)
-                .label("Settings")
+                .label(t.settings)
                 .shortcut("⌘,")
                 .on_press(|s: &mut State| s.open_settings())
                 .build(k),
@@ -182,11 +185,7 @@ pub fn header(s: &State, k: &Kit, title: &str, back: Option<fn(&mut State)>) -> 
             } else {
                 IconButtonVariant::GhostMuted
             })
-            .label(if s.pinned {
-                "Unpin: hide when you click elsewhere"
-            } else {
-                "Pin: stay open when you click elsewhere"
-            })
+            .label(if s.pinned { t.unpin } else { t.pin })
             .on_press(|s: &mut State| s.toggle_pin())
             .build(k);
         bar = bar.child(if s.pinned {
@@ -198,7 +197,7 @@ pub fn header(s: &State, k: &Kit, title: &str, back: Option<fn(&mut State)>) -> 
     bar.child(
         IconButton::new(&icons::CLOSE)
             .variant(IconButtonVariant::GhostMuted)
-            .label("Hide")
+            .label(t.hide)
             .shortcut("Esc")
             .on_press(|s: &mut State| s.hide())
             .build(k),
@@ -206,6 +205,7 @@ pub fn header(s: &State, k: &Kit, title: &str, back: Option<fn(&mut State)>) -> 
 }
 
 fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
+    let t = s.t();
     let mut bar = row()
         .w_full()
         .center_y()
@@ -213,7 +213,7 @@ fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
         .child(buttons::button(
             k,
             Tone::Primary,
-            "Fix",
+            t.fix,
             Some(&icons::SPARKLE),
             |b| {
                 b.shortcut("⌘1")
@@ -224,7 +224,7 @@ fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
         .child(spacer());
     if running {
         bar = bar.child(
-            Button::new("Stop")
+            Button::new(t.stop)
                 .icon(&icons::STOP)
                 .variant(ButtonVariant::GhostMuted)
                 .on_press(|s: &mut State| s.stop())
@@ -236,13 +236,14 @@ fn actions(s: &State, k: &Kit, running: bool, layer: &mut Vec<El>) -> El {
 
 /// Translate and the language it writes in, joined in one control.
 fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
+    let t = s.t();
     let open = s.menu_open(Menu::Language);
     let mut picker = Popover::new("languages")
         .trigger(
-            Button::new(s.settings.language.clone())
+            Button::new(t.language(&s.settings.language))
                 .icon(&icons::CHEV_DOWN)
                 .variant(ButtonVariant::Ghost)
-                .help("Translation language")
+                .help(t.translation_language)
                 .on_press(|s: &mut State| s.toggle_menu(Menu::Language))
                 .build(k)
                 .radius(14.0)
@@ -250,7 +251,7 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         )
         .open(open)
         .placement(Placement::BottomStart)
-        .label("Translation language")
+        .label(t.translation_language)
         .padding(4.0)
         .on_close(|s: &mut State| s.menu = None);
     // A closed popover drops its content, so skip building the list.
@@ -263,7 +264,7 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .px(2.0)
         .center_y()
         .child(
-            Button::new("Translate")
+            Button::new(t.translate)
                 .icon(&icons::GLOBE)
                 .variant(ButtonVariant::Ghost)
                 .shortcut("⌘2")
@@ -279,7 +280,10 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
 
 /// The languages, favourites first; a star marks or unmarks one.
 fn languages(s: &State, k: &Kit) -> El {
-    let (favourites, rest) = s.settings.languages();
+    let t = s.t();
+    let (mut favourites, mut rest) = s.settings.languages();
+    t.sort_languages(&mut favourites);
+    t.sort_languages(&mut rest);
     let mut list = col().w(240.0).gap(2.0);
     if !favourites.is_empty() {
         list = list
@@ -298,15 +302,16 @@ fn languages(s: &State, k: &Kit) -> El {
 }
 
 fn language(s: &State, k: &Kit, name: &'static str) -> El {
+    let t = s.t();
     let favourite = s.settings.is_favourite(name);
     let current = s.settings.language == name;
     let star = el()
         .key(format!("star-{name}"))
         .role("button")
         .label(if favourite {
-            "Remove from favourites"
+            t.remove_favourite
         } else {
-            "Add to favourites"
+            t.add_favourite
         })
         .size(24.0, 24.0)
         .center()
@@ -331,7 +336,7 @@ fn language(s: &State, k: &Kit, name: &'static str) -> El {
     row()
         .key(format!("language-{name}"))
         .role("option")
-        .label(name)
+        .label(t.language(name))
         .w_full()
         .h(30.0)
         .pl(3.0)
@@ -342,7 +347,12 @@ fn language(s: &State, k: &Kit, name: &'static str) -> El {
         .hover(k.c.hover)
         .on_press(move |s: &mut State| s.set_language(name))
         .child(star)
-        .child(text(name).font(k.ty.ui).color(k.c.text_base).grow(1.0))
+        .child(
+            text(t.language(name))
+                .font(k.ty.ui)
+                .color(k.c.text_base)
+                .grow(1.0),
+        )
         .child(
             icon(k.glyph.check_small, 14.0)
                 .color(k.c.icon_base)
@@ -351,12 +361,14 @@ fn language(s: &State, k: &Kit, name: &'static str) -> El {
 }
 
 fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
+    let t = s.t();
     let running = matches!(answer.status, Status::Running { .. });
+    let language = t.language(&s.settings.language);
     let title = match answer.action {
-        Action::Fix if running => "Fixing…".to_owned(),
-        Action::Fix => "Fixed".to_owned(),
-        Action::Translate if running => format!("Translating to {}…", s.settings.language),
-        Action::Translate => format!("{} translation", s.settings.language),
+        Action::Fix if running => t.fixing.to_owned(),
+        Action::Fix => t.fixed.to_owned(),
+        Action::Translate if running => fill(t.translating, language),
+        Action::Translate => fill(t.translation, language),
     };
     // Only a Fix answer has changes.
     let changed = matches!(&answer.status, Status::Done { changes, .. } if diff::changed(changes));
@@ -378,7 +390,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     if changed {
         top = top.child(
             Switch::new(s.show_changes)
-                .label("Show changes")
+                .label(t.show_changes)
                 .on_toggle(|s: &mut State| s.show_changes = !s.show_changes)
                 .build(k),
         );
@@ -395,11 +407,11 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     let body = match &answer.status {
         Status::Failed(e) => note(k, e, NoteKind::Failure),
         Status::Running { text: partial, .. } if partial.is_empty() => {
-            text("Thinking…").font(k.ty.body).color(k.c.text_faint)
+            text(t.thinking).font(k.ty.body).color(k.c.text_faint)
         }
         Status::Running { text: partial, .. } => plain(partial),
         Status::Done { .. } if answer.action == Action::Fix && !changed => {
-            note(k, "Looks good. Nothing to fix.", NoteKind::Info)
+            note(k, t.nothing_to_fix, NoteKind::Info)
         }
         Status::Done { changes, .. } if changed && s.show_changes => {
             scroll_box(diff_text(changes, k))
@@ -425,18 +437,18 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
                 .child(buttons::button(
                     k,
                     Tone::Secondary,
-                    if copied { "Copied" } else { "Copy" },
+                    if copied { t.copied } else { t.copy },
                     Some(if copied { &icons::CHECK } else { &icons::COPY }),
                     |b| b.shortcut("⇧⌘C").on_press(|s: &mut State| s.copy()),
                 ))
                 .child(buttons::button(
                     k,
                     Tone::Primary,
-                    "Replace",
+                    t.replace,
                     Some(&icons::REPLACE),
                     |b| {
                         b.shortcut("⌘↩")
-                            .help("Paste over the selected text")
+                            .help(t.replace_help)
                             .on_press(|s: &mut State| s.replace())
                     },
                 )),

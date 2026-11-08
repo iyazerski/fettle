@@ -2,13 +2,12 @@
 //! runs, which model, the look, the shortcut, the login item, the permission,
 //! and updates.
 
-use std::fmt;
-
 use rune::{Shortcut, ShortcutError, TextEdit, Tx};
 use rune_kit::ShortcutRecorderState;
 use tokio::task::JoinHandle;
 
 use super::state::{Menu, Page, State, fresh_backend};
+use crate::i18n::{Locale, Strings, fill};
 use crate::llm::{Backend, chatgpt};
 use crate::settings::{Appearance, ChatGptAuth, Provider, Reasoning, Settings};
 use crate::{login_item, mac, update};
@@ -34,13 +33,12 @@ pub enum FormError {
     Other(String),
 }
 
-impl fmt::Display for FormError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl FormError {
+    /// Return the problem as the page shows it, in the language of `t`.
+    pub fn message<'a>(&'a self, t: &'static Strings) -> &'a str {
         match self {
-            FormError::Accessibility => {
-                f.write_str("Allow Fettle in Accessibility so it can copy the selected text.")
-            }
-            FormError::Shortcut(message) | FormError::Other(message) => f.write_str(message),
+            FormError::Accessibility => t.accessibility_needed,
+            FormError::Shortcut(message) | FormError::Other(message) => message,
         }
     }
 }
@@ -124,6 +122,14 @@ impl State {
         self.save();
     }
 
+    /// Show the window in the language the picker lists as `name`, or follow
+    /// macOS for any other choice.
+    pub fn pick_app_language(&mut self, name: &str) {
+        self.menu = None;
+        self.settings.app_language = Locale::ALL.into_iter().find(|l| l.native_name() == name);
+        self.save();
+    }
+
     /// Copy the API fields from the form into the settings.
     pub fn api_edited(&mut self) {
         self.settings.api_base = self.form.api_base.text.trim().to_owned();
@@ -170,9 +176,9 @@ impl State {
             .await;
             app.update(move |s, _| {
                 s.form.models = match result {
-                    Ok(models) if models.is_empty() => Models::Failed("No models found.".into()),
+                    Ok(models) if models.is_empty() => Models::Failed(s.t().no_models.into()),
                     Ok(models) => Models::Ready(models),
-                    Err(e) => Models::Failed(format!("Couldn't list the models: {e:#}")),
+                    Err(e) => Models::Failed(fill(s.t().list_models_failed, format_args!("{e:#}"))),
                 };
                 if !matches!(s.form.models, Models::Ready(_)) && s.menu == Some(Menu::Model) {
                     s.menu = None;
@@ -283,9 +289,7 @@ impl State {
                 }
             }
             Err(e) => {
-                self.form.error = Some(FormError::Shortcut(format!(
-                    "The saved shortcut is broken: {e}"
-                )))
+                self.form.error = Some(FormError::Shortcut(fill(self.t().shortcut_broken, e)))
             }
         }
     }
@@ -321,10 +325,8 @@ impl State {
 
     fn shortcut_message(&self, error: &ShortcutError, shortcut: &Shortcut) -> String {
         match (error, self.app.shortcut_owner(shortcut)) {
-            (ShortcutError::Conflict, Some(owner)) => {
-                format!("{owner} already uses the shortcut. Pick another below.")
-            }
-            _ => format!("Couldn't use the shortcut: {error}. Pick another below."),
+            (ShortcutError::Conflict, Some(owner)) => fill(self.t().shortcut_taken, owner),
+            _ => fill(self.t().shortcut_failed, error),
         }
     }
 
@@ -339,7 +341,7 @@ impl State {
                         Update::Available(version)
                     }
                     Ok(_) => Update::Latest,
-                    Err(e) => Update::Failed(format!("Couldn't check for updates: {e:#}")),
+                    Err(e) => Update::Failed(fill(s.t().check_failed, format_args!("{e:#}"))),
                 };
             });
         });
@@ -358,7 +360,9 @@ impl State {
             app.update(move |s, tx: &mut Tx| {
                 match result.and_then(|bundle| update::relaunch(&bundle)) {
                     Ok(()) => tx.quit(),
-                    Err(e) => s.update = Update::Failed(format!("Couldn't update: {e:#}")),
+                    Err(e) => {
+                        s.update = Update::Failed(fill(s.t().update_failed, format_args!("{e:#}")))
+                    }
                 }
             });
         });

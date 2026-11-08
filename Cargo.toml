@@ -16,7 +16,7 @@ libc = "0.2"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "objc2-core-foundation", "NSAppearance", "NSApplication", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSEvent", "NSScreen", "NSRunningApplication", "NSWorkspace"] }
 objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSGeometry", "NSString", "NSURL", "NSValue"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSGeometry", "NSLocale", "NSString", "NSURL", "NSValue"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 ring = "0.17"
 # Rune is pre-release and changes often: keep one tested revision (the one

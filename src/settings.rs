@@ -1,13 +1,14 @@
 //! What Fettle remembers between runs: where the model runs and its
-//! credentials, the model and reasoning, the translation language and the
-//! shortcut. One private JSON file, since it holds tokens.
+//! credentials, the model and reasoning, the translation language, the
+//! shortcut and the window's look and language. One private JSON file, since
+//! it holds tokens.
 
-use std::fmt;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
+use crate::i18n::Locale;
 use crate::json_file;
 
 pub const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
@@ -16,20 +17,26 @@ pub const DEFAULT_API_BASE: &str = "https://api.openai.com/v1";
 pub const DEFAULT_CHATGPT_MODEL: &str = "gpt-6-luna";
 
 /// The languages Translate offers, alphabetical: the 30 with the most first-
-/// and second-language speakers (Ethnologue 2026), counting Chinese and Arabic
-/// once each and leaving out Nigerian Pidgin, plus Belarusian, Polish and
-/// Ukrainian.
-pub const LANGUAGES: &[&str] = &[
+/// and second-language speakers (Ethnologue 2026), counting Arabic once and
+/// leaving out Nigerian Pidgin, plus Belarusian, Polish and Ukrainian, and the
+/// languages of wealthy markets where Macs are common: Traditional Chinese,
+/// Danish, Dutch, Finnish, Hebrew, Norwegian and Swedish.
+pub const LANGUAGES: [&str; 40] = [
     "Amharic",
     "Arabic",
     "Belarusian",
     "Bengali",
     "Chinese (Simplified)",
+    "Chinese (Traditional)",
+    "Danish",
+    "Dutch",
     "English",
+    "Finnish",
     "French",
     "German",
     "Gujarati",
     "Hausa",
+    "Hebrew",
     "Hindi",
     "Indonesian",
     "Italian",
@@ -38,6 +45,7 @@ pub const LANGUAGES: &[&str] = &[
     "Kannada",
     "Korean",
     "Marathi",
+    "Norwegian",
     "Persian",
     "Polish",
     "Portuguese",
@@ -45,6 +53,7 @@ pub const LANGUAGES: &[&str] = &[
     "Russian",
     "Spanish",
     "Swahili",
+    "Swedish",
     "Tagalog",
     "Tamil",
     "Telugu",
@@ -74,6 +83,8 @@ pub struct Settings {
     /// The global shortcut, like `ctrl+alt+e`.
     pub shortcut: String,
     pub appearance: Appearance,
+    /// The language the window speaks; `None` follows macOS.
+    pub app_language: Option<Locale>,
 }
 
 impl Default for Settings {
@@ -90,6 +101,7 @@ impl Default for Settings {
             favourite_languages: Vec::new(),
             shortcut: DEFAULT_SHORTCUT.to_owned(),
             appearance: Appearance::System,
+            app_language: None,
         }
     }
 }
@@ -124,14 +136,6 @@ impl Appearance {
             Appearance::Dark => true,
         }
     }
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Appearance::System => "System",
-            Appearance::Light => "Light",
-            Appearance::Dark => "Dark",
-        }
-    }
 }
 
 /// How hard the model thinks before answering.
@@ -155,16 +159,6 @@ impl Reasoning {
         Reasoning::Medium,
         Reasoning::High,
     ];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Reasoning::Default => "Default",
-            Reasoning::Off => "Off",
-            Reasoning::Low => "Low",
-            Reasoning::Medium => "Medium",
-            Reasoning::High => "High",
-        }
-    }
 
     /// The API's `effort` value, or `None` to leave it out.
     pub fn effort(self) -> Option<&'static str> {
@@ -267,16 +261,6 @@ pub enum Missing {
     SignIn,
     ApiUrl,
     Model,
-}
-
-impl fmt::Display for Missing {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
-            Missing::SignIn => "Sign in with ChatGPT in Settings",
-            Missing::ApiUrl => "Set the API URL in Settings",
-            Missing::Model => "Pick a model in Settings",
-        })
-    }
 }
 
 pub fn home() -> PathBuf {

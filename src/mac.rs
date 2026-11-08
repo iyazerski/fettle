@@ -16,7 +16,7 @@ use objc2_core_graphics::{
     CGEvent, CGEventFlags, CGEventSource, CGEventSourceStateID, CGEventTapLocation,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSArray, NSData, NSDictionary, NSNumber, NSString, NSURL,
+    MainThreadMarker, NSArray, NSData, NSDictionary, NSLocale, NSNumber, NSString, NSURL,
 };
 
 use crate::settings::Appearance;
@@ -119,6 +119,14 @@ pub fn top_center_under_pointer(width: f32, margin: f32) -> Option<(i32, i32)> {
 /// Open the Accessibility pane of System Settings.
 pub fn open_accessibility_settings() {
     open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
+}
+
+/// Return the user's preferred languages as BCP 47 tags, most preferred first.
+pub fn preferred_languages() -> Vec<String> {
+    NSLocale::preferredLanguages()
+        .iter()
+        .map(|tag| tag.to_string())
+        .collect()
 }
 
 pub fn open_url(url: &str) {
