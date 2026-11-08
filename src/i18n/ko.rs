@@ -29,6 +29,8 @@ pub static STRINGS: Strings = Strings {
     thinking: "생각 중…",
     nothing_to_fix: "좋아 보입니다. 고칠 부분이 없습니다.",
     copy: "복사",
+    cut: "오려두기",
+    paste: "붙여넣기",
     copied: "복사됨",
     replace: "바꾸기",
     replace_help: "선택한 텍스트 위에 붙여넣기",

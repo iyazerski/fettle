@@ -151,6 +151,9 @@ pub struct Strings {
     pub thinking: &'static str,
     pub nothing_to_fix: &'static str,
     pub copy: &'static str,
+    /// With `copy`, the items of a text field's menu.
+    pub cut: &'static str,
+    pub paste: &'static str,
     pub copied: &'static str,
     pub replace: &'static str,
     pub replace_help: &'static str,

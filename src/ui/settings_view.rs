@@ -293,7 +293,7 @@ fn about(s: &State, k: &Kit) -> El {
             Button::new(t.quit)
                 .variant(ButtonVariant::Outline)
                 .shortcut("⌘Q")
-                .on_press_tx(|s: &mut State, tx| s.quit(tx))
+                .on_press_tx(|_: &mut State, tx| tx.quit())
                 .build(k),
         );
     let mut block = col().w_full().padding(PAD).gap(8.0).child(line);

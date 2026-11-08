@@ -132,6 +132,7 @@ impl State {
     pub fn pick_app_language(&mut self, name: &str) {
         self.menu = None;
         self.settings.app_language = Locale::ALL.into_iter().find(|l| l.native_name() == name);
+        self.apply_labels();
         self.save();
     }
 
@@ -403,7 +404,7 @@ impl State {
             let result = update::install(&http, &version).await;
             app.update(move |s, tx: &mut Tx| {
                 match result.and_then(|bundle| update::relaunch(&bundle)) {
-                    Ok(()) => s.quit(tx),
+                    Ok(()) => tx.quit(),
                     Err(e) => {
                         s.update = Update::Failed(fill(s.t().update_failed, format_args!("{e:#}")))
                     }

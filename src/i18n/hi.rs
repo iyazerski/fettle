@@ -29,6 +29,8 @@ pub static STRINGS: Strings = Strings {
     thinking: "सोच रहा है…",
     nothing_to_fix: "सब ठीक है। सुधारने को कुछ नहीं।",
     copy: "कॉपी करें",
+    cut: "कट करें",
+    paste: "पेस्ट करें",
     copied: "कॉपी हो गया",
     replace: "बदलें",
     replace_help: "चुने गए टेक्स्ट की जगह पेस्ट करें",

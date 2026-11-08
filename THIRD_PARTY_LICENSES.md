@@ -4568,6 +4568,7 @@ Used by:
 - objc2-core-foundation 0.3.2
 - objc2-core-graphics 0.3.2
 - objc2-core-media 0.3.2
+- objc2-core-text 0.3.2
 - objc2-core-video 0.3.2
 - objc2-io-surface 0.3.2
 - objc2-metal 0.3.2

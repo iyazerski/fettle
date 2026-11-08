@@ -74,6 +74,8 @@ pub fn run(start: Start) -> Result<()> {
                 s.blurred();
             }
         })
+        // Also on logout and shutdown, which skip Fettle's own Quit.
+        .on_quit(|s, _| s.save_now())
         .on_reopen(|s, _, _| {
             s.open_settings();
             true

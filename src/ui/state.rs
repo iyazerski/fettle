@@ -10,7 +10,7 @@ use std::time::Duration;
 use anyhow::Context;
 
 use objc2_core_foundation::CGRect;
-use rune::{AppHandle, Phase, ShortcutId, Tx};
+use rune::{AppHandle, Label, Phase, ShortcutId};
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex, oneshot};
 
@@ -202,6 +202,7 @@ impl State {
     /// settings if `start` says so.
     pub fn started(&mut self, start: Start) {
         self.apply_appearance();
+        self.apply_labels();
         self.register_saved_shortcut();
         self.apply_underlines();
         // Rewrite the file without the credentials versions before 0.3 kept in it.
@@ -220,6 +221,18 @@ impl State {
 
     pub(super) fn apply_appearance(&self) {
         mac::set_appearance(self.settings.appearance);
+    }
+
+    /// Name the items of Rune's own menus, a text field's Cut, Copy and Paste,
+    /// in the window's language.
+    pub(super) fn apply_labels(&self) {
+        let t = self.t();
+        rune::set_labels(move |label| match label {
+            Label::Cut => Some(t.cut.to_owned()),
+            Label::Copy => Some(t.copy.to_owned()),
+            Label::Paste => Some(t.paste.to_owned()),
+            _ => None,
+        });
     }
 
     /// The shortcut: hide the window if it shows, else copy the selection
@@ -602,12 +615,12 @@ impl State {
         self.report(fill(self.t().save_failed, format_args!("{error:#}")));
     }
 
-    /// Quit, saving what's unsaved first.
-    pub fn quit(&mut self, tx: &mut Tx) {
+    /// Save what's unsaved now: Fettle is quitting, and the saving task
+    /// won't get to it.
+    pub fn save_now(&self) {
         if let Err(e) = self.saver.flush() {
             eprintln!("saving the settings: {e:#}");
         }
-        tx.quit();
     }
 
     /// Show `message` on the page that's open.

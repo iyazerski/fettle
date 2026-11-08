@@ -29,6 +29,8 @@ pub static STRINGS: Strings = Strings {
     thinking: "思考中…",
     nothing_to_fix: "看起来不错，没有需要修正的地方。",
     copy: "复制",
+    cut: "剪切",
+    paste: "粘贴",
     copied: "已复制",
     replace: "替换",
     replace_help: "粘贴并覆盖所选文本",

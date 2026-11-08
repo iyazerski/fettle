@@ -594,7 +594,7 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     } else if key.is_command('w') {
         s.hide();
     } else if key.is_command('q') {
-        s.quit(tx);
+        tx.quit();
     } else {
         return s.page == Page::Main && on_main_key(s, key);
     }

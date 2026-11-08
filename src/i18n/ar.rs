@@ -29,6 +29,8 @@ pub static STRINGS: Strings = Strings {
     thinking: "جارٍ التفكير…",
     nothing_to_fix: "يبدو جيدًا. لا شيء يحتاج إلى تصحيح.",
     copy: "نسخ",
+    cut: "قص",
+    paste: "لصق",
     copied: "تم النسخ",
     replace: "استبدال",
     replace_help: "لصق فوق النص المحدد",

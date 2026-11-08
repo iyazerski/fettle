@@ -29,6 +29,8 @@ pub static STRINGS: Strings = Strings {
     thinking: "考え中…",
     nothing_to_fix: "問題ありません。修正箇所はありません。",
     copy: "コピー",
+    cut: "カット",
+    paste: "ペースト",
     copied: "コピーしました",
     replace: "置き換え",
     replace_help: "選択したテキストに上書きして貼り付け",
