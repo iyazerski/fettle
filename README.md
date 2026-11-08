@@ -39,7 +39,7 @@ A free, open-source AI writing assistant for macOS that can run entirely on your
 - **Translate into 40 languages.** Fettle keeps the tone, formatting, names, links and code. Star the languages you use most to keep them at the top.
 - **Paste it back in one keystroke.** <kbd>⌘</kbd><kbd>↩</kbd> replaces your selection with the result. Your clipboard stays as it was.
 - **Or use a bigger model.** Sign in with ChatGPT, or point Fettle at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
-- **Underline mistakes as you type.** Turn it on in Settings, and macOS's own spell and grammar checker marks mistakes in other apps, on your Mac. Click an underline to fix its paragraph with the model.
+- **Underline mistakes as you type.** Turn it on in Settings, and when you pause typing in another app, the model marks what Fix would change in the paragraphs you edited. Click an underline to see the fix and paste it. Each edited paragraph is a request, so a paid model costs much more.
 - **Native and tiny.** Written in Rust, a 10 MB download, about 12 MB of memory when idle, and no CPU use until you call it, unless you turn on underlines.
 - **Private by design.** No account, no telemetry, no servers of ours. Your text stays on your Mac, or goes only to the model you pick.
 - **Free and open source** under the MIT license.
@@ -70,7 +70,7 @@ To fettle is an old English word for to tidy up or put right, and "in fine fettl
 <details>
 <summary><b>Is Fettle a Grammarly alternative?</b></summary>
 
-Yes, for the core job: fixing grammar, spelling and phrasing in any app, with a clear view of what changed. Select the text and press the shortcut when you want a check. Or turn on **Underline mistakes** in Settings: macOS's checker marks mistakes as you type, on your Mac, and a click on an underline sends just that paragraph to the model. Underlines show in apps that tell macOS where their text is on screen, which most native Mac apps do.
+Yes, for the core job: fixing grammar, spelling and phrasing in any app, with a clear view of what changed. Select the text and press the shortcut when you want a check. Or turn on **Underline mistakes** in Settings: when you pause typing, Fettle sends each paragraph you edited to the model and underlines what it would fix, and a click on an underline shows the fix. Each edited paragraph is a request, so this costs much more with a paid model. Underlines show in apps that tell macOS where their text is on screen, which most native Mac apps do.
 
 </details>
 <details>

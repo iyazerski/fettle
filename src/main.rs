@@ -16,7 +16,6 @@ mod login_item;
 mod mac;
 mod prompts;
 mod settings;
-mod spelling;
 mod ui;
 mod underlines;
 mod update;

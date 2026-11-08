@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "Raccourci",
     open_fettle: "Ouvrir Fettle",
     underline: "Souligner les fautes",
-    underline_hint: "Signale les fautes pendant que vous tapez dans d'autres apps. Cliquez pour corriger.",
+    underline_hint: "Signale les fautes pendant que vous tapez dans d'autres apps, avec le modèle. Chaque paragraphe modifié est une requête : avec un modèle payant, cela coûte bien plus cher.",
     start_at_login: "Ouvrir à la connexion",
     accessibility: "Accessibilité",
     allowed: "Autorisé",

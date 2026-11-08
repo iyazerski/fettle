@@ -14,8 +14,6 @@ use objc2_app_kit::{
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::MainThreadMarker;
 
-use crate::spelling::Kind;
-
 /// NSFloatingWindowLevel: over the app's windows, as Fettle's own window is.
 const FLOATING: isize = 3;
 /// The bar's thickness, and how far under the word it sits, in points.
@@ -25,12 +23,11 @@ const GAP: f64 = 1.0;
 const SLOP: f64 = 2.0;
 
 /// An underlined word: where it is, in screen points from the primary
-/// screen's top-left, as the Accessibility API counts, what's wrong, and
-/// where its mistake starts in the text.
+/// screen's top-left, as the Accessibility API counts, and where its
+/// mistake starts in the text.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Line {
     pub word: CGRect,
-    pub kind: Kind,
     pub at: usize,
 }
 
@@ -95,7 +92,7 @@ impl Underlines {
             self.bars.push(bar);
         }
         for (i, bar) in self.bars.iter().enumerate() {
-            let Some((rect, line)) = rects.get(i).zip(lines.get(i)) else {
+            let Some(rect) = rects.get(i) else {
                 bar.setHidden(true);
                 continue;
             };
@@ -104,7 +101,6 @@ impl Underlines {
                 rect.origin.y - frame.origin.y,
             );
             bar.setFrame(CGRect::new(origin, rect.size));
-            bar.setFillColor(&color(line.kind));
             bar.setHidden(false);
         }
         window.orderFrontRegardless();
@@ -165,15 +161,8 @@ fn underline(mtm: MainThreadMarker) -> Retained<NSBox> {
     bar.setTitlePosition(NSTitlePosition::NoTitle);
     bar.setBorderWidth(0.0);
     bar.setCornerRadius(THICKNESS / 2.0);
+    bar.setFillColor(&NSColor::systemRedColor());
     bar
-}
-
-/// Red for spelling and green for grammar, as macOS marks them.
-fn color(kind: Kind) -> Retained<NSColor> {
-    match kind {
-        Kind::Spelling => NSColor::systemRedColor(),
-        Kind::Grammar => NSColor::systemGreenColor(),
-    }
 }
 
 fn union(a: CGRect, b: CGRect) -> CGRect {

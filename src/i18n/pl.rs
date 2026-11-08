@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "Skrót",
     open_fettle: "Otwórz Fettle",
     underline: "Podkreślaj błędy",
-    underline_hint: "Zaznacza błędy podczas pisania w innych aplikacjach. Kliknij, aby poprawić.",
+    underline_hint: "Zaznacza błędy podczas pisania w innych aplikacjach za pomocą modelu. Każdy edytowany akapit to osobne zapytanie, więc płatne modele kosztują znacznie więcej.",
     start_at_login: "Uruchamiaj po zalogowaniu",
     accessibility: "Dostępność",
     allowed: "Dozwolone",

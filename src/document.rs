@@ -1,43 +1,38 @@
 //! A text field's text as the user edits it, and the mistakes found in it.
 //!
 //! An edit shifts the mistakes around it and marks the paragraphs it touched
-//! for checking, so typing re-checks only the paragraph typed in. Checks run
-//! one at a time, a span of whole paragraphs at most [`CHUNK`] long each, so
-//! a long text shows its first mistakes early and an edit spoils little work.
+//! for checking, so only what the user writes is checked, not the text the
+//! field held already, which shows only the mistakes known from before.
+//! Checks run one paragraph at a time.
 //!
-//! Ranges count UTF-16 code units, as the Accessibility API and `NSString` do.
+//! Ranges count UTF-16 code units, as the Accessibility API does.
 
 use std::ops::Range;
 
-use crate::spelling::Mistake;
-
-/// How many units a check covers at most, unless one paragraph is longer:
-/// about 7 ms of checking.
-const CHUNK: usize = 2_000;
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Document {
     text: Vec<u16>,
-    /// Sorted by start.
-    mistakes: Vec<Mistake>,
+    /// What's wrong, sorted and apart.
+    mistakes: Vec<Range<usize>>,
     /// Spans still to check: sorted, apart, and whole paragraphs.
     unchecked: Vec<Range<usize>>,
     check: Check,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 enum Check {
+    #[default]
     Idle,
     Running {
         id: u64,
-        /// Where the span checked is in the text now.
+        /// Where the paragraph checked is in the text now.
         span: Range<usize>,
-        /// Whether an edit changed the span since, so the answer is stale.
+        /// Whether an edit changed the paragraph since, so the answer is stale.
         outdated: bool,
     },
 }
 
-/// A span to check: its text, and where it starts.
+/// A paragraph to check.
 #[derive(Debug)]
 pub struct Request {
     pub id: u64,
@@ -45,31 +40,35 @@ pub struct Request {
 }
 
 impl Document {
-    /// Start on `text`, all of it unchecked.
-    pub fn new(text: Vec<u16>) -> Self {
-        let mut doc = Self {
-            text,
-            mistakes: Vec::new(),
-            unchecked: Vec::new(),
-            check: Check::Idle,
-        };
-        if !doc.text.is_empty() {
-            doc.mark(0..doc.text.len());
+    /// Start on `text`, taking it as checked, with the mistakes `known`
+    /// returns for each paragraph, as ranges in it.
+    pub fn new(text: Vec<u16>, mut known: impl FnMut(&[u16]) -> Option<Vec<Range<usize>>>) -> Self {
+        let mut mistakes = Vec::new();
+        let mut start = 0;
+        while start < text.len() {
+            let span = paragraph(&text, start);
+            if let Some(found) = known(&text[span.clone()]) {
+                mistakes.extend(found.into_iter().map(|m| m.start + start..m.end + start));
+            }
+            start = span.end + 1;
         }
-        doc
+        Self {
+            text,
+            mistakes,
+            ..Self::default()
+        }
     }
 
     pub fn text(&self) -> &[u16] {
         &self.text
     }
 
-    pub fn mistakes(&self) -> &[Mistake] {
+    pub fn mistakes(&self) -> &[Range<usize>] {
         &self.mistakes
     }
 
     /// Take `new` as the text. Returns where the paragraph the edit starts in
-    /// begins, as far as layout before it is unchanged, or `None` if the text
-    /// is the same.
+    /// begins, as layout before it is unchanged, or `None` if the text is the same.
     pub fn edit(&mut self, new: &[u16]) -> Option<usize> {
         if self.text == new {
             return None;
@@ -91,8 +90,8 @@ impl Document {
         };
 
         self.mistakes.retain_mut(|m| {
-            let kept = !edit.overlaps(&m.range);
-            m.range = edit.map(&m.range);
+            let kept = !edit.overlaps(m);
+            *m = edit.map(m);
             kept
         });
         for span in &mut self.unchecked {
@@ -109,70 +108,70 @@ impl Document {
         if let Some(span) = redo {
             self.mark(span);
         }
-        let span = paragraphs(new, edit.start..edit.new_end);
+        let span = paragraph(new, edit.start).start..paragraph(new, edit.new_end).end;
         let start = span.start;
         self.mark(span);
-        self.text = new.to_vec();
+        self.text.clear();
+        self.text.extend_from_slice(new);
         Some(start)
     }
 
-    /// Return the next span to check as `id`, unless one is being checked or
-    /// none is left.
+    /// Return the next paragraph with letters in it to check as `id`, unless
+    /// one is being checked or none is left.
     pub fn next(&mut self, id: u64) -> Option<Request> {
-        if matches!(self.check, Check::Running { .. }) || self.unchecked.is_empty() {
+        if matches!(self.check, Check::Running { .. }) {
             return None;
         }
-        let first = self.unchecked.remove(0);
-        let end = if first.len() > CHUNK {
-            // Through the break ending the paragraph the chunk ends in, so the
-            // rest starts a paragraph.
-            let end = paragraph(&self.text, first.start + CHUNK - 1).end;
-            (end + 1).min(first.end)
-        } else {
-            first.end
-        };
-        if end < first.end {
-            self.unchecked.insert(0, end..first.end);
+        while let Some(first) = self.unchecked.first().cloned() {
+            let span = paragraph(&self.text, first.start);
+            // Past the break, so the rest starts a paragraph.
+            let rest = (span.end + 1).min(first.end)..first.end;
+            if rest.is_empty() {
+                self.unchecked.remove(0);
+            } else {
+                self.unchecked[0] = rest;
+            }
+            let text = &self.text[span.clone()];
+            if char::decode_utf16(text.iter().copied()).any(|c| c.is_ok_and(char::is_alphabetic)) {
+                let text = text.to_vec();
+                self.check = Check::Running {
+                    id,
+                    span,
+                    outdated: false,
+                };
+                return Some(Request { id, text });
+            }
         }
-        let span = first.start..end;
-        let text = self.text[span.clone()].to_vec();
-        self.check = Check::Running {
-            id,
-            span,
-            outdated: false,
-        };
-        Some(Request { id, text })
+        None
     }
 
-    /// Take the mistakes check `id` found. Returns where they changed, if
-    /// they did: not for a stale or unknown check.
-    pub fn finish(&mut self, id: u64, found: Vec<Mistake>) -> Option<Range<usize>> {
+    /// Take the mistakes check `id` found, as ranges in its paragraph, or
+    /// keep the old ones if it found nothing to go on (`None`). Returns
+    /// whether the mistakes changed: not for a stale or unknown check.
+    pub fn finish(&mut self, id: u64, found: Option<Vec<Range<usize>>>) -> bool {
         let Check::Running {
             id: running,
             span,
             outdated,
         } = &self.check
         else {
-            return None;
+            return false;
         };
         if *running != id {
-            return None;
+            return false;
         }
         let (span, outdated) = (span.clone(), *outdated);
         self.check = Check::Idle;
-        if outdated {
-            return None;
-        }
-        let from = self
-            .mistakes
-            .partition_point(|m| m.range.start < span.start);
-        let to = self.mistakes.partition_point(|m| m.range.start < span.end);
-        let found = found.into_iter().map(|m| Mistake {
-            range: m.range.start + span.start..m.range.end + span.start,
-            kind: m.kind,
-        });
+        let Some(found) = found.filter(|_| !outdated) else {
+            return false;
+        };
+        let from = self.mistakes.partition_point(|m| m.start < span.start);
+        let to = self.mistakes.partition_point(|m| m.start < span.end);
+        let found = found
+            .into_iter()
+            .map(|m| m.start + span.start..m.end + span.start);
         self.mistakes.splice(from..to, found);
-        Some(span)
+        true
     }
 
     /// Add `span` to the unchecked spans, merging it with those it meets.
@@ -241,15 +240,9 @@ pub fn paragraph(text: &[u16], at: usize) -> Range<usize> {
     start..end
 }
 
-/// Return the whole paragraphs `range` of `text` falls in.
-fn paragraphs(text: &[u16], range: Range<usize>) -> Range<usize> {
-    paragraph(text, range.start).start..paragraph(text, range.end).end
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::spelling::Kind;
 
     fn units(text: &str) -> Vec<u16> {
         text.encode_utf16().collect()
@@ -260,87 +253,82 @@ mod tests {
     }
 
     /// Run every pending check with a checker that flags words starting with "x".
-    fn check_all(doc: &mut Document) {
+    fn check_all(doc: &mut Document) -> Vec<String> {
+        let mut checked = Vec::new();
         let mut id = 100;
         while let Some(request) = doc.next(id) {
+            let text = String::from_utf16_lossy(&request.text);
             let mut found = Vec::new();
-            let mut start = None;
-            let sentinel = u16::from(b' ');
-            for (i, unit) in request.text.iter().chain([&sentinel]).enumerate() {
-                let space = !char::from_u32(u32::from(*unit)).is_some_and(char::is_alphanumeric);
-                match (start, space) {
-                    (None, false) => start = Some(i),
-                    (Some(s), true) => {
-                        if request.text[s] == u16::from(b'x') {
-                            found.push(Mistake {
-                                range: s..i,
-                                kind: Kind::Spelling,
-                            });
-                        }
-                        start = None;
-                    }
-                    _ => {}
+            let mut at = 0;
+            for word in text.split(' ') {
+                let len = word.encode_utf16().count();
+                if word.starts_with('x') {
+                    found.push(at..at + len);
                 }
+                at += len + 1;
             }
-            doc.finish(id, found);
+            checked.push(text);
+            doc.finish(id, Some(found));
             id += 1;
         }
+        checked
     }
 
     fn marked(doc: &Document) -> Vec<String> {
         doc.mistakes()
             .iter()
-            .map(|m| show(doc.text(), m.range.clone()))
+            .map(|m| show(doc.text(), m.clone()))
             .collect()
     }
 
     #[test]
-    fn edits_recheck_only_their_paragraphs_and_keep_the_rest_in_place() {
-        let mut doc = Document::new(units("a xone\nb xtwo\nc"));
-        check_all(&mut doc);
-        assert_eq!(marked(&doc), ["xone", "xtwo"]);
+    fn checks_only_edited_paragraphs_and_keeps_the_rest_in_place() {
+        // The text it starts with counts as checked, with the mistakes known in it.
+        let known = |p: &[u16]| (p == units("c")).then(|| std::iter::once(0..1).collect());
+        let mut doc = Document::new(units("a xold\nb xtwo\nc"), known);
+        assert!(doc.next(1).is_none());
+        assert_eq!(marked(&doc), ["c"]);
 
-        // Typing in the first paragraph re-checks just that one.
-        let start = doc.edit(&units("a xone xnew\nb xtwo\nc"));
-        assert_eq!(start, Some(0));
-        assert_eq!(marked(&doc), ["xone", "xtwo"]);
-        let request = doc.next(1).unwrap();
-        assert_eq!(String::from_utf16_lossy(&request.text), "a xone xnew");
-        doc.finish(1, Vec::new());
-        assert_eq!(marked(&doc), ["xtwo"]);
+        // A paste over two paragraphs checks each.
+        doc.edit(&units("a xold\nb xtwo xmore\nc xnew\n\n42"));
+        assert_eq!(check_all(&mut doc), ["b xtwo xmore", "c xnew"]);
+        assert_eq!(marked(&doc), ["xtwo", "xmore", "xnew"]);
 
-        // An edit inside a marked word drops it at once.
-        doc.edit(&units("a xone xnew\nb xtwXo\nc"));
-        assert_eq!(marked(&doc), Vec::<String>::new());
-        check_all(&mut doc);
-        assert_eq!(marked(&doc), ["xtwXo"]);
-        assert_eq!(doc.edit(&units("a xone xnew\nb xtwXo\nc")), None);
+        // Typing before them shifts their marks; an edit inside a mark drops it.
+        assert_eq!(
+            doc.edit(&units("a xold!\nb xtwo xmore\nc xnew\n\n42")),
+            Some(0)
+        );
+        assert_eq!(marked(&doc), ["xtwo", "xmore", "xnew"]);
+        assert_eq!(
+            doc.edit(&units("a xold!\nb xtwo xmXore\nc xnew\n\n42")),
+            Some(8)
+        );
+        assert_eq!(marked(&doc), ["xtwo", "xnew"]);
+        assert_eq!(check_all(&mut doc), ["a xold!", "b xtwo xmXore"]);
+        assert_eq!(marked(&doc), ["xold!", "xtwo", "xmXore", "xnew"]);
+        assert_eq!(
+            doc.edit(&units("a xold!\nb xtwo xmXore\nc xnew\n\n42")),
+            None
+        );
     }
 
     #[test]
     fn an_edit_during_a_check_makes_it_stale_and_checks_again() {
-        let mut doc = Document::new(units("xa\nxb"));
-        let request = doc.next(1).unwrap();
-        assert_eq!(request.text.len(), 5);
+        let mut doc = Document::new(units("xa\nxb"), |_| None);
         doc.edit(&units("xa\nxbc"));
+        let request = doc.next(1).unwrap();
+        assert_eq!(String::from_utf16_lossy(&request.text), "xbc");
+        doc.edit(&units("xa\nxbcd"));
         assert!(doc.next(2).is_none(), "one check at a time");
-        assert_eq!(doc.finish(1, Vec::new()), None);
-        check_all(&mut doc);
-        assert_eq!(marked(&doc), ["xa", "xbc"]);
-    }
-
-    #[test]
-    fn long_texts_are_checked_in_chunks_of_whole_paragraphs() {
-        let line = format!("{}\n", "y".repeat(999));
-        let mut doc = Document::new(units(&line.repeat(5)));
-        let mut lengths = Vec::new();
-        for id in 0.. {
-            let Some(request) = doc.next(id) else { break };
-            assert_eq!(request.text.last(), Some(&u16::from(b'\n')));
-            lengths.push(request.text.len());
-            doc.finish(id, Vec::new());
-        }
-        assert_eq!(lengths, [2000, 2000, 1000]);
+        assert!(!doc.finish(1, Some(Vec::new())));
+        assert_eq!(check_all(&mut doc), ["xbcd"]);
+        assert_eq!(marked(&doc), ["xbcd"]);
+        // A failed check keeps the marks it had.
+        doc.edit(&units("xa\nxbcde"));
+        let request = doc.next(3).unwrap();
+        assert!(!doc.finish(request.id, None));
+        assert_eq!(marked(&doc), ["xbcd"]);
     }
 
     #[test]

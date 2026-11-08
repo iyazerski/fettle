@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "Atalho",
     open_fettle: "Abrir o Fettle",
     underline: "Sublinhar erros",
-    underline_hint: "Marca erros enquanto você digita em outros apps. Clique para corrigir.",
+    underline_hint: "Marca erros enquanto você digita em outros apps, usando o modelo. Cada parágrafo editado é uma solicitação, então modelos pagos custam bem mais.",
     start_at_login: "Abrir ao iniciar sessão",
     accessibility: "Acessibilidade",
     allowed: "Permitido",

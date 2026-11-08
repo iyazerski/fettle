@@ -59,6 +59,7 @@ pub fn run(start: Start) -> Result<()> {
         .keep_running()
         .fit_content_height();
     let me = app.handle();
+    let frames = me.clone();
     let handle = rt.handle().clone();
     me.update(move |s, _| s.started(start));
     let app = app
@@ -76,6 +77,18 @@ pub fn run(start: Start) -> Result<()> {
         .on_reopen(|s, _, _| {
             s.open_settings();
             true
+        })
+        .on_frame_drawn({
+            let mut height = 0.0;
+            move |rt| {
+                if rt.viewport.1 != height {
+                    height = rt.viewport.1;
+                    frames.update_if(move |s, _| {
+                        s.laid_out(height);
+                        false
+                    });
+                }
+            }
         });
     rune::run_windows_with_args(RunOptions { accessory: true }, [], move |_| {
         let options = WindowOptions {

@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "ショートカット",
     open_fettle: "Fettle を開く",
     underline: "ミスに下線を引く",
-    underline_hint: "ほかのアプリで入力中のミスに下線を引きます。クリックで修正します。",
+    underline_hint: "ほかのアプリで入力中のミスを、モデルを使って示します。編集した段落ごとにリクエストが送られるため、有料モデルでは費用が大幅に増えます。",
     start_at_login: "ログイン時に起動",
     accessibility: "アクセシビリティ",
     allowed: "許可済み",

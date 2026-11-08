@@ -1,9 +1,10 @@
 //! Underlining mistakes as the user types in other apps: read the focused
 //! text field whenever the app reports a change, and on a timer for apps that
-//! don't; check the paragraphs that changed with macOS's spell and grammar
-//! checker in the background; and underline what it finds. A click on an
-//! underline opens the paragraph in the window to fix it with the model.
+//! don't; once the user pauses, ask the model to fix each paragraph they
+//! edited, as the Fix action does; and underline what its fix changes. A click
+//! on an underline opens the paragraph in the window with that fix.
 
+use std::collections::HashMap;
 use std::ops::Range;
 use std::time::{Duration, Instant};
 
@@ -15,16 +16,20 @@ use tokio::time::MissedTickBehavior;
 
 use super::state::State;
 use crate::ax::{Apps, Field, Focus, Watch};
+use crate::diff::{self, Piece};
 use crate::document::{Document, paragraph};
-use crate::spelling::{self, Mistake};
 use crate::underlines::{Clicks, Line, Underlines};
 
 /// How often the focused field is read even if its app reports nothing, to
 /// catch scrolling and apps that don't report changes.
 const TICK: Duration = Duration::from_millis(300);
-/// For how long after an edit the word at the caret goes unmarked, as the
-/// user may still be typing it.
-const TYPING: Duration = Duration::from_millis(1500);
+/// How long the user must stop typing before an edited paragraph goes to the
+/// model, so a request covers a finished thought rather than each keystroke.
+const IDLE: Duration = Duration::from_millis(1500);
+/// Longer paragraphs, in UTF-16 units, aren't sent: each edit would resend them.
+const MAX_PARAGRAPH: usize = 4000;
+/// How many paragraphs' fixes are kept, so text seen before isn't sent again.
+const MAX_FIXES: usize = 256;
 /// Longer texts, in UTF-16 units, aren't checked: reading them on every
 /// change would cost too much.
 const MAX_TEXT: usize = 100_000;
@@ -35,13 +40,29 @@ const MAX_LINES: usize = 40;
 pub struct Checker {
     running: Option<Running>,
     apps: Apps,
-    session: Option<Session>,
     underlines: Underlines,
     /// Reused for each read of the field's text.
     buffer: Vec<u16>,
     /// The last check's number, unique across fields, so an answer about an
     /// earlier field can't land in a later one.
     checks: u64,
+    /// The model's fix of each paragraph it was asked about, by its text.
+    fixes: HashMap<Vec<u16>, Fix>,
+}
+
+/// The model's fix of a paragraph, as the Fix action shows it.
+#[derive(Debug, Clone)]
+pub struct Fix {
+    pub text: String,
+    /// The word diff from the paragraph to `text`.
+    pub changes: Vec<Piece>,
+}
+
+/// A paragraph to ask the model to fix, as check `id`.
+#[derive(Debug)]
+pub struct Check {
+    pub id: u64,
+    pub text: String,
 }
 
 /// What runs while underlining is on.
@@ -51,6 +72,8 @@ struct Running {
     _clicks: Option<Clicks>,
     /// The watch on the app in front, with its pid.
     watch: Option<(i32, Watch)>,
+    /// The field being underlined, if any.
+    session: Option<Session>,
 }
 
 impl Drop for Running {
@@ -83,6 +106,8 @@ pub struct Target {
     range: Range<usize>,
     units: Vec<u16>,
     pub text: String,
+    /// The underlined word clicked, in points from the primary screen's top-left.
+    pub word: CGRect,
 }
 
 impl Checker {
@@ -91,8 +116,6 @@ impl Checker {
         if self.running.is_some() {
             return;
         }
-        // The checker's first answer takes about 200 ms; later ones, a few.
-        spelling::request(&[u16::from(b'a')], |_| ());
         let ticks = app.clone();
         let ticker = rt.spawn(async move {
             let mut every = tokio::time::interval(TICK);
@@ -111,28 +134,30 @@ impl Checker {
             ticker,
             _clicks: Clicks::watch(move |at| clicks.update(move |s, _| s.underline_clicked(at))),
             watch: None,
+            session: None,
         });
     }
 
     pub fn stop(&mut self) {
         self.running = None;
-        self.pause();
+        self.underlines.hide();
     }
 
     /// Hide the underlines until the next `refresh`.
     pub fn pause(&mut self) {
         self.underlines.hide();
-        self.session = None;
+        if let Some(running) = &mut self.running {
+            running.session = None;
+        }
     }
 
-    /// Read the focused field, check what changed, and underline the mistakes known.
-    pub fn refresh(&mut self) {
-        let Some(running) = &mut self.running else {
-            return;
-        };
+    /// Read the focused field, underline the mistakes known, and return the
+    /// paragraph to ask the model about next, if it's time to.
+    pub fn refresh(&mut self) -> Option<Check> {
+        let running = self.running.as_mut()?;
         let Some(Focus { pid, field }) = self.apps.focused() else {
             self.pause();
-            return;
+            return None;
         };
         if running
             .watch
@@ -148,12 +173,12 @@ impl Checker {
             });
             running.watch = watch.map(|w| (pid, w));
         }
-        let same = self.session.as_ref().is_some_and(|s| s.field == field);
+        let same = running.session.as_ref().is_some_and(|s| s.field == field);
         if !same && field.is_secure() || !field.read(MAX_TEXT, &mut self.buffer) {
             self.pause();
-            return;
+            return None;
         }
-        match &mut self.session {
+        match &mut running.session {
             Some(session) if same => {
                 if let Some(start) = session.doc.edit(&self.buffer) {
                     session.edited = Some(Instant::now());
@@ -162,66 +187,101 @@ impl Checker {
                 }
             }
             _ => {
-                self.session = Some(Session {
+                let fixes = &self.fixes;
+                let doc = Document::new(self.buffer.clone(), |paragraph| {
+                    fixes.get(paragraph).map(|f| diff::marks(&f.changes))
+                });
+                running.session = Some(Session {
                     field,
-                    doc: Document::new(self.buffer.clone()),
+                    doc,
                     edited: None,
                     layout: Layout::default(),
                 });
             }
         }
-        self.request();
+        let check = self.request();
         self.draw();
+        check
     }
 
-    /// Take the mistakes check `id` found, and start the next check.
-    pub fn finished(&mut self, id: u64, found: Vec<Mistake>) {
-        let Some(session) = &mut self.session else {
-            return;
-        };
-        if session.doc.finish(id, found).is_some() {
-            self.draw();
+    /// Take the model's `fix` of `text`, asked as check `id`, or `None` if
+    /// the request failed, and return the paragraph to ask about next.
+    pub fn finished(&mut self, id: u64, text: &str, fix: Option<Fix>) -> Option<Check> {
+        let found = fix.as_ref().map(|f| diff::marks(&f.changes));
+        if let Some(fix) = fix {
+            self.remember(text.encode_utf16().collect(), fix);
         }
-        self.request();
+        self.session_mut()?.doc.finish(id, found);
+        let check = self.request();
+        self.draw();
+        check
     }
 
-    /// Return the paragraph with the underlined mistake at `point`, in AppKit's coordinates.
-    pub fn clicked(&self, point: (f64, f64)) -> Option<Target> {
+    /// Keep the model's `fix` of `target`'s paragraph, so it isn't sent again.
+    pub fn learn(&mut self, target: &Target, fix: Fix) {
+        self.remember(target.units.clone(), fix);
+    }
+
+    fn remember(&mut self, paragraph: Vec<u16>, fix: Fix) {
+        if self.fixes.len() >= MAX_FIXES {
+            self.fixes.clear();
+        }
+        self.fixes.insert(paragraph, fix);
+    }
+
+    fn session_mut(&mut self) -> Option<&mut Session> {
+        self.running.as_mut()?.session.as_mut()
+    }
+
+    /// Return the paragraph with the underlined mistake at `point`, in
+    /// AppKit's coordinates, and the model's fix of it if known.
+    pub fn clicked(&self, point: (f64, f64)) -> Option<(Target, Option<Fix>)> {
         let line = self.underlines.hit(point)?;
-        let session = self.session.as_ref()?;
+        let session = self.running.as_ref()?.session.as_ref()?;
         let text = session.doc.text();
         let range = paragraph(text, line.at);
         let units = text.get(range.clone())?.to_vec();
-        Some(Target {
+        let fix = self.fixes.get(&units).cloned();
+        let target = Target {
             field: session.field.clone(),
             text: String::from_utf16_lossy(&units),
+            word: line.word,
             units,
             range,
-        })
+        };
+        Some((target, fix))
     }
 
-    /// Check the next unchecked span, if no check is running.
-    fn request(&mut self) {
-        let (Some(running), Some(session)) = (&self.running, &mut self.session) else {
-            return;
-        };
-        let Some(request) = session.doc.next(self.checks + 1) else {
-            return;
-        };
-        self.checks = request.id;
-        let (app, id) = (running.app.clone(), request.id);
-        spelling::request(&request.text, move |found| {
-            app.update_if(move |s, _| {
-                s.field_checked(id, found);
-                false
-            });
-        });
+    /// Return the next edited paragraph to ask the model about, once the
+    /// user stopped typing and no request is running. Paragraphs it fixed
+    /// before take their known fix, and long ones are skipped.
+    fn request(&mut self) -> Option<Check> {
+        let session = self.running.as_mut()?.session.as_mut()?;
+        if session.edited.is_some_and(|at| at.elapsed() < IDLE) {
+            return None;
+        }
+        loop {
+            let request = session.doc.next(self.checks + 1)?;
+            self.checks = request.id;
+            if request.text.len() > MAX_PARAGRAPH {
+                session.doc.finish(request.id, None);
+            } else if let Some(fix) = self.fixes.get(&request.text) {
+                session
+                    .doc
+                    .finish(request.id, Some(diff::marks(&fix.changes)));
+            } else {
+                return Some(Check {
+                    id: request.id,
+                    text: String::from_utf16_lossy(&request.text),
+                });
+            }
+        }
     }
 
     /// Underline the known mistakes that show, asking the app where only for
     /// words whose place may have changed.
     fn draw(&mut self) {
-        let Some(session) = &mut self.session else {
+        let Some(session) = self.running.as_mut().and_then(|r| r.session.as_mut()) else {
             return;
         };
         let field = &session.field;
@@ -234,7 +294,7 @@ impl Checker {
                 words: Vec::new(),
             };
         }
-        let typing = session.edited.is_some_and(|at| at.elapsed() < TYPING);
+        let typing = session.edited.is_some_and(|at| at.elapsed() < IDLE);
         let caret = typing
             .then(|| field.selection())
             .flatten()
@@ -244,15 +304,14 @@ impl Checker {
         let mistakes = session.doc.mistakes();
         let (from, to) = match &layout.visible {
             Some(visible) => (
-                mistakes.partition_point(|m| m.range.end <= visible.start),
-                mistakes.partition_point(|m| m.range.start < visible.end),
+                mistakes.partition_point(|m| m.end <= visible.start),
+                mistakes.partition_point(|m| m.start < visible.end),
             ),
             None => (0, mistakes.len()),
         };
         let mut lines = Vec::new();
         let mut asked = Vec::new();
-        'mistakes: for mistake in &mistakes[from..to.max(from)] {
-            let range = &mistake.range;
+        'mistakes: for range in &mistakes[from..to.max(from)] {
             if caret.is_some_and(|c| range.start <= c && c <= range.end) {
                 continue;
             }
@@ -270,7 +329,6 @@ impl Checker {
                 if let Some(rect) = rect {
                     lines.push(Line {
                         word: rect,
-                        kind: mistake.kind,
                         at: range.start,
                     });
                 }

@@ -1,6 +1,7 @@
 //! The word diff between the selected text and its fixed version, as
 //! Grammarly shows it: removed words, then the words that replace them.
 
+use std::ops::Range;
 use std::time::Duration;
 
 use similar::{ChangeTag, TextDiff};
@@ -121,6 +122,67 @@ pub fn changed(pieces: &[Piece]) -> bool {
     pieces.iter().any(|p| p.kind != Kind::Same)
 }
 
+/// Return what the diff changes in the old text, as UTF-16 ranges, sorted
+/// and apart: removed words, and for a word added between two, the word it
+/// joins (`tasty` for a comma after it) or else the word after it (`store`
+/// for `the` before it).
+pub fn marks(pieces: &[Piece]) -> Vec<Range<usize>> {
+    let old: Vec<u16> = pieces
+        .iter()
+        .filter(|p| p.kind != Kind::Added)
+        .flat_map(|p| p.text.encode_utf16())
+        .collect();
+    let word = |u: u16| char::from_u32(u32::from(u)).is_none_or(char::is_alphanumeric);
+    let mut marks: Vec<Range<usize>> = Vec::new();
+    let mut at = 0;
+    let mut after_removed = false;
+    for piece in pieces {
+        let len = piece.text.encode_utf16().count();
+        match piece.kind {
+            Kind::Same => at += len,
+            Kind::Removed => {
+                let words = piece.text.trim();
+                if !words.is_empty() {
+                    let space = &piece.text[..piece.text.len() - piece.text.trim_start().len()];
+                    let start = at + space.encode_utf16().count();
+                    marks.push(start..start + words.encode_utf16().count());
+                }
+                at += len;
+            }
+            Kind::Added if after_removed => {}
+            Kind::Added => {
+                let joined = at > 0 && word(old[at - 1]);
+                let (start, end) = if joined {
+                    let start = old[..at]
+                        .iter()
+                        .rposition(|u| !word(*u))
+                        .map_or(0, |i| i + 1);
+                    (start, at)
+                } else {
+                    let end = old[at..]
+                        .iter()
+                        .position(|u| !word(*u))
+                        .map_or(old.len(), |i| at + i);
+                    (at, end)
+                };
+                if start < end {
+                    marks.push(start..end);
+                }
+            }
+        }
+        after_removed = piece.kind == Kind::Removed;
+    }
+    marks.sort_by_key(|m| m.start);
+    marks.dedup_by(|next, kept| {
+        let meets = next.start <= kept.end;
+        if meets {
+            kept.end = kept.end.max(next.end);
+        }
+        meets
+    });
+    marks
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,26 +213,36 @@ mod tests {
                 "I has went to store yesterday.",
                 "I went to the store yesterday.",
                 "I [-has -]went to {+the +}store yesterday.",
+                &["has", "store"][..],
             ),
             (
                 "We discussed about it on the meeting.",
                 "We discussed it at the meeting.",
                 "We discussed [-about -]it [-on-]{+at+} the meeting.",
+                &["about", "on"],
             ),
             (
                 "They was very tasty and I don't",
                 "They were very tasty, and I don't",
                 "They [-was-]{+were+} very tasty{+,+} and I don't",
+                &["was", "tasty"],
             ),
-            ("a b c d", "x y z d", "[-a b c-]{+x y z+} d"),
-            ("Fine as is.\n", "Fine as is.\n", "Fine as is.\n"),
+            ("a b c d", "x y z d", "[-a b c-]{+x y z+} d", &["a b c"]),
+            ("Fine as is.\n", "Fine as is.\n", "Fine as is.\n", &[]),
+            ("Это хорошо", "Это хорошо.", "Это хорошо{+.+}", &["хорошо"]),
         ];
-        for (old, new, want) in cases {
+        for (old, new, want, marked) in cases {
             let pieces = words(old, new);
             assert_eq!(show(&pieces), want, "{old:?} -> {new:?}");
             assert_eq!(side(&pieces, Kind::Added), old);
             assert_eq!(side(&pieces, Kind::Removed), new);
             assert_eq!(changed(&pieces), old != new);
+            let units: Vec<u16> = old.encode_utf16().collect();
+            let got: Vec<String> = marks(&pieces)
+                .into_iter()
+                .map(|r| String::from_utf16_lossy(&units[r]))
+                .collect();
+            assert_eq!(got, marked, "{old:?} -> {new:?}");
         }
     }
 }

@@ -80,6 +80,11 @@ impl Draft {
         });
     }
 
+    /// Show `status` as `action`'s answer, known without a run.
+    pub fn answered(&mut self, action: Action, status: Status) {
+        self.answer = Some(Answer { action, status });
+    }
+
     /// Show `action`'s run `run`, which `job` streams in.
     pub fn running(&mut self, action: Action, run: u64, job: JoinHandle<()>) {
         self.answer = Some(Answer {

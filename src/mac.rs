@@ -13,6 +13,7 @@ use objc2_app_kit::{
     NSPasteboard, NSPasteboardItem, NSPasteboardTypeString, NSPasteboardWriting, NSScreen,
     NSWorkspace,
 };
+use objc2_core_foundation::CGRect;
 use objc2_core_graphics::{
     CGEvent, CGEventFlags, CGEventSource, CGEventSourceStateID, CGEventTapLocation,
 };
@@ -114,6 +115,36 @@ pub fn top_center_under_pointer(width: f32, margin: f32) -> Option<(i32, i32)> {
     // AppKit counts up from the primary screen's bottom; winit down from its top.
     let x = area.origin.x + (area.size.width - f64::from(width)) / 2.0;
     let y = primary - (area.origin.y + area.size.height) + f64::from(margin);
+    Some(((x * scale).round() as i32, (y * scale).round() as i32))
+}
+
+/// Where a window `width` by `height` points goes to sit centred over `word`,
+/// `gap` points above it, or under it if there's no room above: its top-left
+/// in physical pixels, as winit counts. `word` is in points from the primary
+/// screen's top-left, as the Accessibility API counts.
+pub fn over_word(word: CGRect, width: f32, height: f32, gap: f64) -> Option<(i32, i32)> {
+    let mtm = MainThreadMarker::new()?;
+    let screens = NSScreen::screens(mtm);
+    let primary = screens.iter().next()?.frame().size.height;
+    let (width, height) = (f64::from(width), f64::from(height));
+    let middle = word.origin.x + word.size.width / 2.0;
+    let screen = screen_at(&screens, middle, primary - word.origin.y)?;
+    let area = screen.visibleFrame();
+    let scale = screen.backingScaleFactor();
+    let x = (middle - width / 2.0)
+        .min(area.origin.x + area.size.width - width)
+        .max(area.origin.x);
+    // From here on, points down from the primary screen's top, as winit counts.
+    let (area_top, area_bottom) = (
+        primary - (area.origin.y + area.size.height),
+        primary - area.origin.y,
+    );
+    let above = word.origin.y - gap - height;
+    let y = if above >= area_top {
+        above
+    } else {
+        (word.origin.y + word.size.height + gap).min(area_bottom - height)
+    };
     Some(((x * scale).round() as i32, (y * scale).round() as i32))
 }
 

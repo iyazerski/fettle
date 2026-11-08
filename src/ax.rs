@@ -22,7 +22,7 @@ use objc2_core_foundation::{
 const TIMEOUT: f32 = 0.25;
 /// Code editors built on VS Code, by bundle ID. Fettle leaves them alone:
 /// asking them to expose their content switches them to screen reader mode,
-/// which changes the editor, and spell checking code only adds noise.
+/// which changes the editor, and checking code only adds noise.
 const CODE_EDITORS: [&str; 5] = [
     "com.microsoft.VSCode",
     "com.microsoft.VSCodeInsiders",

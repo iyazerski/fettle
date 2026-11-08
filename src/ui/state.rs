@@ -9,12 +9,13 @@ use std::time::Duration;
 
 use anyhow::Context;
 
+use objc2_core_foundation::CGRect;
 use rune::{AppHandle, Phase, ShortcutId, Tx};
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex, oneshot};
 
-use super::checker::{Checker, Target};
-use super::draft::{Draft, Status, complete};
+use super::checker::{self, Checker, Fix, Target};
+use super::draft::{Answer, Draft, Status, complete};
 use super::onboarding::Step;
 use super::saver::Saver;
 use super::settings_state::{Form, FormError, Update};
@@ -25,7 +26,6 @@ use crate::llm::{Ask, Backend, chatgpt};
 use crate::mac;
 use crate::prompts::{self, Action};
 use crate::settings::{Credentials, Settings};
-use crate::spelling::Mistake;
 
 /// How far below the top of the screen the window opens.
 const TOP_MARGIN: f32 = 120.0;
@@ -34,6 +34,8 @@ const TOP_MARGIN: f32 = 120.0;
 const PASTE_DELAY: Duration = Duration::from_millis(120);
 /// How long a dropdown's list waits for the window to grow for it: a few frames.
 const MENU_DELAY: Duration = Duration::from_millis(50);
+/// How far the window opened from an underline sits from its word, in points.
+const WORD_GAP: f64 = 6.0;
 
 pub struct State {
     pub app: AppHandle<State>,
@@ -52,11 +54,7 @@ pub struct State {
     /// The language macOS prefers, of those the window speaks.
     system_locale: Locale,
     /// The dropdown that's open.
-    pub menu: Option<Menu>,
-    /// Whether the open dropdown's list shows yet: it waits a few frames for the
-    /// window to grow, since a window that fits its content doesn't lay out
-    /// again when its height changes, and the list would be cut to the old height.
-    pub menu_shown: bool,
+    pub menu: Option<Dropdown>,
     /// Whether Fettle may copy and paste in other apps.
     pub trusted: bool,
     /// Whether macOS's Accessibility prompt was asked for since launch.
@@ -74,6 +72,16 @@ pub struct State {
     target: Option<Target>,
 }
 
+/// An open dropdown.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Dropdown {
+    pub menu: Menu,
+    /// Whether its list shows yet: it waits a few frames for the window to
+    /// grow, since a window that fits its content doesn't lay out again when
+    /// its height changes, and the list would be cut to the old height.
+    pub shown: bool,
+}
+
 /// Where the window is, and the drag moving it.
 #[derive(Default)]
 struct Placement {
@@ -81,6 +89,11 @@ struct Placement {
     position: Option<(i32, i32)>,
     /// Where a drag of the window began.
     drag: Option<Drag>,
+    /// The word the window sits over until dragged, in points from the
+    /// primary screen's top-left: the underline it opened from.
+    over: Option<CGRect>,
+    /// The window's height in points, as last laid out.
+    height: f32,
 }
 
 /// The pointer and the window's top-left when a drag of the window began.
@@ -96,6 +109,7 @@ impl Placement {
     fn drag(&mut self, phase: Phase, pointer: Option<(f64, f64)>) -> Option<(i32, i32)> {
         match phase {
             Phase::Down => {
+                self.over = None;
                 self.drag = pointer
                     .zip(self.position)
                     .map(|(pointer, origin)| Drag { pointer, origin });
@@ -134,7 +148,7 @@ pub enum Page {
     Onboarding(Step),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Menu {
     Language,
     Model,
@@ -172,7 +186,6 @@ impl State {
             pinned: false,
             system_locale: Locale::from_preferred(&mac::preferred_languages()),
             menu: None,
-            menu_shown: false,
             trusted: mac::accessibility_trusted(),
             asked_accessibility: false,
             form,
@@ -234,7 +247,7 @@ impl State {
         // Copying waits for the other app, off the UI thread.
         self.rt.spawn_blocking(move || {
             let text = mac::copy_selection();
-            app.update(move |s, _| s.show_text(text));
+            app.update(move |s, _| s.show_text(text, None));
         });
     }
 
@@ -252,13 +265,62 @@ impl State {
         if self.app.is_visible() || self.capturing {
             self.checker.pause();
         } else {
-            self.checker.refresh();
+            let check = self.checker.refresh();
+            self.proofread(check);
         }
     }
 
-    /// The answer to the field check `id`.
-    pub fn field_checked(&mut self, id: u64, found: Vec<Mistake>) {
-        self.checker.finished(id, found);
+    /// The model's `fix` of the field's paragraph `text`, asked as check `id`.
+    pub fn field_checked(&mut self, id: u64, text: &str, fix: Option<Fix>) {
+        let check = self.checker.finished(id, text, fix);
+        self.proofread(check);
+    }
+
+    /// Ask the model to fix a paragraph of the focused field, as the Fix
+    /// action does. Without a model to ask, the paragraph goes unchecked.
+    fn proofread(&mut self, mut check: Option<checker::Check>) {
+        let (checker::Check { id, text }, (backend, model)) = loop {
+            let next = check.take();
+            let Some(next) = next else {
+                return;
+            };
+            match Backend::with_model(&self.settings) {
+                Ok(chosen) => break (next, chosen),
+                Err(_) => check = self.checker.finished(next.id, &next.text, None),
+            }
+        };
+        let (effort, app, http, refreshing) = (
+            self.settings.effort(),
+            self.app.clone(),
+            self.http.clone(),
+            self.refreshing.clone(),
+        );
+        self.rt.spawn(async move {
+            let result = async {
+                let backend = fresh_backend(&app, &http, &refreshing, backend).await?;
+                let ask = Ask {
+                    system: prompts::system(Action::Fix, ""),
+                    text: text.clone(),
+                    model,
+                    effort,
+                };
+                let mut fixed = String::new();
+                backend
+                    .stream(&http, &ask, |delta| fixed.push_str(delta))
+                    .await?;
+                anyhow::Ok(fixed)
+            }
+            .await;
+            let fix = match result.map(|fixed| complete(Action::Fix, &text, &fixed, "")) {
+                Ok(Status::Done { text, changes, .. }) => Some(Fix { text, changes }),
+                Ok(_) => None,
+                Err(e) => {
+                    eprintln!("checking a paragraph: {e:#}");
+                    None
+                }
+            };
+            app.update(move |s, _| s.field_checked(id, &text, fix));
+        });
     }
 
     /// A click at `point` in another app: on an underline, open its paragraph and fix it.
@@ -266,15 +328,27 @@ impl State {
         if self.app.is_visible() || self.capturing {
             return;
         }
-        let Some(target) = self.checker.clicked(point) else {
+        let Some((target, fix)) = self.checker.clicked(point) else {
             return;
         };
-        self.show_text(Some(target.text.clone()));
+        self.show_text(Some(target.text.clone()), Some(target.word));
+        match fix {
+            Some(fix) => self.draft.answered(
+                Action::Fix,
+                Status::Done {
+                    text: fix.text,
+                    changes: fix.changes,
+                    copied: false,
+                },
+            ),
+            None => self.start(Action::Fix),
+        }
         self.target = Some(target);
-        self.start(Action::Fix);
     }
 
-    fn show_text(&mut self, text: Option<String>) {
+    /// Show `text` on the main page, over `word` if given, else at the top of the screen.
+    fn show_text(&mut self, text: Option<String>, word: Option<CGRect>) {
+        self.placement.over = word;
         self.capturing = false;
         self.target = None;
         self.stop();
@@ -287,8 +361,12 @@ impl State {
 
     pub(super) fn show(&mut self) {
         // Not `AppHandle::place`: it pins the window's size, and the window fits its content.
+        let place = || match self.placement.over {
+            Some(word) => mac::over_word(word, WIDTH, self.placement.height, WORD_GAP),
+            None => mac::top_center_under_pointer(WIDTH, TOP_MARGIN),
+        };
         if !self.app.is_visible()
-            && let Some(position) = mac::top_center_under_pointer(WIDTH, TOP_MARGIN)
+            && let Some(position) = place()
         {
             self.placement.position = Some(position);
             self.app.set_position(position);
@@ -296,7 +374,24 @@ impl State {
         self.app.open();
     }
 
+    /// The window was laid out `height` points tall: keep it over its word.
+    pub fn laid_out(&mut self, height: f32) {
+        self.placement.height = height;
+        // A dropdown grows the window for its list; the window stays put for it.
+        if self.menu.is_some() || !self.app.is_visible() {
+            return;
+        }
+        if let Some(word) = self.placement.over
+            && let Some(position) = mac::over_word(word, WIDTH, height, WORD_GAP)
+            && self.placement.position != Some(position)
+        {
+            self.placement.position = Some(position);
+            self.app.set_position(position);
+        }
+    }
+
     pub fn hide(&mut self) {
+        self.placement.over = None;
         self.stop();
         self.menu = None;
         self.app.hide();
@@ -346,7 +441,7 @@ impl State {
     }
 
     pub fn toggle_menu(&mut self, menu: Menu) {
-        if self.menu == Some(menu) {
+        if self.menu_is(menu) {
             self.menu = None;
             return;
         }
@@ -354,19 +449,30 @@ impl State {
         // the frame that grows the window.
         self.app.update(move |s, tx| {
             tx.instant();
-            s.menu = Some(menu);
-            s.menu_shown = false;
+            s.menu = Some(Dropdown { menu, shown: false });
         });
         let app = self.app.clone();
         self.rt.spawn(async move {
             tokio::time::sleep(MENU_DELAY).await;
-            app.update(move |s, _| s.menu_shown = s.menu == Some(menu));
+            app.update(move |s, _| {
+                if let Some(open) = &mut s.menu
+                    && open.menu == menu
+                {
+                    open.shown = true;
+                }
+            });
         });
+    }
+
+    /// Whether `menu` is the dropdown that's open.
+    pub fn menu_is(&self, menu: Menu) -> bool {
+        self.menu.is_some_and(|open| open.menu == menu)
     }
 
     /// Whether `menu`'s list shows.
     pub fn menu_open(&self, menu: Menu) -> bool {
-        self.menu == Some(menu) && self.menu_shown
+        self.menu
+            .is_some_and(|open| open.menu == menu && open.shown)
     }
 
     /// Run `action` on the text in the window.
@@ -419,9 +525,28 @@ impl State {
                     None => format!("{e:#}"),
                 }),
             };
-            app.update(move |s, _| s.draft.finished(run, status));
+            app.update(move |s, _| s.run_finished(run, status));
         });
         self.draft.running(action, run, job);
+    }
+
+    /// End run `run` with `status`. A fix of a clicked paragraph also counts
+    /// as its check, so the paragraph isn't sent to the model again.
+    fn run_finished(&mut self, run: u64, status: Status) {
+        self.draft.finished(run, status);
+        if let Some(target) = &self.target
+            && self.draft.source.text == target.text
+            && let Some(Answer {
+                action: Action::Fix,
+                status: Status::Done { text, changes, .. },
+            }) = &self.draft.answer
+        {
+            let fix = Fix {
+                text: text.clone(),
+                changes: changes.clone(),
+            };
+            self.checker.learn(target, fix);
+        }
     }
 
     /// Stop the running answer, if any.

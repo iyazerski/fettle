@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "Shortcut",
     open_fettle: "Open Fettle",
     underline: "Underline mistakes",
-    underline_hint: "Marks mistakes as you type in other apps. Click one to fix it.",
+    underline_hint: "Marks mistakes as you type in other apps, using the model. Each paragraph you edit is a request, so paid models cost much more.",
     start_at_login: "Start at login",
     accessibility: "Accessibility",
     allowed: "Allowed",
