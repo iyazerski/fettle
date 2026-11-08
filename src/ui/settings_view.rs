@@ -15,11 +15,12 @@ use super::buttons::{self, Tone};
 use super::icons;
 use super::settings_state::{Login, Models, Update};
 use super::state::{Menu, State};
-use super::view::{NoteKind, WIDTH, divider, header, note};
+use super::view::{Lead, NoteKind, WIDTH, divider, header, note};
 use crate::i18n::{Locale, fill};
+use crate::llm::Backend;
 use crate::llm::on_device::Availability;
 use crate::mac;
-use crate::settings::{Appearance, Missing, Provider};
+use crate::settings::{Appearance, Provider};
 
 /// The providers, in the order the settings list them.
 const PROVIDERS: [Provider; 3] = [Provider::OnDevice, Provider::ChatGpt, Provider::Api];
@@ -40,10 +41,13 @@ const CONTROL: f32 = WIDTH - 2.0 * 14.0 - 2.0 * PAD - LABEL - 12.0;
 pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
     let sk = segmented_kit(k);
-    let mut page = col()
-        .w_full()
-        .gap(8.0)
-        .child(header(s, k, t.settings, Some(State::back)));
+    let mut page = col().w_full().gap(8.0).child(header(
+        s,
+        k,
+        Lead::Back(State::back),
+        t.settings,
+        Vec::new(),
+    ));
     if let Some(error) = &s.form.error {
         page = page.child(note(k, error.message(t), NoteKind::Failure));
     }
@@ -328,7 +332,7 @@ pub(super) fn on_device(s: &State, k: &Kit) -> El {
 pub(super) fn chatgpt(s: &State, k: &Kit) -> El {
     let t = s.t();
     let line = row().w_full().center_y().gap(8.0);
-    match (&s.settings.chatgpt, &s.form.login) {
+    match (&s.settings.credentials.chatgpt, &s.form.login) {
         (_, Login::Waiting(_)) => line
             .child(
                 text(t.finish_sign_in)
@@ -410,12 +414,8 @@ fn api(s: &State, k: &Kit) -> [El; 2] {
 /// The model dropdown, once the provider can list its models.
 fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
     let t = s.t();
-    if s.settings.provider == Provider::OnDevice
-        || matches!(
-            s.settings.missing(),
-            Some(Missing::SignIn | Missing::ApiUrl)
-        )
-    {
+    let current = s.settings.model()?;
+    if Backend::of(&s.settings).is_err() {
         return None;
     }
     let loading = matches!(s.form.models, Models::Loading(_));
@@ -423,7 +423,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
         Models::Ready(models) => models,
         _ => &[],
     };
-    let current = Some(s.settings.model()).filter(|m| !m.is_empty());
+    let current = Some(current).filter(|m| !m.is_empty());
     let select = Select::new("model", models)
         .label(t.model)
         .appearance(SelectAppearance::Field)

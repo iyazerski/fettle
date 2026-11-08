@@ -73,7 +73,7 @@ impl Form {
     pub(super) fn new(settings: &Settings) -> Self {
         Self {
             api_base: TextEdit::new(&settings.api_base),
-            api_key: TextEdit::new(&settings.api_key).secure(),
+            api_key: TextEdit::new(&settings.credentials.api_key).secure(),
             shortcut: ShortcutRecorderState::new(settings.shortcut.parse().ok()),
             models: Models::Idle,
             login: Login::Idle,
@@ -94,7 +94,7 @@ impl State {
         }
         self.menu = None;
         self.page = Page::Settings;
-        if matches!(self.form.models, Models::Idle) && Backend::of(&self.settings).is_ok() {
+        if matches!(self.form.models, Models::Idle) {
             self.load_models();
         }
         self.show();
@@ -114,9 +114,7 @@ impl State {
         self.settings.provider = provider;
         self.set_models(Models::Idle);
         self.save();
-        if Backend::of(&self.settings).is_ok() {
-            self.load_models();
-        }
+        self.load_models();
     }
 
     pub fn toggle_reasoning(&mut self) {
@@ -141,7 +139,7 @@ impl State {
     /// Copy the API fields from the form into the settings.
     pub fn api_edited(&mut self) {
         self.settings.api_base = self.form.api_base.text.trim().to_owned();
-        self.settings.api_key = self.form.api_key.text.trim().to_owned();
+        self.settings.credentials.api_key = self.form.api_key.text.trim().to_owned();
         self.set_models(Models::Idle);
         self.save_soon();
     }
@@ -173,7 +171,11 @@ impl State {
         self.form.models = models;
     }
 
+    /// Load the provider's models, if it has models to pick and can list them.
     pub fn load_models(&mut self) {
+        if self.settings.model().is_none() {
+            return;
+        }
         let Ok(backend) = Backend::of(&self.settings) else {
             return;
         };
@@ -226,7 +228,7 @@ impl State {
         match result {
             Ok(auth) => {
                 self.form.login = Login::Idle;
-                self.settings.chatgpt = Some(auth);
+                self.settings.credentials.chatgpt = Some(auth);
                 self.save();
                 self.load_models();
             }
@@ -248,7 +250,7 @@ impl State {
     }
 
     pub fn sign_out(&mut self) {
-        self.settings.chatgpt = None;
+        self.settings.credentials.chatgpt = None;
         self.set_models(Models::Idle);
         self.menu = None;
         self.save();
@@ -259,13 +261,14 @@ impl State {
     pub(super) fn saved_auth(&mut self, old_refresh: &str, auth: ChatGptAuth) {
         if self
             .settings
+            .credentials
             .chatgpt
             .as_ref()
             .is_none_or(|current| current.refresh != old_refresh)
         {
             return;
         }
-        self.settings.chatgpt = Some(auth);
+        self.settings.credentials.chatgpt = Some(auth);
         self.save();
     }
 

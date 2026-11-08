@@ -1,11 +1,15 @@
 //! Self-update: find the latest GitHub release, and swap the running
 //! Fettle.app for it.
 
+use std::ffi::CString;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result, bail, ensure};
 use serde::Deserialize;
+
+use crate::mac;
 
 const REPO: &str = "iyazerski/fettle";
 const ASSET: &str = "Fettle.zip";
@@ -86,16 +90,12 @@ pub fn relaunch(app: &Path) -> Result<()> {
 /// The Fettle.app this binary runs from.
 fn running_app() -> Result<PathBuf> {
     let exe = std::env::current_exe()?.canonicalize()?;
-    // Fettle.app/Contents/MacOS/fettle
-    exe.ancestors()
-        .nth(3)
-        .filter(|p| p.extension().is_some_and(|e| e == "app"))
+    mac::bundle_of(&exe)
         .map(Path::to_path_buf)
         .context("Fettle isn't running from Fettle.app, so it can't update itself")
 }
 
-/// Unpack `zip` next to `app` and swap the two, keeping the old app if the
-/// swap fails.
+/// Unpack `zip` next to `app` and swap the two.
 fn swap(app: &Path, zip: &[u8]) -> Result<()> {
     let parent = app.parent().context("the app has no folder")?;
     // Beside the app, so the swap is a rename on one volume.
@@ -103,44 +103,49 @@ fn swap(app: &Path, zip: &[u8]) -> Result<()> {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir(&work)
         .with_context(|| format!("Fettle can't write to {}", parent.display()))?;
-    let result = (|| {
-        let archive = work.join(ASSET);
-        std::fs::write(&archive, zip)?;
-        run(Command::new("/usr/bin/ditto")
-            .arg("-x")
-            .arg("-k")
-            .arg(&archive)
-            .arg(&work))?;
-        let new = work.join("Fettle.app");
-        ensure!(new.is_dir(), "the download has no Fettle.app");
-        // The checksum comes from the same release, so it only catches damage. The
-        // signature shows the app is Fettle's own.
-        run(Command::new("/usr/bin/codesign")
-            .args(["--verify", "--strict", "-R", SIGNER])
-            .arg(&new))
-        .context("the download isn't signed by Fettle's release certificate")?;
-        let adhoc = adhoc_signed(app);
-        let old = work.join("old.app");
-        std::fs::rename(app, &old).context("moving the old version away")?;
-        if let Err(e) = std::fs::rename(&new, app) {
-            std::fs::rename(&old, app)?;
-            return Err(e).context("putting the new version in place");
-        }
-        if adhoc {
-            // An ad-hoc signature changes with every build, so the old grant can't
-            // match the new app: clear it, so macOS asks again.
-            let _ =
-                run(Command::new("/usr/bin/tccutil").args(["reset", "Accessibility", BUNDLE_ID]));
-        }
-        Ok(())
-    })();
-    // Without an app in place, a failed rollback left the old one in `work`.
-    if !app.exists() {
-        return result
-            .with_context(|| format!("the old version is in {}", work.join("old.app").display()));
-    }
+    let result = unpack_and_swap(app, &work, zip);
+    // After a swap, the old version is what's left in `work`.
     let _ = std::fs::remove_dir_all(&work);
     result
+}
+
+/// Unpack `zip` in `work`, check that it's Fettle's, and swap it with `app`.
+fn unpack_and_swap(app: &Path, work: &Path, zip: &[u8]) -> Result<()> {
+    let archive = work.join(ASSET);
+    std::fs::write(&archive, zip)?;
+    run(Command::new("/usr/bin/ditto")
+        .arg("-x")
+        .arg("-k")
+        .arg(&archive)
+        .arg(work))?;
+    let new = work.join("Fettle.app");
+    ensure!(new.is_dir(), "the download has no Fettle.app");
+    // The checksum comes from the same release, so it only catches damage. The
+    // signature shows the app is Fettle's own.
+    run(Command::new("/usr/bin/codesign")
+        .args(["--verify", "--strict", "-R", SIGNER])
+        .arg(&new))
+    .context("the download isn't signed by Fettle's release certificate")?;
+    let adhoc = adhoc_signed(app);
+    // One atomic exchange, so even a crash leaves one version in place.
+    exchange(&new, app).context("putting the new version in place")?;
+    if adhoc {
+        // An ad-hoc signature changes with every build, so the old grant can't
+        // match the new app: clear it, so macOS asks again.
+        let _ = run(Command::new("/usr/bin/tccutil").args(["reset", "Accessibility", BUNDLE_ID]));
+    }
+    Ok(())
+}
+
+/// Swap the items at `a` and `b` in one step. Both must be on one volume.
+fn exchange(a: &Path, b: &Path) -> std::io::Result<()> {
+    let a = CString::new(a.as_os_str().as_bytes())?;
+    let b = CString::new(b.as_os_str().as_bytes())?;
+    // SAFETY: both are NUL-terminated paths that outlive the call.
+    if unsafe { libc::renamex_np(a.as_ptr(), b.as_ptr(), libc::RENAME_SWAP) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    Ok(())
 }
 
 /// Whether `app` has an ad-hoc signature, which macOS's privacy grants can't follow

@@ -18,9 +18,17 @@ use crate::settings::{ChatGptAuth, Missing, Provider, Settings};
 pub struct Ask {
     pub system: String,
     pub text: String,
-    pub model: String,
+    /// The model to ask; `None` on device, which has only one.
+    pub model: Option<String>,
     /// The reasoning effort, like `none` or `low`.
     pub effort: &'static str,
+}
+
+impl Ask {
+    /// Return the model to ask, which every backend but the on-device one needs.
+    fn model(&self) -> Result<&str> {
+        self.model.as_deref().context("no model is chosen")
+    }
 }
 
 /// Where requests go, with what they need.
@@ -40,6 +48,7 @@ impl Backend {
                 other => Err(Missing::OnDevice(other)),
             },
             Provider::ChatGpt => settings
+                .credentials
                 .chatgpt
                 .clone()
                 .map(Backend::ChatGpt)
@@ -51,9 +60,19 @@ impl Backend {
                 }
                 Ok(Backend::Api {
                     base: base.to_owned(),
-                    key: settings.api_key.trim().to_owned(),
+                    key: settings.credentials.api_key.trim().to_owned(),
                 })
             }
+        }
+    }
+
+    /// Where `settings` send a request and the model they ask, or what they
+    /// lack to send one.
+    pub fn with_model(settings: &Settings) -> Result<(Self, Option<String>), Missing> {
+        let backend = Self::of(settings)?;
+        match settings.model().map(str::trim) {
+            Some("") => Err(Missing::Model),
+            model => Ok((backend, model.map(str::to_owned))),
         }
     }
 

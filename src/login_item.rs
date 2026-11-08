@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result};
 
+use crate::mac;
 use crate::settings::home;
 
 const LABEL: &str = "dev.iyazerski.fettle";
@@ -22,11 +23,7 @@ pub fn enable() -> Result<()> {
     let exe = std::env::current_exe().context("finding Fettle's executable")?;
     // From a bundle, start through LaunchServices, so opening Fettle.app later
     // reaches this copy instead of starting another.
-    let bundle = exe
-        .ancestors()
-        .nth(3)
-        .filter(|app| app.extension().is_some_and(|e| e == "app"));
-    let args: Vec<String> = match bundle {
+    let args: Vec<String> = match mac::bundle_of(&exe) {
         Some(app) => vec![
             "/usr/bin/open".into(),
             "-g".into(),

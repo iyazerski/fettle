@@ -103,7 +103,7 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let mut page = col()
         .w_full()
         .gap(12.0)
-        .child(header(s, k, "Fettle", None))
+        .child(header(s, k, Lead::Mark, "Fettle", main_tools(s, k)))
         .child(source(s, k));
     if let Some(notice) = &s.notice {
         page = page.child(note(k, notice, NoteKind::Info));
@@ -140,62 +140,68 @@ fn source(s: &State, k: &Kit) -> El {
     col().w_full().child(field.pr(34.0)).child(clear)
 }
 
-/// The title row, with a back button on sub-pages and the hide button. It
-/// moves the window when dragged.
-pub fn header(s: &State, k: &Kit, title: &str, back: Option<fn(&mut State)>) -> El {
+/// What starts a header: Fettle's mark, or a button back.
+pub enum Lead {
+    Mark,
+    Back(fn(&mut State)),
+}
+
+/// The title row: `lead`, `title`, and on the right `tools` and the hide
+/// button. It moves the window when dragged.
+pub fn header(s: &State, k: &Kit, lead: Lead, title: &str, tools: Vec<El>) -> El {
     let t = s.t();
-    let mut bar = row()
+    let lead = match lead {
+        Lead::Mark => icon(&icons::SPARKLE, 15.0).color(k.c.text_accent),
+        Lead::Back(back) => IconButton::new(&icons::BACK)
+            .variant(IconButtonVariant::GhostMuted)
+            .label(t.back)
+            .on_press(back)
+            .build(k),
+    };
+    row()
         .key("header")
         .w_full()
         .center_y()
         .gap(6.0)
-        .on_drag(|s: &mut State, drag, _| s.drag(drag.phase));
-    if let Some(back) = back {
-        bar = bar.child(
-            IconButton::new(&icons::BACK)
-                .variant(IconButtonVariant::GhostMuted)
-                .label(t.back)
-                .on_press(back)
-                .build(k),
-        );
-    } else {
-        bar = bar.child(icon(&icons::SPARKLE, 15.0).color(k.c.text_accent));
-    }
-    bar = bar
+        .on_drag(|s: &mut State, drag, _| s.drag(drag.phase))
+        .child(lead)
         .child(text(title).font(k.ty.ui_medium).color(k.c.text_base))
-        .child(spacer());
-    if back.is_none() {
-        bar = bar.child(
-            IconButton::new(&icons::GEAR)
+        .child(spacer())
+        .children(tools)
+        .child(
+            IconButton::new(&icons::CLOSE)
                 .variant(IconButtonVariant::GhostMuted)
-                .label(t.settings)
-                .shortcut("⌘,")
-                .on_press(|s: &mut State| s.open_settings())
+                .label(t.hide)
+                .shortcut("Esc")
+                .on_press(|s: &mut State| s.hide())
                 .build(k),
-        );
-        let pin = IconButton::new(&icons::PIN)
-            .variant(if s.pinned {
-                IconButtonVariant::Ghost
-            } else {
-                IconButtonVariant::GhostMuted
-            })
-            .label(if s.pinned { t.unpin } else { t.pin })
-            .on_press(|s: &mut State| s.toggle_pin())
-            .build(k);
-        bar = bar.child(if s.pinned {
-            pin.fill(k.c.bg_accent.alpha(0.16))
+        )
+}
+
+/// The main page's header buttons: settings, and pinning the window open.
+fn main_tools(s: &State, k: &Kit) -> Vec<El> {
+    let t = s.t();
+    let settings = IconButton::new(&icons::GEAR)
+        .variant(IconButtonVariant::GhostMuted)
+        .label(t.settings)
+        .shortcut("⌘,")
+        .on_press(|s: &mut State| s.open_settings())
+        .build(k);
+    let pin = IconButton::new(&icons::PIN)
+        .variant(if s.pinned {
+            IconButtonVariant::Ghost
         } else {
-            pin
-        });
-    }
-    bar.child(
-        IconButton::new(&icons::CLOSE)
-            .variant(IconButtonVariant::GhostMuted)
-            .label(t.hide)
-            .shortcut("Esc")
-            .on_press(|s: &mut State| s.hide())
-            .build(k),
-    )
+            IconButtonVariant::GhostMuted
+        })
+        .label(if s.pinned { t.unpin } else { t.pin })
+        .on_press(|s: &mut State| s.toggle_pin())
+        .build(k);
+    let pin = if s.pinned {
+        pin.fill(k.c.bg_accent.alpha(0.16))
+    } else {
+        pin
+    };
+    vec![settings, pin]
 }
 
 fn actions(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {

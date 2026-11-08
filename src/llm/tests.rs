@@ -47,7 +47,7 @@ fn ask(effort: &'static str) -> Ask {
     Ask {
         system: "Fix it.".into(),
         text: "teh text".into(),
-        model: "m1".into(),
+        model: Some("m1".into()),
         effort,
     }
 }
@@ -154,4 +154,27 @@ async fn api_answers_count_only_when_the_stream_says_they_are_done() {
             .map_err(|e| e.to_string());
         assert_eq!(got, want.map_err(str::to_owned), "ending {end:?}");
     }
+}
+
+#[test]
+fn requests_need_a_sign_in_an_api_url_and_a_model() {
+    let mut settings = Settings {
+        provider: Provider::ChatGpt,
+        ..Settings::default()
+    };
+    assert_eq!(Backend::with_model(&settings).err(), Some(Missing::SignIn));
+    settings.provider = Provider::Api;
+    settings.api_base = " ".into();
+    assert_eq!(Backend::with_model(&settings).err(), Some(Missing::ApiUrl));
+    settings.api_base = "http://x/v1/".into();
+    settings.api_model = " ".into();
+    assert_eq!(Backend::with_model(&settings).err(), Some(Missing::Model));
+    settings.api_model = " m1 ".into();
+    let Ok((Backend::Api { base, .. }, model)) = Backend::with_model(&settings) else {
+        panic!("an API with a URL and a model is ready");
+    };
+    assert_eq!(
+        (base.as_str(), model.as_deref()),
+        ("http://x/v1", Some("m1"))
+    );
 }

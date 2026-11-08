@@ -7,7 +7,7 @@ use security_framework::passwords::{
     delete_generic_password, get_generic_password, set_generic_password,
 };
 
-use crate::settings::{ChatGptAuth, Settings};
+use crate::settings::Credentials;
 
 /// Debug builds keep their own items, so a test copy can't change the
 /// installed app's sign-in.
@@ -20,29 +20,6 @@ const CHATGPT: &str = "chatgpt";
 const API_KEY: &str = "api-key";
 /// `errSecItemNotFound`.
 const NOT_FOUND: i32 = -25300;
-
-/// The credentials in the settings.
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Credentials {
-    pub chatgpt: Option<ChatGptAuth>,
-    pub api_key: String,
-}
-
-impl Credentials {
-    /// Return the credentials `settings` hold.
-    pub fn of(settings: &Settings) -> Self {
-        Self {
-            chatgpt: settings.chatgpt.clone(),
-            api_key: settings.api_key.clone(),
-        }
-    }
-
-    /// Put these credentials into `settings`.
-    pub fn apply(&self, settings: &mut Settings) {
-        settings.chatgpt = self.chatgpt.clone();
-        settings.api_key = self.api_key.clone();
-    }
-}
 
 /// Read the credentials; one that can't be read is reported and left out.
 pub fn load() -> Credentials {

@@ -18,12 +18,12 @@ use super::settings_state::{Form, FormError, Update};
 use super::view::WIDTH;
 use crate::diff::{self, Piece};
 use crate::i18n::{Locale, Strings, fill};
-use crate::keychain::{self, Credentials};
+use crate::keychain;
 use crate::llm::on_device::{self, Availability, Refusal};
 use crate::llm::{Ask, Backend, chatgpt};
 use crate::mac;
 use crate::prompts::{self, Action};
-use crate::settings::Settings;
+use crate::settings::{Credentials, Settings};
 
 /// How far below the top of the screen the window opens.
 const TOP_MARGIN: f32 = 120.0;
@@ -331,19 +331,14 @@ impl State {
     /// Run `action` on the text in the window.
     pub fn start(&mut self, action: Action) {
         self.menu = None;
-        let original = self.source.text.clone();
-        if original.trim().is_empty() {
+        if self.source.text.trim().is_empty() {
             self.notice = Some(self.t().no_text.into());
             return;
         }
         self.notice = None;
         self.cancel();
-        let backend = match self.settings.missing() {
-            Some(missing) => Err(missing),
-            None => Backend::of(&self.settings),
-        };
-        let backend = match backend {
-            Ok(backend) => backend,
+        let (backend, model) = match Backend::with_model(&self.settings) {
+            Ok(chosen) => chosen,
             Err(missing) => {
                 self.answer = Some(Answer {
                     action,
@@ -355,8 +350,8 @@ impl State {
         let run = self.run;
         let ask = Ask {
             system: prompts::system(action, &self.settings.language),
-            text: original,
-            model: self.settings.model().trim().to_owned(),
+            text: self.source.text.clone(),
+            model,
             effort: self.settings.effort(),
         };
         let (app, http, refreshing) =
@@ -495,7 +490,7 @@ impl State {
         if let Some(job) = self.pending_save.take() {
             job.abort();
         }
-        let credentials = Credentials::of(&self.settings);
+        let credentials = self.settings.credentials.clone();
         let saved = self
             .settings
             .save(&self.settings_path)
@@ -584,7 +579,7 @@ pub(super) async fn fresh_backend(
     let _turn = refreshing.lock().await;
     let (tx, rx) = oneshot::channel();
     app.update(move |s, _| {
-        let _ = tx.send(s.settings.chatgpt.clone());
+        let _ = tx.send(s.settings.credentials.chatgpt.clone());
     });
     let auth = rx
         .await

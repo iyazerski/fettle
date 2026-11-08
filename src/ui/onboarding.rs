@@ -2,12 +2,13 @@
 //! the Accessibility permission, and a first try on a sample.
 
 use rune::{Cursor, El, Shortcut, TextStyle, col, icon, row, spacer, text};
-use rune_kit::{Button, ButtonVariant, IconButton, IconButtonVariant, Kit};
+use rune_kit::{Button, ButtonVariant, Kit};
 
 use super::buttons::{self, Tone};
 use super::icons;
 use super::settings_view::{accessibility, chatgpt, on_device};
 use super::state::{Page, State};
+use super::view::{Lead, header};
 use crate::i18n::fill;
 use crate::settings::Provider;
 
@@ -82,28 +83,11 @@ pub fn view(s: &State, k: &Kit, step: Step) -> El {
         Step::Access => access(s, k),
         Step::Done => done(s, k),
     };
-    col().w_full().gap(16.0).child(top(s, k, step)).child(body)
-}
-
-/// The title row: back (after the first step), the step dots, and close.
-fn top(s: &State, k: &Kit, step: Step) -> El {
-    let t = s.t();
-    let mut bar = row()
-        .key("header")
-        .w_full()
-        .center_y()
-        .gap(6.0)
-        .on_drag(|s: &mut State, drag, _| s.drag(drag.phase));
-    bar = if step == Step::Welcome {
-        bar.child(icon(&icons::SPARKLE, 15.0).color(k.c.text_accent))
+    // Back from every step after the first.
+    let lead = if step == Step::Welcome {
+        Lead::Mark
     } else {
-        bar.child(
-            IconButton::new(&icons::BACK)
-                .variant(IconButtonVariant::GhostMuted)
-                .label(t.back)
-                .on_press(|s: &mut State| s.step(false))
-                .build(k),
-        )
+        Lead::Back(|s| s.step(false))
     };
     let dots = row().gap(6.0).center_y().children(Step::ALL.map(|at| {
         let color = if at.index() <= step.index() {
@@ -113,16 +97,11 @@ fn top(s: &State, k: &Kit, step: Step) -> El {
         };
         col().w(6.0).h(6.0).radius(3.0).fill(color)
     }));
-    bar.child(text("Fettle").font(k.ty.ui_medium).color(k.c.text_base))
-        .child(spacer())
-        .child(dots)
-        .child(
-            IconButton::new(&icons::CLOSE)
-                .variant(IconButtonVariant::GhostMuted)
-                .label(t.hide)
-                .on_press(|s: &mut State| s.hide())
-                .build(k),
-        )
+    col()
+        .w_full()
+        .gap(16.0)
+        .child(header(s, k, lead, "Fettle", vec![dots]))
+        .child(body)
 }
 
 /// A step's title, text and content, with its buttons at the bottom right.

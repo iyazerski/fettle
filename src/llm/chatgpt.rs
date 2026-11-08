@@ -102,7 +102,7 @@ pub async fn stream(
     mut on_delta: impl FnMut(&str),
 ) -> Result<()> {
     let body = json!({
-        "model": ask.model,
+        "model": ask.model()?,
         "store": false,
         "stream": true,
         "instructions": ask.system,

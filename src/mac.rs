@@ -2,6 +2,7 @@
 //! both through the pasteboard and synthetic ⌘C/⌘V, which need the
 //! Accessibility permission.
 
+use std::path::Path;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -114,6 +115,14 @@ pub fn top_center_under_pointer(width: f32, margin: f32) -> Option<(i32, i32)> {
     let x = area.origin.x + (area.size.width - f64::from(width)) / 2.0;
     let y = primary - (area.origin.y + area.size.height) + f64::from(margin);
     Some(((x * scale).round() as i32, (y * scale).round() as i32))
+}
+
+/// Return the `.app` bundle `exe` runs from, if it runs from one, as in
+/// `Fettle.app/Contents/MacOS/fettle`.
+pub fn bundle_of(exe: &Path) -> Option<&Path> {
+    exe.ancestors()
+        .nth(3)
+        .filter(|app| app.extension().is_some_and(|e| e == "app"))
 }
 
 /// Open the Accessibility pane of System Settings.

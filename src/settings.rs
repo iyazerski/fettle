@@ -69,15 +69,12 @@ pub const LANGUAGES: [&str; 40] = [
 #[serde(default)]
 pub struct Settings {
     pub provider: Provider,
-    /// The ChatGPT sign-in, once done. Kept in the keychain.
+    /// Kept in the keychain.
     #[serde(skip)]
-    pub chatgpt: Option<ChatGptAuth>,
+    pub credentials: Credentials,
     pub chatgpt_model: String,
-    /// An OpenAI-compatible API: its base URL (up to `/v1`) and key. The key
-    /// is kept in the keychain.
+    /// An OpenAI-compatible API's base URL, up to `/v1`.
     pub api_base: String,
-    #[serde(skip)]
-    pub api_key: String,
     pub api_model: String,
     /// Whether the model thinks a little before it answers: slower, and
     /// rarely needed for these tasks.
@@ -99,10 +96,9 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             provider: Provider::OnDevice,
-            chatgpt: None,
+            credentials: Credentials::default(),
             chatgpt_model: DEFAULT_CHATGPT_MODEL.to_owned(),
             api_base: DEFAULT_API_BASE.to_owned(),
-            api_key: String::new(),
             api_model: String::new(),
             reasoning_enabled: false,
             language: "English".to_owned(),
@@ -149,6 +145,15 @@ impl Appearance {
     }
 }
 
+/// The secrets in the settings, which the keychain keeps rather than the file.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Credentials {
+    /// The ChatGPT sign-in, once done.
+    pub chatgpt: Option<ChatGptAuth>,
+    /// The OpenAI-compatible API's key.
+    pub api_key: String,
+}
+
 /// The tokens from signing in with ChatGPT.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChatGptAuth {
@@ -193,12 +198,12 @@ impl Settings {
         }
     }
 
-    /// The model for the current provider; empty on device, which has one.
-    pub fn model(&self) -> &str {
+    /// Return the model for the current provider; `None` on device, which has only one.
+    pub fn model(&self) -> Option<&str> {
         match self.provider {
-            Provider::OnDevice => "",
-            Provider::ChatGpt => &self.chatgpt_model,
-            Provider::Api => &self.api_model,
+            Provider::OnDevice => None,
+            Provider::ChatGpt => Some(&self.chatgpt_model),
+            Provider::Api => Some(&self.api_model),
         }
     }
 
@@ -232,18 +237,6 @@ impl Settings {
             .copied()
             .partition(|l| self.is_favourite(l))
     }
-
-    /// Why the model can't be called yet, if it can't.
-    pub fn missing(&self) -> Option<Missing> {
-        match self.provider {
-            // Whether the model can run is checked when it's called.
-            Provider::OnDevice => None,
-            Provider::ChatGpt if self.chatgpt.is_none() => Some(Missing::SignIn),
-            Provider::Api if self.api_base.trim().is_empty() => Some(Missing::ApiUrl),
-            _ if self.model().trim().is_empty() => Some(Missing::Model),
-            _ => None,
-        }
-    }
 }
 
 /// What the settings lack before the model can be called.
@@ -269,7 +262,7 @@ mod tests {
         let path = dir.path().join("nested/settings.json");
         assert_eq!(Settings::load(&path), Settings::default());
 
-        let mut settings = Settings {
+        let settings = Settings {
             provider: Provider::Api,
             api_model: "gpt-x".into(),
             reasoning_enabled: true,
@@ -277,7 +270,7 @@ mod tests {
         };
         settings.save(&path).unwrap();
         assert_eq!(Settings::load(&path), settings);
-        assert_eq!(Settings::load(&path).model(), "gpt-x");
+        assert_eq!(Settings::load(&path).model(), Some("gpt-x"));
 
         // An older file, without newer fields and with ones since dropped, still loads.
         std::fs::write(
@@ -288,9 +281,6 @@ mod tests {
         let loaded = Settings::load(&path);
         assert_eq!(loaded.api_base, "http://x");
         assert_eq!(loaded.shortcut, DEFAULT_SHORTCUT);
-        settings.provider = Provider::ChatGpt;
-        settings.chatgpt = None;
-        assert_eq!(settings.missing(), Some(Missing::SignIn));
     }
 
     #[test]
@@ -298,21 +288,23 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
         let settings = Settings {
-            api_key: "sk-secret".into(),
-            chatgpt: Some(ChatGptAuth {
-                access: "access-secret".into(),
-                refresh: "refresh-secret".into(),
-                expires_at: 0,
-                account_id: "acct".into(),
-                email: None,
-            }),
+            credentials: Credentials {
+                api_key: "sk-secret".into(),
+                chatgpt: Some(ChatGptAuth {
+                    access: "access-secret".into(),
+                    refresh: "refresh-secret".into(),
+                    expires_at: 0,
+                    account_id: "acct".into(),
+                    email: None,
+                }),
+            },
             ..Settings::default()
         };
         settings.save(&path).unwrap();
         let file = std::fs::read_to_string(&path).unwrap();
         assert!(!file.contains("secret"), "{file}");
         let loaded = Settings::load(&path);
-        assert!(loaded.api_key.is_empty() && loaded.chatgpt.is_none());
+        assert_eq!(loaded.credentials, Credentials::default());
     }
 
     #[test]

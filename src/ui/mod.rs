@@ -38,7 +38,7 @@ pub fn run(start: Start) -> Result<()> {
     let settings_path = Settings::path();
     let mut settings = Settings::load(&settings_path);
     let credentials = keychain::load();
-    credentials.apply(&mut settings);
+    settings.credentials = credentials.clone();
 
     let spec = AppSpec {
         fonts: rune_theme_opencode::FONTS,
