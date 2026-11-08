@@ -12,13 +12,19 @@ const DIFF_TIMEOUT: Duration = Duration::from_secs(1);
 /// Split `text` into words (letters, digits and inner apostrophes), runs of
 /// whitespace, and single other characters, so punctuation diffs on its own.
 fn tokens(text: &str) -> Vec<&str> {
+    #[derive(Clone, Copy, PartialEq, Eq)]
+    enum Class {
+        Word,
+        Space,
+        Other,
+    }
     let class = |c: char| {
         if c.is_alphanumeric() || c == '\'' || c == '’' {
-            0
+            Class::Word
         } else if c.is_whitespace() {
-            1
+            Class::Space
         } else {
-            2
+            Class::Other
         }
     };
     let mut out = Vec::new();
@@ -26,7 +32,7 @@ fn tokens(text: &str) -> Vec<&str> {
     let mut last = None;
     for (i, c) in text.char_indices() {
         let kind = class(c);
-        if i > start && (last != Some(kind) || kind == 2) {
+        if i > start && (last != Some(kind) || kind == Class::Other) {
             out.push(&text[start..i]);
             start = i;
         }

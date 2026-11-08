@@ -10,6 +10,7 @@ mod sse;
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::settings::{ChatGptAuth, Missing, Provider, Settings};
@@ -20,8 +21,15 @@ pub struct Ask {
     pub text: String,
     /// The model to ask; `None` on device, which has only one.
     pub model: Option<String>,
-    /// The reasoning effort, like `none` or `low`.
-    pub effort: &'static str,
+    pub effort: Effort,
+}
+
+/// How much the model reasons before it answers, as the APIs name it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Effort {
+    None,
+    Low,
 }
 
 impl Ask {
@@ -129,13 +137,16 @@ async fn check(response: reqwest::Response) -> Result<reqwest::Response> {
 fn error_message(body: &str) -> String {
     let json: Option<Value> = serde_json::from_str(body).ok();
     let found = json.as_ref().and_then(|v| {
-        v.pointer("/error/message")
-            .or_else(|| v.get("error"))
-            .or_else(|| v.pointer("/detail/message"))
-            .or_else(|| v.get("detail"))
-            .or_else(|| v.get("message"))
-            .and_then(Value::as_str)
-            .map(str::to_owned)
+        [
+            "/error/message",
+            "/error",
+            "/detail/message",
+            "/detail",
+            "/message",
+        ]
+        .into_iter()
+        .find_map(|path| v.pointer(path)?.as_str())
+        .map(str::to_owned)
     });
     let text = found.unwrap_or_else(|| body.trim().to_owned());
     if text.is_empty() {

@@ -4,7 +4,7 @@
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::fmt;
 
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
 use super::Ask;
@@ -35,7 +35,8 @@ pub enum Availability {
     NotReady,
 }
 
-/// Return whether the on-device model can run now.
+/// Return whether the on-device model can run now, from the bridge's status
+/// code (see `swift/on_device.swift`).
 pub fn availability() -> Availability {
     match fettle_on_device_status() {
         0 => Availability::Ready,
@@ -70,7 +71,7 @@ impl std::error::Error for Refusal {}
 /// What the bridge reports while it answers.
 enum Event {
     Chunk(String),
-    Done(i32, String),
+    Done(Result<()>),
 }
 
 type Events = UnboundedSender<Event>;
@@ -109,11 +110,7 @@ pub async fn stream(ask: &Ask, mut on_delta: impl FnMut(&str)) -> Result<()> {
     while let Some(event) = received.recv().await {
         match event {
             Event::Chunk(piece) => on_delta(&piece),
-            Event::Done(0, _) => return Ok(()),
-            Event::Done(2, _) => return Err(Refusal::TooLong.into()),
-            Event::Done(3, _) => return Err(Refusal::Language.into()),
-            Event::Done(4, _) => return Err(Refusal::Declined.into()),
-            Event::Done(_, message) => bail!("{message}"),
+            Event::Done(result) => return result,
         }
     }
     bail!("the on-device model stopped without an answer")
@@ -136,5 +133,17 @@ extern "C" fn on_done(context: *mut c_void, code: i32, message: *const c_char) {
             CStr::from_ptr(message),
         )
     };
-    let _ = events.send(Event::Done(code, message.to_string_lossy().into_owned()));
+    let _ = events.send(Event::Done(ended(code, &message.to_string_lossy())));
+}
+
+/// Return how an answer ended, from `OnDone`'s code (see `swift/on_device.swift`)
+/// and message.
+fn ended(code: i32, message: &str) -> Result<()> {
+    match code {
+        0 => Ok(()),
+        2 => Err(Refusal::TooLong.into()),
+        3 => Err(Refusal::Language.into()),
+        4 => Err(Refusal::Declined.into()),
+        _ => Err(anyhow!("{message}")),
+    }
 }

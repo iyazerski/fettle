@@ -18,8 +18,14 @@ const BUNDLE_ID: &str = "dev.iyazerski.fettle";
 /// release certificate (`MACOS_CERT_P12` in CI). A new certificate needs a new hash here.
 const SIGNER: &str = r#"=identifier "dev.iyazerski.fettle" and certificate leaf = H"d92f0c1f8b4c244056244514e6e27e95cc431234""#;
 
+/// Return the latest release's version, like `0.1.7`, if it's newer than this one.
+pub async fn available(http: &reqwest::Client) -> Result<Option<String>> {
+    let latest = latest(http).await?;
+    Ok(newer(&latest, crate::VERSION)?.then_some(latest))
+}
+
 /// The version of the latest release, like `0.1.7`.
-pub async fn latest(http: &reqwest::Client) -> Result<String> {
+async fn latest(http: &reqwest::Client) -> Result<String> {
     #[derive(Deserialize)]
     struct Release {
         tag_name: String,
@@ -39,9 +45,14 @@ pub async fn latest(http: &reqwest::Client) -> Result<String> {
 }
 
 /// Whether version `candidate` comes after `current`, comparing dotted numbers.
-pub fn newer(candidate: &str, current: &str) -> bool {
-    let parts = |v: &str| -> Vec<u64> { v.split('.').map(|p| p.parse().unwrap_or(0)).collect() };
-    parts(candidate) > parts(current)
+fn newer(candidate: &str, current: &str) -> Result<bool> {
+    let parts = |v: &str| -> Result<Vec<u64>> {
+        v.split('.')
+            .map(str::parse)
+            .collect::<Result<_, _>>()
+            .with_context(|| format!("unexpected version {v}"))
+    };
+    Ok(parts(candidate)? > parts(current)?)
 }
 
 /// Download release `version` and put it in place of the running Fettle.app.
@@ -184,10 +195,11 @@ mod tests {
             ("1.0", "0.9.9", true),
         ] {
             assert_eq!(
-                newer(candidate, current),
+                newer(candidate, current).unwrap(),
                 expected,
                 "{candidate} vs {current}"
             );
         }
+        assert!(newer("0.4.0-beta", "0.3.0").is_err());
     }
 }

@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::i18n::Locale;
 use crate::json_file;
+use crate::llm::Effort;
 use crate::llm::on_device::Availability;
 
 pub const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
@@ -189,12 +190,12 @@ impl Settings {
         json_file::save(path, self)
     }
 
-    /// The reasoning effort to ask for: a little when reasoning is on, none otherwise.
-    pub fn effort(&self) -> &'static str {
+    /// Return the reasoning effort to ask for: a little when reasoning is on, none otherwise.
+    pub fn effort(&self) -> Effort {
         if self.reasoning_enabled {
-            "low"
+            Effort::Low
         } else {
-            "none"
+            Effort::None
         }
     }
 

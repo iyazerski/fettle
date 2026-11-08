@@ -369,13 +369,11 @@ impl State {
         self.update = Update::Checking;
         let (app, http) = (self.app.clone(), self.http.clone());
         self.rt.spawn(async move {
-            let result = update::latest(&http).await;
+            let result = update::available(&http).await;
             app.update(move |s, _| {
                 s.update = match result {
-                    Ok(version) if update::newer(&version, crate::VERSION) => {
-                        Update::Available(version)
-                    }
-                    Ok(_) => Update::Latest,
+                    Ok(Some(version)) => Update::Available(version),
+                    Ok(None) => Update::Latest,
                     Err(e) => Update::Failed(fill(s.t().check_failed, format_args!("{e:#}"))),
                 };
             });

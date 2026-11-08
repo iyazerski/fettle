@@ -26,6 +26,14 @@ impl Step {
     fn index(self) -> usize {
         self as usize
     }
+
+    fn next(self) -> Option<Step> {
+        Step::ALL.get(self.index() + 1).copied()
+    }
+
+    fn previous(self) -> Option<Step> {
+        self.index().checked_sub(1).map(|i| Step::ALL[i])
+    }
 }
 
 impl State {
@@ -40,39 +48,33 @@ impl State {
         self.show();
     }
 
-    fn go_to(&mut self, step: Step) {
-        self.page = Page::Onboarding(step);
-    }
-
-    /// Go one step forward, or back if `forward` is false.
-    fn step(&mut self, forward: bool) {
-        let Page::Onboarding(step) = self.page else {
-            return;
-        };
-        let at = step.index();
-        let next = if forward {
-            at + 1
-        } else {
-            at.saturating_sub(1)
-        };
-        if let Some(step) = Step::ALL.get(next) {
-            self.go_to(*step);
+    /// Go to the step `to` picks after the current one, if it picks one.
+    fn move_step(&mut self, to: fn(Step) -> Option<Step>) {
+        if let Page::Onboarding(step) = self.page
+            && let Some(step) = to(step)
+        {
+            self.page = Page::Onboarding(step);
         }
     }
 
-    /// Finish the welcome steps: open the main page on the sample if `try_it`,
-    /// else hide until the shortcut.
-    fn finish_onboarding(&mut self, try_it: bool) {
+    /// Finish the welcome steps and hide until the shortcut.
+    fn finish_onboarding(&mut self) {
+        self.end_onboarding();
+        self.hide();
+    }
+
+    /// Finish the welcome steps on the main page, with a sample to try.
+    fn try_sample(&mut self) {
+        self.end_onboarding();
+        self.answer = None;
+        self.notice = None;
+        self.source.replace_text(self.t().sample.to_owned());
+    }
+
+    fn end_onboarding(&mut self) {
         self.settings.onboarded = true;
         self.save();
         self.page = Page::Main;
-        if try_it {
-            self.answer = None;
-            self.notice = None;
-            self.source.replace_text(self.t().sample.to_owned());
-        } else {
-            self.hide();
-        }
     }
 }
 
@@ -87,7 +89,7 @@ pub fn view(s: &State, k: &Kit, step: Step) -> El {
     let lead = if step == Step::Welcome {
         Lead::Mark
     } else {
-        Lead::Back(|s| s.step(false))
+        Lead::Back(|s| s.move_step(Step::previous))
     };
     let dots = row().gap(6.0).center_y().children(Step::ALL.map(|at| {
         let color = if at.index() <= step.index() {
@@ -130,7 +132,7 @@ fn page(k: &Kit, title: &str, body: &str, content: Option<El>, buttons: Vec<El>)
 
 fn next(k: &Kit, label: &str) -> El {
     buttons::button(k, Tone::Primary, label, None, |b| {
-        b.on_press(|s: &mut State| s.step(true))
+        b.on_press(|s: &mut State| s.move_step(Step::next))
     })
 }
 
@@ -242,10 +244,10 @@ fn done(s: &State, k: &Kit) -> El {
         vec![
             Button::new(t.done)
                 .variant(ButtonVariant::Ghost)
-                .on_press(|s: &mut State| s.finish_onboarding(false))
+                .on_press(|s: &mut State| s.finish_onboarding())
                 .build(k),
             buttons::button(k, Tone::Primary, t.try_it, Some(&icons::SPARKLE), |b| {
-                b.on_press(|s: &mut State| s.finish_onboarding(true))
+                b.on_press(|s: &mut State| s.try_sample())
             }),
         ],
     )

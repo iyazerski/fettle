@@ -43,7 +43,7 @@ async fn serve_once(
     (base, task)
 }
 
-fn ask(effort: &'static str) -> Ask {
+fn ask(effort: Effort) -> Ask {
     Ask {
         system: "Fix it.".into(),
         text: "teh text".into(),
@@ -67,7 +67,7 @@ async fn api_streams_the_answer() {
     };
     let mut answer = String::new();
     backend
-        .stream(&http().unwrap(), &ask("low"), |d| answer.push_str(d))
+        .stream(&http().unwrap(), &ask(Effort::Low), |d| answer.push_str(d))
         .await
         .unwrap();
     assert_eq!(answer, "the text");
@@ -88,24 +88,33 @@ async fn api_streams_the_answer() {
 
 #[tokio::test]
 async fn api_errors_carry_the_servers_message() {
-    let (base, _request) = serve_once(
-        "401 Unauthorized",
-        "application/json",
-        r#"{"error":{"message":"Incorrect API key provided"}}"#,
-    )
-    .await;
-    let backend = Backend::Api {
-        base,
-        key: String::new(),
-    };
-    let error = backend
-        .stream(&http().unwrap(), &ask("none"), |_| {})
-        .await
-        .unwrap_err();
-    assert_eq!(
-        error.to_string(),
-        "Incorrect API key provided (401 Unauthorized)"
-    );
+    let cases = [
+        (
+            r#"{"error":{"message":"Incorrect API key provided"}}"#,
+            "Incorrect API key provided",
+        ),
+        (
+            r#"{"error":{"code":"x"},"message":"No access"}"#,
+            "No access",
+        ),
+        ("", "the server gave no reason"),
+    ];
+    for (body, want) in cases {
+        let (base, _request) = serve_once("401 Unauthorized", "application/json", body).await;
+        let backend = Backend::Api {
+            base,
+            key: String::new(),
+        };
+        let error = backend
+            .stream(&http().unwrap(), &ask(Effort::None), |_| {})
+            .await
+            .unwrap_err();
+        assert_eq!(
+            error.to_string(),
+            format!("{want} (401 Unauthorized)"),
+            "{body}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -149,7 +158,7 @@ async fn api_answers_count_only_when_the_stream_says_they_are_done() {
             key: String::new(),
         };
         let got = backend
-            .stream(&http().unwrap(), &ask("none"), |_| {})
+            .stream(&http().unwrap(), &ask(Effort::None), |_| {})
             .await
             .map_err(|e| e.to_string());
         assert_eq!(got, want.map_err(str::to_owned), "ending {end:?}");
