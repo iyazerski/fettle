@@ -39,6 +39,8 @@ pub struct State {
     pub answer: Option<Answer>,
     /// Show the fixed text as a word diff rather than plain text.
     pub show_changes: bool,
+    /// Keep the window open when another app takes focus.
+    pub pinned: bool,
     /// The dropdown that's open.
     pub menu: Option<Menu>,
     /// Whether the open dropdown's list shows yet: it waits for the window to
@@ -133,6 +135,7 @@ impl State {
             source: TextEdit::new(""),
             answer: None,
             show_changes: true,
+            pinned: false,
             menu: None,
             menu_shown: false,
             notice: None,
@@ -223,11 +226,19 @@ impl State {
         self.app.hide();
     }
 
-    /// The window lost focus: hide it.
+    /// The window lost focus: hide it, unless it's pinned.
     pub fn blurred(&mut self) {
-        if !self.form.shortcut.is_recording() {
+        if !self.pinned && !self.form.shortcut.is_recording() {
             self.hide();
         }
+    }
+
+    pub fn toggle_pin(&mut self) {
+        self.pinned = !self.pinned;
+    }
+
+    pub fn clear_source(&mut self) {
+        self.source.replace_text(String::new());
     }
 
     /// Move the window with the pointer. The panel is outside winit's reach, so

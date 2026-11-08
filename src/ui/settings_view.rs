@@ -31,7 +31,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let mut page = col()
         .w_full()
         .gap(12.0)
-        .child(header(k, "Settings", Some(State::back)));
+        .child(header(s, k, "Settings", Some(State::back)));
     if let Some(error) = &s.form.error {
         page = page.child(note(k, &error.to_string(), NoteKind::Failure));
     }

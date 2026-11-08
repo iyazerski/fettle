@@ -1,6 +1,8 @@
 //! What the window draws: the text at the top, the actions under it, and the
 //! answer at the bottom; or the settings ([`settings_view`](super::settings_view)).
 
+use std::sync::OnceLock;
+
 use rune::{
     Color, Cx, El, Key, KeyEvent, ScrollSpec, Span, SystemMaterial, Tx, col, el, icon, rich, row,
     spacer, text,
@@ -28,9 +30,34 @@ const LANGUAGES_MAX: f32 = 250.0;
 /// tall as its content, and a dropdown may hang below it.
 const MENU_ROOM: f32 = LANGUAGES_MAX + 16.0;
 
+/// Return the theme's kit with Fettle's violet, the app icon's colour, as the
+/// accent in place of the theme's blue.
+fn kit(dark: bool) -> &'static Kit {
+    static DARK: OnceLock<Kit> = OnceLock::new();
+    static LIGHT: OnceLock<Kit> = OnceLock::new();
+    let cell = if dark { &DARK } else { &LIGHT };
+    cell.get_or_init(|| {
+        let mut k = rune_theme_opencode::kit(dark).clone();
+        // Violet 500 on dark; the deeper 600 on light keeps white button text readable.
+        let (fill, ink) = if dark {
+            ("#8b5cf6", "#a78bfa")
+        } else {
+            ("#7c3aed", "#7c3aed")
+        };
+        let (fill, ink) = (
+            rune::color::hex(fill).expect("a valid hex colour"),
+            rune::color::hex(ink).expect("a valid hex colour"),
+        );
+        k.c.bg_accent = fill;
+        k.c.text_accent = ink;
+        k.c.icon_accent = ink;
+        k
+    })
+}
+
 pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     let dark = s.settings.appearance.dark(cx.system_dark());
-    let k = rune_theme_opencode::kit(dark);
+    let k = kit(dark);
     let mut layer = Vec::new();
     let page = match s.page {
         Page::Main => main(s, k, &mut layer),
@@ -78,31 +105,45 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let mut page = col()
         .w_full()
         .gap(12.0)
-        .child(header(k, "Fettle", None))
-        .child(
-            TextArea::new(&s.source)
-                .label("Text")
-                .placeholder("Select text in any app and press the shortcut, or type here")
-                .width(None)
-                .auto_grow(2, 8)
-                .on_edit(|s: &mut State| &mut s.source)
-                .build(k)
-                // Kit tints fields under the pointer like buttons; a text box shouldn't.
-                .hover(Color::TRANSPARENT),
-        );
+        .child(header(s, k, "Fettle", None))
+        .child(source(s, k));
     if let Some(notice) = &s.notice {
         page = page.child(note(k, notice, NoteKind::Info));
     }
     page = page.child(actions(s, k, running, layer));
     if let Some(answer) = &s.answer {
-        page = page.child(divider(k)).child(answer_view(s, answer, k));
+        page = page.child(answer_view(s, answer, k));
     }
     page
 }
 
+/// The editable text, with a button in its corner that clears it.
+fn source(s: &State, k: &Kit) -> El {
+    let field = TextArea::new(&s.source)
+        .label("Text")
+        .placeholder("Select text in any app and press the shortcut, or type here")
+        .width(None)
+        .auto_grow(2, 8)
+        .on_edit(|s: &mut State| &mut s.source)
+        .build(k)
+        // Kit tints fields under the pointer like buttons; a text box shouldn't.
+        .hover(Color::TRANSPARENT);
+    if s.source.text.is_empty() {
+        return field;
+    }
+    let clear = IconButton::new(&icons::CLOSE)
+        .variant(IconButtonVariant::GhostMuted)
+        .label("Clear")
+        .on_press(|s: &mut State| s.clear_source())
+        .build(k)
+        .pin(None, Some(6.0), Some(6.0), None);
+    // Room on the right so the text doesn't run under the button.
+    col().w_full().child(field.pr(34.0)).child(clear)
+}
+
 /// The title row, with a back button on sub-pages and the hide button. It
 /// moves the window when dragged.
-pub fn header(k: &Kit, title: &str, back: Option<fn(&mut State)>) -> El {
+pub fn header(s: &State, k: &Kit, title: &str, back: Option<fn(&mut State)>) -> El {
     let mut bar = row()
         .key("header")
         .w_full()
@@ -132,6 +173,24 @@ pub fn header(k: &Kit, title: &str, back: Option<fn(&mut State)>) -> El {
                 .on_press(|s: &mut State| s.open_settings())
                 .build(k),
         );
+        let pin = IconButton::new(&icons::PIN)
+            .variant(if s.pinned {
+                IconButtonVariant::Ghost
+            } else {
+                IconButtonVariant::GhostMuted
+            })
+            .label(if s.pinned {
+                "Unpin: hide when you click elsewhere"
+            } else {
+                "Pin: stay open when you click elsewhere"
+            })
+            .on_press(|s: &mut State| s.toggle_pin())
+            .build(k);
+        bar = bar.child(if s.pinned {
+            pin.fill(k.c.bg_accent.alpha(0.16))
+        } else {
+            pin
+        });
     }
     bar.child(
         IconButton::new(&icons::CLOSE)
@@ -298,11 +357,17 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     };
     // Only a Fix answer has changes.
     let changed = matches!(&answer.status, Status::Done { changes, .. } if diff::changed(changes));
-    let mut top = row().w_full().center_y().gap(8.0).child(
-        text(title)
-            .font(k.ty.text_small_medium)
-            .color(k.c.text_muted),
-    );
+    let glyph = match answer.action {
+        Action::Fix => &icons::SPARKLE,
+        Action::Translate => &icons::GLOBE,
+    };
+    let mut top = row()
+        .w_full()
+        .h(24.0)
+        .center_y()
+        .gap(8.0)
+        .child(icon(glyph, 15.0).color(k.c.icon_accent))
+        .child(text(title).font(k.ty.ui_medium).color(k.c.text_base));
     if running {
         top = top.child(Spinner::new().size(12.0).build(k));
     }
@@ -317,7 +382,6 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     }
     let plain = |content: &str| {
         scroll_box(
-            k,
             text(content)
                 .font(k.ty.body)
                 .color(k.c.text_base)
@@ -335,11 +399,20 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
             note(k, "Looks good. Nothing to fix.", NoteKind::Info)
         }
         Status::Done { changes, .. } if changed && s.show_changes => {
-            scroll_box(k, diff_text(changes, k))
+            scroll_box(diff_text(changes, k))
         }
         Status::Done { text: done, .. } => plain(done),
     };
-    let mut section = col().w_full().gap(8.0).child(top).child(body);
+    let mut section = col()
+        .w_full()
+        .gap(10.0)
+        .padding(12.0)
+        .radius(k.radius.lg)
+        .fill(k.c.bg_base.alpha(0.85))
+        .border(1.0, k.c.border_muted)
+        .child(top)
+        .child(divider(k))
+        .child(body);
     if let Status::Done { copied, .. } = answer.status {
         section = section.child(
             row()
@@ -411,15 +484,11 @@ fn diff_text(changes: &[Piece], k: &Kit) -> El {
         .selectable(true)
 }
 
-/// `content` in a well that scrolls past [`ANSWER_MAX`].
-fn scroll_box(k: &Kit, content: El) -> El {
+/// `content`, scrolling past [`ANSWER_MAX`].
+fn scroll_box(content: El) -> El {
     col()
         .w_full()
         .max_h(ANSWER_MAX)
-        .padding(10.0)
-        .radius(k.radius.md)
-        .fill(k.c.bg_base.alpha(0.7))
-        .border(1.0, k.c.border_muted)
         .scroll(ScrollSpec {
             stick_bottom: false,
         })
