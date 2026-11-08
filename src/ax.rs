@@ -20,16 +20,42 @@ use objc2_core_foundation::{
 /// How long an Accessibility call waits for an app, in seconds: checks run
 /// on the UI thread, which a hung app mustn't stall.
 const TIMEOUT: f32 = 0.25;
-/// Code editors built on VS Code, by bundle ID. Fettle leaves them alone:
-/// asking them to expose their content switches them to screen reader mode,
-/// which changes the editor, and checking code only adds noise.
-const CODE_EDITORS: [&str; 5] = [
+/// Apps Fettle leaves alone, by bundle ID: their text is code, commands or
+/// queries, not prose, so checking it only adds noise. Editors built on VS
+/// Code also switch to screen reader mode when asked to expose their content,
+/// which changes the editor.
+const SKIPPED_APPS: [&str; 23] = [
+    // Editors built on VS Code.
     "com.microsoft.VSCode",
     "com.microsoft.VSCodeInsiders",
     "com.vscodium",
     "com.todesktop.230313mzl4w4u92", // Cursor
     "com.exafunction.windsurf",
+    "dev.kiro.desktop",
+    "com.trae.app",
+    // Other code editors.
+    "dev.zed.Zed",
+    "com.apple.dt.Xcode",
+    "com.sublimetext.4",
+    "com.panic.Nova",
+    "com.barebones.bbedit",
+    "com.google.android.studio",
+    // Database and API tools.
+    "com.tinyapp.TablePlus",
+    "com.postmanlabs.mac",
+    // Terminals.
+    "com.apple.Terminal",
+    "com.googlecode.iterm2",
+    "com.mitchellh.ghostty",
+    "dev.warp.Warp-Stable",
+    "net.kovidgoyal.kitty",
+    "org.alacritty",
+    "com.github.wez.wezterm",
+    "co.zeit.hyper",
 ];
+/// Bundle ID prefixes of vendors whose apps are all skipped: every JetBrains
+/// IDE has its own ID.
+const SKIPPED_VENDORS: [&str; 1] = ["com.jetbrains."];
 /// What a [`Watch`] listens for: edits, caret moves, focus moves, and
 /// windows moving under the text.
 const NOTIFICATIONS: [&str; 5] = [
@@ -56,7 +82,7 @@ pub struct Focus {
 
 impl Apps {
     /// Return the element with the keyboard focus in the app in front,
-    /// unless that's Fettle or a code editor.
+    /// unless that's Fettle or a skipped app.
     pub fn focused(&mut self) -> Option<Focus> {
         static TIMEOUT_SET: Once = Once::new();
         TIMEOUT_SET.call_once(|| {
@@ -66,11 +92,11 @@ impl Apps {
         });
         let front = NSWorkspace::sharedWorkspace().frontmostApplication()?;
         let pid = front.processIdentifier();
-        let editor = front
+        let skipped = front
             .bundleIdentifier()
-            .is_some_and(|id| CODE_EDITORS.contains(&id.to_string().as_str()));
+            .is_some_and(|id| is_skipped(&id.to_string()));
         // SAFETY: getpid has no preconditions.
-        if editor || pid == unsafe { libc::getpid() } {
+        if skipped || pid == unsafe { libc::getpid() } {
             return None;
         }
         // SAFETY: a plain CF object for the app with `pid`.
@@ -88,6 +114,11 @@ impl Apps {
             field: Field { element },
         })
     }
+}
+
+/// Whether Fettle leaves the app with bundle ID `id` alone.
+fn is_skipped(id: &str) -> bool {
+    SKIPPED_APPS.contains(&id) || SKIPPED_VENDORS.iter().any(|v| id.starts_with(v))
 }
 
 /// Ask an Electron or Chromium app to build its accessibility tree, which

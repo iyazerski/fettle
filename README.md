@@ -31,15 +31,12 @@ A free, open-source AI writing assistant for macOS that can run entirely on your
 
 ## Why Fettle
 
-- **Runs on your Mac, for free.** With Apple Intelligence on macOS 26, Fettle uses Apple's on-device model. No account, no API key, and your text never leaves your Mac.
 - **Works in every app.** Mail, Slack, Notes, your browser, your code editor. If you can select the text, Fettle can fix it.
-- **See every change.** Fixes show up word by word, like track changes.
 - **Any language.** Fix and Rewrite work in any language the model knows, and keep your text in the language you wrote it in.
-- **Rewrite in one click.** Make text more formal, friendlier, shorter or clearer.
-- **Translate into 40 languages.** Fettle keeps the tone, formatting, names, links and code. Star the languages you use most to keep them at the top.
-- **Paste it back in one keystroke.** <kbd>⌘</kbd><kbd>↩</kbd> replaces your selection with the result. Your clipboard stays as it was.
+- **Runs on your Mac, for free.** With Apple Intelligence on macOS 26, Fettle uses Apple's on-device model. No account, no API key, and your text never leaves your Mac.
 - **Or use a bigger model.** Sign in with ChatGPT, or point Fettle at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
-- **Underline mistakes as you type.** Turn it on in Settings, and when you pause typing in another app, the model marks what Fix would change in the paragraphs you edited. Click an underline to see the fix and paste it. Each edited paragraph is a request, so a paid model costs much more.
+- **Rewrite in one click.** Make text more formal, friendlier, shorter or clearer.
+- **Mistakes underlined as you type.** Like Grammarly, Fettle marks mistakes right where you write. Click one to fix it. Faster, and free with the on-device model.
 - **Native and tiny.** Written in Rust, a 10 MB download, about 12 MB of memory when idle, and no CPU use until you call it, unless you turn on underlines.
 - **Private by design.** No account, no telemetry, no servers of ours. Your text stays on your Mac, or goes only to the model you pick.
 - **Free and open source** under the MIT license.
