@@ -5,6 +5,7 @@
 mod buttons;
 mod icons;
 mod onboarding;
+mod saver;
 mod settings_state;
 mod settings_view;
 mod state;
@@ -59,7 +60,7 @@ pub fn run(start: Start) -> Result<()> {
     let handle = rt.handle().clone();
     me.update(move |s, _| s.started(start));
     let app = app
-        .init(move || State::new(me, handle, http, settings, credentials, settings_path))
+        .init(move || State::new(me, handle, http, settings, settings_path, credentials))
         .on_focus(|s, focused, _| {
             if focused {
                 // Back from System Settings, where Accessibility or Apple

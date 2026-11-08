@@ -14,11 +14,11 @@ use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
 
 use super::onboarding::Step;
+use super::saver::Saver;
 use super::settings_state::{Form, FormError, Update};
 use super::view::WIDTH;
 use crate::diff::{self, Piece};
 use crate::i18n::{Locale, Strings, fill};
-use crate::keychain;
 use crate::llm::on_device::{self, Availability, Refusal};
 use crate::llm::{Ask, Backend, chatgpt};
 use crate::mac;
@@ -32,8 +32,6 @@ const TOP_MARGIN: f32 = 120.0;
 const PASTE_DELAY: Duration = Duration::from_millis(120);
 /// How long the window takes to grow for a dropdown.
 const MENU_DELAY: Duration = Duration::from_millis(200);
-/// How long typing in a settings field must pause before the settings are saved.
-const SAVE_DELAY: Duration = Duration::from_millis(500);
 
 pub struct State {
     pub app: AppHandle<State>,
@@ -42,9 +40,7 @@ pub struct State {
     /// Held while the ChatGPT sign-in refreshes, so requests take turns.
     pub(super) refreshing: Arc<Mutex<()>>,
     pub settings: Settings,
-    pub(super) settings_path: PathBuf,
-    /// The credentials as the keychain holds them, to write only changes.
-    saved_credentials: Credentials,
+    saver: Saver,
     /// Whether Apple's on-device model can run, as last checked.
     pub on_device: Availability,
     pub page: Page,
@@ -73,8 +69,6 @@ pub struct State {
     /// Whether the selection is being copied, so a second press can't copy
     /// over the first one's borrowed pasteboard.
     capturing: bool,
-    /// A save waiting for typing to pause.
-    pending_save: Option<JoinHandle<()>>,
     /// Counts runs, so a late piece of an old answer is dropped.
     run: u64,
     /// The window's top-left in physical pixels, once Fettle has placed it.
@@ -141,18 +135,24 @@ impl State {
         rt: Handle,
         http: reqwest::Client,
         settings: Settings,
-        saved_credentials: Credentials,
         settings_path: PathBuf,
+        saved_credentials: Credentials,
     ) -> Self {
         let form = Form::new(&settings);
+        let saver = Saver::new(
+            &rt,
+            app.clone(),
+            &settings,
+            settings_path,
+            saved_credentials,
+        );
         Self {
             app,
             rt,
             http,
             refreshing: Arc::default(),
             settings,
-            settings_path,
-            saved_credentials,
+            saver,
             on_device: on_device::availability(),
             page: Page::Main,
             source: TextEdit::new(""),
@@ -168,7 +168,6 @@ impl State {
             update: Update::Idle,
             shortcut: None,
             capturing: false,
-            pending_save: None,
             run: 0,
             position: None,
             drag: None,
@@ -253,7 +252,6 @@ impl State {
     }
 
     pub fn hide(&mut self) {
-        self.flush_save();
         self.cancel();
         self.menu = None;
         self.app.hide();
@@ -486,46 +484,19 @@ impl State {
         self.save();
     }
 
-    pub(super) fn save(&mut self) {
-        if let Some(job) = self.pending_save.take() {
-            job.abort();
-        }
-        let credentials = self.settings.credentials.clone();
-        let saved = self
-            .settings
-            .save(&self.settings_path)
-            .and_then(|()| keychain::save(&credentials, &self.saved_credentials));
-        match saved {
-            Ok(()) => self.saved_credentials = credentials,
-            Err(e) => self.report(fill(self.t().save_failed, format_args!("{e:#}"))),
-        }
+    pub(super) fn save(&self) {
+        self.saver.save(&self.settings);
     }
 
-    /// Save the settings once typing pauses, rather than on every keystroke.
-    pub(super) fn save_soon(&mut self) {
-        if let Some(job) = self.pending_save.take() {
-            job.abort();
-        }
-        let app = self.app.clone();
-        self.pending_save = Some(self.rt.spawn(async move {
-            tokio::time::sleep(SAVE_DELAY).await;
-            app.update(|s, _| {
-                s.pending_save = None;
-                s.save();
-            });
-        }));
-    }
-
-    /// Save now if a save is waiting.
-    pub(super) fn flush_save(&mut self) {
-        if self.pending_save.is_some() {
-            self.save();
-        }
+    pub(super) fn save_failed(&mut self, error: &anyhow::Error) {
+        self.report(fill(self.t().save_failed, format_args!("{error:#}")));
     }
 
     /// Quit, saving what's unsaved first.
     pub fn quit(&mut self, tx: &mut Tx) {
-        self.flush_save();
+        if let Err(e) = self.saver.flush() {
+            eprintln!("saving the settings: {e:#}");
+        }
         tx.quit();
     }
 

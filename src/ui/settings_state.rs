@@ -101,7 +101,6 @@ impl State {
     }
 
     pub fn back(&mut self) {
-        self.flush_save();
         self.page = Page::Main;
         self.menu = None;
         self.form.error = None;
@@ -141,7 +140,7 @@ impl State {
         self.settings.api_base = self.form.api_base.text.trim().to_owned();
         self.settings.credentials.api_key = self.form.api_key.text.trim().to_owned();
         self.set_models(Models::Idle);
-        self.save_soon();
+        self.save();
     }
 
     /// Open or close the model list, loading it first if needed.
@@ -392,7 +391,7 @@ impl State {
             let result = update::install(&http, &version).await;
             app.update(move |s, tx: &mut Tx| {
                 match result.and_then(|bundle| update::relaunch(&bundle)) {
-                    Ok(()) => tx.quit(),
+                    Ok(()) => s.quit(tx),
                     Err(e) => {
                         s.update = Update::Failed(fill(s.t().update_failed, format_args!("{e:#}")))
                     }

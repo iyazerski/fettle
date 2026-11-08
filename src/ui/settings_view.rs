@@ -5,6 +5,8 @@
 //! fills the same column on the right of its label, and a compact one (switch,
 //! status) sits at the right edge, so every row lines up.
 
+use std::sync::OnceLock;
+
 use rune::{Cursor, El, col, icon, row, spacer, text};
 use rune_kit::{
     Button, ButtonVariant, Kit, Placement, SegmentedControl, Select, SelectAppearance,
@@ -52,7 +54,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         page = page.child(note(k, error.message(t), NoteKind::Failure));
     }
 
-    let mut model_rows = vec![provider(s, k, &sk)];
+    let mut model_rows = vec![provider(s, k, sk)];
     if s.settings.provider == Provider::Api {
         model_rows.extend(api(s, k));
     }
@@ -83,7 +85,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             )
             .width(None)
             .on_pick(|s: &mut State, i, _| s.set_appearance(Appearance::ALL[i]))
-            .build(&sk),
+            .build(sk),
         ),
         wide(k, t.app_language, app_language(s, k, layer)),
         wide(
@@ -168,15 +170,21 @@ fn app_language(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .build(k, layer)
 }
 
-/// Return the kit for segmented controls. In light mode, their track is grey so the
-/// white selected segment stands out from the rest.
-fn segmented_kit(k: &Kit) -> Kit {
-    let mut sk = k.clone();
-    if !k.dark {
-        // The default track is nearly as white as the selected segment on the light glass.
-        sk.c.layer_01 = k.dark_a(0.07);
-    }
-    sk
+/// Return the kit for segmented controls, made once per appearance from `k`,
+/// the window's kit. In light mode, their track is grey so the white selected
+/// segment stands out from the rest.
+fn segmented_kit(k: &Kit) -> &'static Kit {
+    static DARK: OnceLock<Kit> = OnceLock::new();
+    static LIGHT: OnceLock<Kit> = OnceLock::new();
+    let cell = if k.dark { &DARK } else { &LIGHT };
+    cell.get_or_init(|| {
+        let mut sk = k.clone();
+        if !k.dark {
+            // The default track is nearly as white as the selected segment on the light glass.
+            sk.c.layer_01 = k.dark_a(0.07);
+        }
+        sk
+    })
 }
 
 /// Who made Fettle, its license, the licenses of what it's built from, and its
