@@ -1,6 +1,7 @@
 name: Release
 
-# Every push to main that changes the app publishes a release v0.1.<run>, so
+# Every push to main that changes the app publishes a release vX.Y.<n>, where
+# X.Y comes from Cargo.toml and n counts the earlier X.Y releases, so
 # these links always get the newest:
 #   https://github.com/<owner>/<repo>/releases/latest/download/Fettle.dmg
 #   https://github.com/<owner>/<repo>/releases/latest/download/Fettle.zip
@@ -26,9 +27,6 @@ concurrency:
   group: release
   cancel-in-progress: false
 
-env:
-  VERSION: 0.1.${{ github.run_number }}
-
 jobs:
   # A release reaches every user through the updater, so it ships only what passes CI.
   ci:
@@ -48,6 +46,11 @@ jobs:
         with:
           # The whole history and tags, to list the changes since the last release.
           fetch-depth: 0
+      - name: Pick version
+        run: |
+          minor=$(sed -nE 's/^version = "([0-9]+\.[0-9]+)\..*"/\1/p' Cargo.toml)
+          patch=$(git tag --list "v$minor.*" | wc -l | tr -d ' ')
+          echo "VERSION=$minor.$patch" >> "$GITHUB_ENV"
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ env.TARGET }}
