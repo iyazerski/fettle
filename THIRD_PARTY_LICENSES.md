@@ -3291,6 +3291,7 @@ Used by:
 - bitflags 2.13.2
 - cfg-if 1.0.5
 - core-foundation-sys 0.8.7
+- core-foundation 0.10.1
 - core-foundation 0.9.4
 - core-graphics-types 0.1.3
 - core-graphics 0.23.2
@@ -3327,6 +3328,8 @@ Used by:
 - rustc-hash 1.1.0
 - rustls 0.23.46
 - scopeguard 1.2.0
+- security-framework-sys 2.17.0
+- security-framework 3.7.0
 - similar 2.7.0
 - simplecss 0.2.2
 - smallvec 1.16.5

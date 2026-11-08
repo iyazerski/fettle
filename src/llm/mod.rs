@@ -1,9 +1,10 @@
-//! The model behind Fix and Translate: a ChatGPT plan through the sign-in
-//! Codex uses ([`chatgpt`]), or any OpenAI-compatible API ([`compat`]). Both
-//! stream the answer.
+//! The model behind the actions: Apple's on-device model ([`on_device`]), a
+//! ChatGPT plan through the sign-in Codex uses ([`chatgpt`]), or any
+//! OpenAI-compatible API ([`compat`]). All stream the answer.
 
 pub mod chatgpt;
 mod compat;
+pub mod on_device;
 mod sse;
 
 use std::time::Duration;
@@ -25,6 +26,7 @@ pub struct Ask {
 /// Where requests go, with what they need.
 #[derive(Clone)]
 pub enum Backend {
+    OnDevice,
     ChatGpt(ChatGptAuth),
     Api { base: String, key: String },
 }
@@ -33,6 +35,10 @@ impl Backend {
     /// Where `settings` send requests, or what they lack to send any.
     pub fn of(settings: &Settings) -> Result<Self, Missing> {
         match settings.provider {
+            Provider::OnDevice => match on_device::availability() {
+                on_device::Availability::Ready => Ok(Backend::OnDevice),
+                other => Err(Missing::OnDevice(other)),
+            },
             Provider::ChatGpt => settings
                 .chatgpt
                 .clone()
@@ -59,14 +65,16 @@ impl Backend {
         on_delta: impl FnMut(&str),
     ) -> Result<()> {
         match self {
+            Backend::OnDevice => on_device::stream(ask, on_delta).await,
             Backend::ChatGpt(auth) => chatgpt::stream(http, auth, ask, on_delta).await,
             Backend::Api { base, key } => compat::stream(http, base, key, ask, on_delta).await,
         }
     }
 
-    /// The models this backend offers, sorted.
+    /// The models this backend offers, sorted; none to pick from on device.
     pub async fn models(&self, http: &reqwest::Client) -> Result<Vec<String>> {
         let mut models = match self {
+            Backend::OnDevice => Vec::new(),
             Backend::ChatGpt(auth) => chatgpt::models(http, auth).await?,
             Backend::Api { base, key } => compat::models(http, base, key).await?,
         };

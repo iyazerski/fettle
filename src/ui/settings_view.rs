@@ -13,8 +13,12 @@ use super::settings_state::{Login, Models, Update};
 use super::state::{Menu, State};
 use super::view::{NoteKind, WIDTH, divider, header, note};
 use crate::i18n::{Locale, fill};
+use crate::llm::on_device::Availability;
 use crate::mac;
 use crate::settings::{Appearance, Missing, Provider, Reasoning};
+
+/// The providers, in the order the settings list them.
+const PROVIDERS: [Provider; 3] = [Provider::OnDevice, Provider::ChatGpt, Provider::Api];
 
 const AUTHOR: &str = "Ihar Yazerski";
 const AUTHOR_URL: &str = "https://buymeacoffee.com/iyazerski";
@@ -40,37 +44,36 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     page.child(section(k, t.model))
         .child(
             SegmentedControl::new(
-                &[t.chatgpt_plan, t.compatible_api],
-                Some(usize::from(s.settings.provider == Provider::Api)),
+                // The full "OpenAI-compatible API" doesn't fit a third of the row.
+                &[t.on_device, t.chatgpt_plan, "API"],
+                PROVIDERS.iter().position(|p| *p == s.settings.provider),
             )
             .width(None)
-            .on_pick(|s: &mut State, i, _| {
-                s.set_provider(if i == 0 {
-                    Provider::ChatGpt
-                } else {
-                    Provider::Api
-                })
-            })
+            .on_pick(|s: &mut State, i, _| s.set_provider(PROVIDERS[i]))
             .build(&sk),
         )
         .child(match s.settings.provider {
+            Provider::OnDevice => on_device(s, k),
             Provider::ChatGpt => chatgpt(s, k),
             Provider::Api => api(s, k),
         })
         .children(model(s, k, layer))
-        .child(labeled(
-            k,
-            t.reasoning,
-            SegmentedControl::new(
-                &t.reasoning_levels,
-                Reasoning::ALL
-                    .iter()
-                    .position(|r| *r == s.settings.reasoning),
+        // Apple's model has no reasoning effort to set.
+        .children((s.settings.provider != Provider::OnDevice).then(|| {
+            labeled(
+                k,
+                t.reasoning,
+                SegmentedControl::new(
+                    &t.reasoning_levels,
+                    Reasoning::ALL
+                        .iter()
+                        .position(|r| *r == s.settings.reasoning),
+                )
+                .width(None)
+                .on_pick(|s: &mut State, i, _| s.set_reasoning(Reasoning::ALL[i]))
+                .build(&sk),
             )
-            .width(None)
-            .on_pick(|s: &mut State, i, _| s.set_reasoning(Reasoning::ALL[i]))
-            .build(&sk),
-        ))
+        }))
         .child(divider(k))
         .child(section(k, t.general))
         .child(labeled(
@@ -228,7 +231,51 @@ fn footer(s: &State, k: &Kit) -> El {
     }
 }
 
-fn chatgpt(s: &State, k: &Kit) -> El {
+/// Whether Apple's on-device model can run, with a way to System Settings when
+/// a setting there stops it.
+pub(super) fn on_device(s: &State, k: &Kit) -> El {
+    let t = s.t();
+    if s.on_device == Availability::Ready {
+        return row()
+            .w_full()
+            .center_y()
+            .gap(6.0)
+            .child(icon(&icons::CHECK, 14.0).color(k.c.success.icon))
+            .child(
+                text(t.on_device_ready)
+                    .font(k.ty.ui)
+                    .color(k.c.text_base)
+                    .wrap()
+                    .grow(1.0),
+            );
+    }
+    // A setting in System Settings can fix these, so they read as a step, not an error.
+    let fixable = matches!(
+        s.on_device,
+        Availability::TurnedOff | Availability::NotReady
+    );
+    let kind = if fixable {
+        NoteKind::Info
+    } else {
+        NoteKind::Failure
+    };
+    let mut line = row()
+        .w_full()
+        .center_y()
+        .gap(8.0)
+        .child(note(k, t.on_device_status(s.on_device), kind).grow(1.0));
+    if fixable {
+        line = line.child(
+            Button::new(t.open_system_settings)
+                .variant(ButtonVariant::Ghost)
+                .on_press(|s: &mut State| s.open_apple_intelligence())
+                .build(k),
+        );
+    }
+    line
+}
+
+pub(super) fn chatgpt(s: &State, k: &Kit) -> El {
     let t = s.t();
     let line = row().w_full().center_y().gap(8.0);
     match (&s.settings.chatgpt, &s.form.login) {
@@ -308,10 +355,12 @@ fn api(s: &State, k: &Kit) -> El {
 /// The model dropdown, once the provider can list its models.
 fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
     let t = s.t();
-    if matches!(
-        s.settings.missing(),
-        Some(Missing::SignIn | Missing::ApiUrl)
-    ) {
+    if s.settings.provider == Provider::OnDevice
+        || matches!(
+            s.settings.missing(),
+            Some(Missing::SignIn | Missing::ApiUrl)
+        )
+    {
         return None;
     }
     let loading = matches!(s.form.models, Models::Loading(_));
@@ -355,7 +404,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
     Some(block)
 }
 
-fn accessibility(s: &State, k: &Kit) -> El {
+pub(super) fn accessibility(s: &State, k: &Kit) -> El {
     let t = s.t();
     if s.trusted {
         return row()

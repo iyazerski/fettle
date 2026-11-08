@@ -1,7 +1,7 @@
-//! What Fettle remembers between runs: where the model runs and its
-//! credentials, the model and reasoning, the translation language, the
-//! shortcut and the window's look and language. One private JSON file, since
-//! it holds tokens.
+//! What Fettle remembers between runs: where the model runs, the model and
+//! reasoning, the translation language, the shortcut and the window's look and
+//! language, in one JSON file. The credentials live in the keychain
+//! ([`keychain`](crate::keychain)), never in the file.
 
 use std::path::{Path, PathBuf};
 
@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::i18n::Locale;
 use crate::json_file;
+use crate::llm::on_device::Availability;
 
 pub const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
 pub const DEFAULT_API_BASE: &str = "https://api.openai.com/v1";
@@ -68,11 +69,14 @@ pub const LANGUAGES: [&str; 40] = [
 #[serde(default)]
 pub struct Settings {
     pub provider: Provider,
-    /// The ChatGPT sign-in, once done.
+    /// The ChatGPT sign-in, once done. Kept in the keychain.
+    #[serde(skip)]
     pub chatgpt: Option<ChatGptAuth>,
     pub chatgpt_model: String,
-    /// An OpenAI-compatible API: its base URL (up to `/v1`) and key.
+    /// An OpenAI-compatible API: its base URL (up to `/v1`) and key. The key
+    /// is kept in the keychain.
     pub api_base: String,
+    #[serde(skip)]
     pub api_key: String,
     pub api_model: String,
     pub reasoning: Reasoning,
@@ -85,12 +89,14 @@ pub struct Settings {
     pub appearance: Appearance,
     /// The language the window speaks; `None` follows macOS.
     pub app_language: Option<Locale>,
+    /// Whether the welcome steps are done.
+    pub onboarded: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
-            provider: Provider::ChatGpt,
+            provider: Provider::OnDevice,
             chatgpt: None,
             chatgpt_model: DEFAULT_CHATGPT_MODEL.to_owned(),
             api_base: DEFAULT_API_BASE.to_owned(),
@@ -102,6 +108,7 @@ impl Default for Settings {
             shortcut: DEFAULT_SHORTCUT.to_owned(),
             appearance: Appearance::System,
             app_language: None,
+            onboarded: false,
         }
     }
 }
@@ -109,6 +116,8 @@ impl Default for Settings {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Provider {
+    /// Apple's on-device model.
+    OnDevice,
     /// A ChatGPT plan, through the sign-in Codex uses.
     ChatGpt,
     /// Any OpenAI-compatible chat completions API.
@@ -207,18 +216,21 @@ impl Settings {
         json_file::save(path, self)
     }
 
-    /// The model for the current provider.
+    /// The model for the current provider; empty on device, which has one.
     pub fn model(&self) -> &str {
         match self.provider {
+            Provider::OnDevice => "",
             Provider::ChatGpt => &self.chatgpt_model,
             Provider::Api => &self.api_model,
         }
     }
 
-    pub fn model_mut(&mut self) -> &mut String {
+    /// Return the current provider's model to change, unless it has only one.
+    pub fn model_mut(&mut self) -> Option<&mut String> {
         match self.provider {
-            Provider::ChatGpt => &mut self.chatgpt_model,
-            Provider::Api => &mut self.api_model,
+            Provider::OnDevice => None,
+            Provider::ChatGpt => Some(&mut self.chatgpt_model),
+            Provider::Api => Some(&mut self.api_model),
         }
     }
 
@@ -247,6 +259,8 @@ impl Settings {
     /// Why the model can't be called yet, if it can't.
     pub fn missing(&self) -> Option<Missing> {
         match self.provider {
+            // Whether the model can run is checked when it's called.
+            Provider::OnDevice => None,
             Provider::ChatGpt if self.chatgpt.is_none() => Some(Missing::SignIn),
             Provider::Api if self.api_base.trim().is_empty() => Some(Missing::ApiUrl),
             _ if self.model().trim().is_empty() => Some(Missing::Model),
@@ -258,6 +272,7 @@ impl Settings {
 /// What the settings lack before the model can be called.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Missing {
+    OnDevice(Availability),
     SignIn,
     ApiUrl,
     Model,
@@ -288,13 +303,35 @@ mod tests {
         assert_eq!(Settings::load(&path).model(), "gpt-x");
 
         // An older file without newer fields still loads.
-        std::fs::write(&path, r#"{"provider":"api","api_key":"k"}"#).unwrap();
+        std::fs::write(&path, r#"{"provider":"api","api_base":"http://x"}"#).unwrap();
         let loaded = Settings::load(&path);
-        assert_eq!(loaded.api_key, "k");
+        assert_eq!(loaded.api_base, "http://x");
         assert_eq!(loaded.shortcut, DEFAULT_SHORTCUT);
         settings.provider = Provider::ChatGpt;
         settings.chatgpt = None;
         assert_eq!(settings.missing(), Some(Missing::SignIn));
+    }
+
+    #[test]
+    fn credentials_stay_out_of_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let settings = Settings {
+            api_key: "sk-secret".into(),
+            chatgpt: Some(ChatGptAuth {
+                access: "access-secret".into(),
+                refresh: "refresh-secret".into(),
+                expires_at: 0,
+                account_id: "acct".into(),
+                email: None,
+            }),
+            ..Settings::default()
+        };
+        settings.save(&path).unwrap();
+        let file = std::fs::read_to_string(&path).unwrap();
+        assert!(!file.contains("secret"), "{file}");
+        let loaded = Settings::load(&path);
+        assert!(loaded.api_key.is_empty() && loaded.chatgpt.is_none());
     }
 
     #[test]

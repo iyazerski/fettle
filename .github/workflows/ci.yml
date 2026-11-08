@@ -9,8 +9,9 @@ on:
 
 jobs:
   rust:
-    # The app is macOS only (AppKit).
-    runs-on: macos-15
+    # The app is macOS only (AppKit), and its Swift bridge needs the macOS 26
+    # SDK, which has Apple's on-device model.
+    runs-on: macos-26
 
     steps:
       - uses: actions/checkout@v7

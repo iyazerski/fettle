@@ -12,6 +12,8 @@ on:
     branches: [main]
     paths:
       - "src/**"
+      - "swift/**"
+      - "build.rs"
       - "assets/**"
       - "scripts/bundle.sh"
       - "scripts/dmg.py"
@@ -34,8 +36,9 @@ jobs:
 
   release:
     needs: ci
-    # Apple silicon only, like the Macs it runs on.
-    runs-on: macos-15
+    # Apple silicon only, like the Macs it runs on, with the macOS 26 SDK the
+    # Swift bridge to Apple's on-device model needs.
+    runs-on: macos-26
     permissions:
       contents: write
     env:

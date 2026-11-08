@@ -14,8 +14,8 @@ use rune_kit::{
 
 use super::buttons::{self, Tone};
 use super::icons;
-use super::settings_view;
 use super::state::{Answer, Menu, Page, State, Status};
+use super::{onboarding, settings_view};
 use crate::diff::{self, Kind, Piece};
 use crate::i18n::fill;
 use crate::prompts::{Action, Style};
@@ -63,6 +63,7 @@ pub fn view(s: &State, cx: &mut Cx<State>) -> El {
     let page = match s.page {
         Page::Main => main(s, k, &mut layer),
         Page::Settings => settings_view::view(s, k, &mut layer),
+        Page::Onboarding(step) => onboarding::view(s, k, step),
     };
     let tint = if dark {
         k.c.bg_base.alpha(0.72)
@@ -576,7 +577,7 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
             _ if s.form.shortcut.is_recording() => return false,
             _ if s.menu.is_some() => s.menu = None,
             Page::Settings => s.back(),
-            Page::Main => s.hide(),
+            Page::Main | Page::Onboarding(_) => s.hide(),
         }
         return true;
     }

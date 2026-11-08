@@ -4,6 +4,7 @@
 
 mod buttons;
 mod icons;
+mod onboarding;
 mod settings_state;
 mod settings_view;
 mod state;
@@ -12,6 +13,7 @@ mod view;
 use anyhow::{Context, Result};
 use rune::{App, AppSpec, MacWindowOptions, RunOptions, WindowOptions, WindowSpec};
 
+use crate::keychain;
 use crate::settings::Settings;
 
 pub use self::state::Start;
@@ -34,7 +36,9 @@ pub fn run(start: Start) -> Result<()> {
         .context("starting the runtime")?;
     let http = crate::llm::http()?;
     let settings_path = Settings::path();
-    let settings = Settings::load(&settings_path);
+    let mut settings = Settings::load(&settings_path);
+    let credentials = keychain::load();
+    credentials.apply(&mut settings);
 
     let spec = AppSpec {
         fonts: rune_theme_opencode::FONTS,
@@ -55,11 +59,13 @@ pub fn run(start: Start) -> Result<()> {
     let handle = rt.handle().clone();
     me.update(move |s, _| s.started(start));
     let app = app
-        .init(move || State::new(me, handle, http, settings, settings_path))
+        .init(move || State::new(me, handle, http, settings, credentials, settings_path))
         .on_focus(|s, focused, _| {
             if focused {
-                // Back from System Settings, where Accessibility may have just been allowed.
+                // Back from System Settings, where Accessibility or Apple
+                // Intelligence may have just been turned on.
                 s.recheck_accessibility();
+                s.recheck_on_device();
             } else {
                 s.blurred();
             }

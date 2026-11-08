@@ -8,6 +8,7 @@
 mod diff;
 mod i18n;
 mod json_file;
+mod keychain;
 mod llm;
 mod login_item;
 mod mac;

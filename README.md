@@ -7,7 +7,7 @@
 **Fix grammar, rewrite and translate text in any Mac app with one shortcut.**
 
 Select text, press <kbd>⌃</kbd><kbd>⌥</kbd><kbd>E</kbd>, and click **Fix**, **Translate** or **Rewrite**.<br>
-A free, open-source AI writing assistant for macOS, and a lightweight alternative to Grammarly.
+A free, open-source AI writing assistant for macOS that can run entirely on your Mac, and a lightweight alternative to Grammarly.
 
 [![Download Fettle.dmg](https://img.shields.io/github/v/release/iyazerski/fettle?label=download&color=3b6cf6)](https://github.com/iyazerski/fettle/releases/latest/download/Fettle.dmg)
 [![macOS](https://img.shields.io/badge/macOS-13%2B%20·%20Apple%20silicon-black?logo=apple)](#install)
@@ -31,20 +31,21 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
 
 ## Why Fettle
 
+- **Runs on your Mac, for free.** With Apple Intelligence on macOS 26, Fettle uses Apple's on-device model. No account, no API key, and your text never leaves your Mac.
 - **Works in every app.** Mail, Slack, Notes, your browser, your code editor. If you can select the text, Fettle can fix it.
 - **See every change.** Fixes show up word by word, like track changes.
 - **Any language.** Fix and Rewrite work in any language the model knows, and keep your text in the language you wrote it in.
 - **Rewrite in one click.** Make text more formal, friendlier, shorter or clearer.
 - **Translate into 40 languages.** Fettle keeps the tone, formatting, names, links and code. Star the languages you use most to keep them at the top.
 - **Paste it back in one keystroke.** <kbd>⌘</kbd><kbd>↩</kbd> replaces your selection with the result. Your clipboard stays as it was.
-- **Use your ChatGPT plan or your own API.** Sign in with ChatGPT, or point Fettle at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
+- **Or use a bigger model.** Sign in with ChatGPT, or point Fettle at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
 - **Native and tiny.** Written in Rust, a 10 MB download, about 12 MB of memory when idle, and no CPU use until you call it.
-- **Private by design.** No account, no telemetry, no servers of ours. Your text goes only to the model you pick.
+- **Private by design.** No account, no telemetry, no servers of ours. Your text stays on your Mac, or goes only to the model you pick.
 - **Free and open source** under the MIT license.
 
 ## Install
 
-For macOS 13 or later on Apple silicon (M1 and newer). Pick one:
+For macOS 13 or later on Apple silicon (M1 and newer). The on-device model needs macOS 26 with Apple Intelligence turned on. Pick one:
 
 - [**Download**](https://github.com/iyazerski/fettle/releases/latest/download/Fettle.dmg) and install the latest release.
 - **Homebrew:** `brew install --cask iyazerski/tap/fettle`
@@ -86,13 +87,21 @@ Fix and Rewrite work in any language the model knows, whatever language the app 
 <details>
 <summary><b>Which AI models can I use?</b></summary>
 
-With a ChatGPT plan, the models your plan offers through Codex. With an API, any model that the API's `/v1/models` endpoint lists.
+- **On this Mac:** Apple's on-device model, which comes with Apple Intelligence on macOS 26. It's free and private, but smaller, so it takes shorter texts and fewer languages.
+- **ChatGPT plan:** the models your plan offers through Codex.
+- **API:** any model that the API's `/v1/models` endpoint lists.
+
+</details>
+<details>
+<summary><b>Why does Fettle say Apple Intelligence isn't ready?</b></summary>
+
+Turn it on in **System Settings > Apple Intelligence & Siri**. Your Mac and Siri must use the same language, and Apple Intelligence must support it: English, French, German, Italian, Spanish, Portuguese, Japanese, Korean, Chinese, Danish, Dutch, Norwegian, Swedish, Turkish or Vietnamese. Right after you turn it on, macOS may need a while to download the model.
 
 </details>
 <details>
 <summary><b>Does it cost anything?</b></summary>
 
-Fettle is free. The model is billed by your provider: it's part of your ChatGPT plan, or charged by your API provider.
+Fettle and the on-device model are free. Other models are billed by your provider: they're part of your ChatGPT plan, or charged by your API provider.
 
 </details>
 <details>
@@ -122,7 +131,9 @@ Pre-commit hooks run with [prek](https://github.com/j178/prek): `prek install`.
 ## Privacy
 
 - Fettle has no account and no analytics, and it has no server of its own.
-- The text you fix or translate goes only to the model provider you chose: OpenAI when you sign in with ChatGPT, or the API URL you entered.
+- With **On this Mac**, your text never leaves your Mac.
+- Otherwise, the text you fix or translate goes only to the model provider you chose: OpenAI when you sign in with ChatGPT, or the API URL you entered.
+- Your ChatGPT sign-in and API key are kept in the macOS Keychain.
 - Fettle restores your clipboard after it copies and pastes.
 
 ## License

@@ -9,10 +9,13 @@ use rune::{AppHandle, Phase, ShortcutId, TextEdit, Tx};
 use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 
+use super::onboarding::Step;
 use super::settings_state::{Form, FormError, Update};
 use super::view::WIDTH;
 use crate::diff::{self, Piece};
 use crate::i18n::{Locale, Strings, fill};
+use crate::keychain::{self, Credentials};
+use crate::llm::on_device::{self, Availability, Refusal};
 use crate::llm::{Ask, Backend, chatgpt};
 use crate::mac;
 use crate::prompts::{self, Action};
@@ -34,6 +37,10 @@ pub struct State {
     pub(super) http: reqwest::Client,
     pub settings: Settings,
     pub(super) settings_path: PathBuf,
+    /// The credentials as the keychain holds them, to write only changes.
+    saved_credentials: Credentials,
+    /// Whether Apple's on-device model can run, as last checked.
+    pub on_device: Availability,
     pub page: Page,
     /// The text to work on: the selection, editable.
     pub source: TextEdit,
@@ -90,6 +97,7 @@ pub enum Start {
 pub enum Page {
     Main,
     Settings,
+    Onboarding(Step),
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -127,6 +135,7 @@ impl State {
         rt: Handle,
         http: reqwest::Client,
         settings: Settings,
+        saved_credentials: Credentials,
         settings_path: PathBuf,
     ) -> Self {
         let form = Form::new(&settings);
@@ -136,6 +145,8 @@ impl State {
             http,
             settings,
             settings_path,
+            saved_credentials,
+            on_device: on_device::availability(),
             page: Page::Main,
             source: TextEdit::new(""),
             answer: None,
@@ -157,16 +168,21 @@ impl State {
         }
     }
 
-    /// Take the shortcut, and show the settings if `start` says so.
+    /// Take the shortcut, and show the welcome steps on the first run, or the
+    /// settings if `start` says so.
     pub fn started(&mut self, start: Start) {
         self.apply_appearance();
         self.register_saved_shortcut();
+        // Rewrite the file without the credentials versions before 0.3 kept in it.
+        self.save();
         eprintln!(
             "fettle {} is running; {} opens it",
             crate::VERSION,
             self.settings.shortcut
         );
-        if start == Start::Shown {
+        if !self.settings.onboarded {
+            self.open_onboarding();
+        } else if start == Start::Shown {
             self.open_settings();
         }
     }
@@ -183,6 +199,10 @@ impl State {
         }
         if self.app.is_visible() {
             self.hide();
+            return;
+        }
+        if !self.settings.onboarded {
+            self.open_onboarding();
             return;
         }
         self.set_trusted(mac::accessibility_trusted());
@@ -333,7 +353,7 @@ impl State {
             effort: self.settings.reasoning.effort(),
         };
         let (app, http) = (self.app.clone(), self.http.clone());
-        let empty = self.t().empty_answer;
+        let t = self.t();
         let job = self.rt.spawn(async move {
             let mut streamed = String::new();
             let result = async {
@@ -350,11 +370,14 @@ impl State {
             let status = match result {
                 // The diff can take a while on a long text: keep it off the UI thread.
                 Ok(()) => tokio::task::spawn_blocking(move || {
-                    complete(action, &ask.text, &streamed, empty)
+                    complete(action, &ask.text, &streamed, t.empty_answer)
                 })
                 .await
                 .unwrap_or_else(|e| Status::Failed(e.to_string())),
-                Err(e) => Status::Failed(format!("{e:#}")),
+                Err(e) => Status::Failed(match e.downcast_ref::<Refusal>() {
+                    Some(refusal) => t.refusal(*refusal).into(),
+                    None => format!("{e:#}"),
+                }),
             };
             app.update(move |s, _| s.finished(run, status));
         });
@@ -464,8 +487,14 @@ impl State {
         if let Some(job) = self.pending_save.take() {
             job.abort();
         }
-        if let Err(e) = self.settings.save(&self.settings_path) {
-            self.report(fill(self.t().save_failed, format_args!("{e:#}")));
+        let credentials = Credentials::of(&self.settings);
+        let saved = self
+            .settings
+            .save(&self.settings_path)
+            .and_then(|()| keychain::save(&credentials, &self.saved_credentials));
+        match saved {
+            Ok(()) => self.saved_credentials = credentials,
+            Err(e) => self.report(fill(self.t().save_failed, format_args!("{e:#}"))),
         }
     }
 
@@ -500,7 +529,7 @@ impl State {
     /// Show `message` on the page that's open.
     pub(super) fn report(&mut self, message: String) {
         match self.page {
-            Page::Main => self.notice = Some(message),
+            Page::Main | Page::Onboarding(_) => self.notice = Some(message),
             Page::Settings => self.form.error = Some(FormError::Other(message)),
         }
     }

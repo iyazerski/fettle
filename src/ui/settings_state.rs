@@ -8,9 +8,12 @@ use tokio::task::JoinHandle;
 
 use super::state::{Menu, Page, State, fresh_backend};
 use crate::i18n::{Locale, Strings, fill};
-use crate::llm::{Backend, chatgpt};
+use crate::llm::{Backend, chatgpt, on_device};
 use crate::settings::{Appearance, ChatGptAuth, Provider, Reasoning, Settings};
 use crate::{login_item, mac, update};
+
+/// System Settings' Apple Intelligence & Siri pane.
+const APPLE_INTELLIGENCE_URL: &str = "x-apple.systempreferences:com.apple.Siri-Settings.extension";
 
 /// The settings page's own state.
 pub struct Form {
@@ -83,6 +86,7 @@ impl Form {
 impl State {
     pub fn open_settings(&mut self) {
         self.set_trusted(mac::accessibility_trusted());
+        self.recheck_on_device();
         self.form.at_login = login_item::enabled();
         self.menu = None;
         self.page = Page::Settings;
@@ -150,8 +154,10 @@ impl State {
 
     pub fn pick_model(&mut self, model: &str) {
         self.menu = None;
-        *self.settings.model_mut() = model.to_owned();
-        self.save();
+        if let Some(current) = self.settings.model_mut() {
+            *current = model.to_owned();
+            self.save();
+        }
     }
 
     /// Replace the model list, stopping a load the new list supersedes, so
@@ -218,12 +224,14 @@ impl State {
                 self.settings.chatgpt = Some(auth);
                 self.save();
                 self.load_models();
-                self.open_settings();
             }
-            Err(e) => {
-                self.form.login = Login::Failed(e);
-                self.open_settings();
-            }
+            Err(e) => self.form.login = Login::Failed(e),
+        }
+        // Back to where the sign-in started: the welcome steps or the settings.
+        if matches!(self.page, Page::Onboarding(_)) {
+            self.show();
+        } else {
+            self.open_settings();
         }
     }
 
@@ -268,6 +276,15 @@ impl State {
 
     pub fn recheck_accessibility(&mut self) {
         self.set_trusted(mac::accessibility_trusted());
+    }
+
+    pub fn recheck_on_device(&mut self) {
+        self.on_device = on_device::availability();
+    }
+
+    /// Open Apple Intelligence & Siri in System Settings.
+    pub fn open_apple_intelligence(&mut self) {
+        mac::open_url(APPLE_INTELLIGENCE_URL);
     }
 
     /// Record whether macOS lets Fettle press keys, and drop the request to

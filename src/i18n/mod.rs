@@ -16,6 +16,7 @@ mod zh;
 
 use serde::{Deserialize, Serialize};
 
+use crate::llm::on_device::{Availability, Refusal};
 use crate::prompts::Style;
 use crate::settings::{LANGUAGES, Missing};
 
@@ -166,6 +167,36 @@ pub struct Strings {
     pub model: &'static str,
     pub chatgpt_plan: &'static str,
     pub compatible_api: &'static str,
+    pub on_device: &'static str,
+    pub on_device_ready: &'static str,
+    pub on_device_old_macos: &'static str,
+    pub on_device_not_eligible: &'static str,
+    pub on_device_turned_off: &'static str,
+    pub on_device_not_ready: &'static str,
+    /// Opens Apple Intelligence in System Settings.
+    pub open_system_settings: &'static str,
+    pub too_long: &'static str,
+    pub unsupported_language: &'static str,
+    pub declined: &'static str,
+    pub welcome_title: &'static str,
+    /// `{}`: the shortcut.
+    pub welcome_body: &'static str,
+    pub get_started: &'static str,
+    pub next: &'static str,
+    pub model_title: &'static str,
+    // The choices in the welcome steps, under their names.
+    pub on_device_body: &'static str,
+    pub chatgpt_body: &'static str,
+    pub api_body: &'static str,
+    pub access_title: &'static str,
+    pub access_body: &'static str,
+    pub done_title: &'static str,
+    /// `{}`: the shortcut.
+    pub done_body: &'static str,
+    pub try_it: &'static str,
+    pub done: &'static str,
+    /// A sentence with mistakes for Fix to correct.
+    pub sample: &'static str,
     pub reasoning: &'static str,
     /// Default, Off, Low, Medium, High.
     pub reasoning_levels: [&'static str; 5],
@@ -232,9 +263,30 @@ impl Strings {
     /// Return what to do about `missing`.
     pub fn missing(&self, missing: Missing) -> &'static str {
         match missing {
+            Missing::OnDevice(availability) => self.on_device_status(availability),
             Missing::SignIn => self.missing_sign_in,
             Missing::ApiUrl => self.missing_api_url,
             Missing::Model => self.missing_model,
+        }
+    }
+
+    /// Return what `availability` means for the on-device model, in this language.
+    pub fn on_device_status(&self, availability: Availability) -> &'static str {
+        match availability {
+            Availability::Ready => self.on_device_ready,
+            Availability::OldMacOS => self.on_device_old_macos,
+            Availability::NotEligible => self.on_device_not_eligible,
+            Availability::TurnedOff => self.on_device_turned_off,
+            Availability::NotReady => self.on_device_not_ready,
+        }
+    }
+
+    /// Return why the on-device model gave no answer, in this language.
+    pub fn refusal(&self, refusal: Refusal) -> &'static str {
+        match refusal {
+            Refusal::TooLong => self.too_long,
+            Refusal::Language => self.unsupported_language,
+            Refusal::Declined => self.declined,
         }
     }
 
