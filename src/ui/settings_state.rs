@@ -9,7 +9,7 @@ use tokio::task::JoinHandle;
 use super::state::{Menu, Page, State, fresh_backend};
 use crate::i18n::{Locale, Strings, fill};
 use crate::llm::{Backend, chatgpt, on_device};
-use crate::settings::{Appearance, ChatGptAuth, Provider, Reasoning, Settings};
+use crate::settings::{Appearance, ChatGptAuth, Provider, Settings};
 use crate::{login_item, mac, update};
 
 /// System Settings' Apple Intelligence & Siri pane.
@@ -119,8 +119,8 @@ impl State {
         }
     }
 
-    pub fn set_reasoning(&mut self, reasoning: Reasoning) {
-        self.settings.reasoning = reasoning;
+    pub fn toggle_reasoning(&mut self) {
+        self.settings.reasoning_enabled = !self.settings.reasoning_enabled;
         self.save();
     }
 

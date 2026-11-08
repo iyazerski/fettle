@@ -14,17 +14,15 @@ pub async fn stream(
     ask: &Ask,
     mut on_delta: impl FnMut(&str),
 ) -> Result<()> {
-    let mut body = json!({
+    let body = json!({
         "model": ask.model,
         "stream": true,
         "messages": [
             { "role": "system", "content": ask.system },
             { "role": "user", "content": ask.text },
         ],
+        "reasoning_effort": ask.effort,
     });
-    if let Some(effort) = ask.effort {
-        body["reasoning_effort"] = json!(effort);
-    }
     let mut request = http.post(format!("{base}/chat/completions")).json(&body);
     if !key.is_empty() {
         request = request.bearer_auth(key);

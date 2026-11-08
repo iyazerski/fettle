@@ -69,7 +69,7 @@ pub static STRINGS: Strings = Strings {
     done: "Gotowe",
     sample: "Wczoraj ja i mój kolega poszliśmy do biblioteki i znaleźliśmy trzy książka o kotach, które bardzo mi się podobał.",
     reasoning: "Rozumowanie",
-    reasoning_levels: ["Auto", "Nie", "Mało", "Średnio", "Dużo"],
+    reasoning_hint: "Model myśli przed odpowiedzią. Rzadko potrzebne przy tych zadaniach, a odpowiedzi trwają dłużej.",
     general: "Ogólne",
     appearance: "Wygląd",
     appearances: ["System", "Jasny", "Ciemny"],

@@ -350,7 +350,7 @@ impl State {
             system: prompts::system(action, &self.settings.language),
             text: original,
             model: self.settings.model().trim().to_owned(),
-            effort: self.settings.reasoning.effort(),
+            effort: self.settings.effort(),
         };
         let (app, http) = (self.app.clone(), self.http.clone());
         let t = self.t();

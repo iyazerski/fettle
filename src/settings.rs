@@ -79,7 +79,9 @@ pub struct Settings {
     #[serde(skip)]
     pub api_key: String,
     pub api_model: String,
-    pub reasoning: Reasoning,
+    /// Whether the model thinks a little before it answers: slower, and
+    /// rarely needed for these tasks.
+    pub reasoning_enabled: bool,
     /// The language Translate writes in.
     pub language: String,
     /// Languages listed first in the picker.
@@ -102,7 +104,7 @@ impl Default for Settings {
             api_base: DEFAULT_API_BASE.to_owned(),
             api_key: String::new(),
             api_model: String::new(),
-            reasoning: Reasoning::Off,
+            reasoning_enabled: false,
             language: "English".to_owned(),
             favourite_languages: Vec::new(),
             shortcut: DEFAULT_SHORTCUT.to_owned(),
@@ -147,40 +149,6 @@ impl Appearance {
     }
 }
 
-/// How hard the model thinks before answering.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Reasoning {
-    /// Send nothing: the model's own default. Models without reasoning
-    /// reject the parameter, so this is the safe pick for them.
-    Default,
-    Off,
-    Low,
-    Medium,
-    High,
-}
-
-impl Reasoning {
-    pub const ALL: [Reasoning; 5] = [
-        Reasoning::Default,
-        Reasoning::Off,
-        Reasoning::Low,
-        Reasoning::Medium,
-        Reasoning::High,
-    ];
-
-    /// The API's `effort` value, or `None` to leave it out.
-    pub fn effort(self) -> Option<&'static str> {
-        match self {
-            Reasoning::Default => None,
-            Reasoning::Off => Some("none"),
-            Reasoning::Low => Some("low"),
-            Reasoning::Medium => Some("medium"),
-            Reasoning::High => Some("high"),
-        }
-    }
-}
-
 /// The tokens from signing in with ChatGPT.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChatGptAuth {
@@ -214,6 +182,15 @@ impl Settings {
             std::fs::create_dir_all(dir)?;
         }
         json_file::save(path, self)
+    }
+
+    /// The reasoning effort to ask for: a little when reasoning is on, none otherwise.
+    pub fn effort(&self) -> &'static str {
+        if self.reasoning_enabled {
+            "low"
+        } else {
+            "none"
+        }
     }
 
     /// The model for the current provider; empty on device, which has one.
@@ -295,15 +272,19 @@ mod tests {
         let mut settings = Settings {
             provider: Provider::Api,
             api_model: "gpt-x".into(),
-            reasoning: Reasoning::High,
+            reasoning_enabled: true,
             ..Settings::default()
         };
         settings.save(&path).unwrap();
         assert_eq!(Settings::load(&path), settings);
         assert_eq!(Settings::load(&path).model(), "gpt-x");
 
-        // An older file without newer fields still loads.
-        std::fs::write(&path, r#"{"provider":"api","api_base":"http://x"}"#).unwrap();
+        // An older file, without newer fields and with ones since dropped, still loads.
+        std::fs::write(
+            &path,
+            r#"{"provider":"api","api_base":"http://x","reasoning":"high"}"#,
+        )
+        .unwrap();
         let loaded = Settings::load(&path);
         assert_eq!(loaded.api_base, "http://x");
         assert_eq!(loaded.shortcut, DEFAULT_SHORTCUT);

@@ -1,5 +1,9 @@
-//! The settings page: where the model runs, which model, how hard it thinks,
+//! The settings page: where the model runs, which model, whether it reasons,
 //! the look, the shortcut, login item and permission, updates, and credits.
+//!
+//! Settings sit in rounded groups. A wide control (picker, dropdown, field)
+//! fills the same column on the right of its label, and a compact one (switch,
+//! status) sits at the right edge, so every row lines up.
 
 use rune::{Cursor, El, col, icon, row, spacer, text};
 use rune_kit::{
@@ -15,7 +19,7 @@ use super::view::{NoteKind, WIDTH, divider, header, note};
 use crate::i18n::{Locale, fill};
 use crate::llm::on_device::Availability;
 use crate::mac;
-use crate::settings::{Appearance, Missing, Provider, Reasoning};
+use crate::settings::{Appearance, Missing, Provider};
 
 /// The providers, in the order the settings list them.
 const PROVIDERS: [Provider; 3] = [Provider::OnDevice, Provider::ChatGpt, Provider::Api];
@@ -26,57 +30,45 @@ const REPO_URL: &str = "https://github.com/iyazerski/fettle";
 const LICENSE_URL: &str = "https://github.com/iyazerski/fettle/blob/main/LICENSE";
 const NOTICES_URL: &str = "https://github.com/iyazerski/fettle/blob/main/THIRD_PARTY_LICENSES.md";
 
+/// The space inside a group, around its rows.
+const PAD: f32 = 12.0;
 /// The label column's width.
-const LABEL: f32 = 110.0;
-/// A control's width beside its label: the window less its padding, the label and the gap.
-const CONTROL: f32 = WIDTH - 2.0 * 14.0 - LABEL - 12.0;
+const LABEL: f32 = 130.0;
+/// A wide control's width: the window less its padding, the group's, the label and the gap.
+const CONTROL: f32 = WIDTH - 2.0 * 14.0 - 2.0 * PAD - LABEL - 12.0;
 
 pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
     let sk = segmented_kit(k);
     let mut page = col()
         .w_full()
-        .gap(12.0)
+        .gap(8.0)
         .child(header(s, k, t.settings, Some(State::back)));
     if let Some(error) = &s.form.error {
         page = page.child(note(k, error.message(t), NoteKind::Failure));
     }
-    page.child(section(k, t.model))
-        .child(
-            SegmentedControl::new(
-                // The full "OpenAI-compatible API" doesn't fit a third of the row.
-                &[t.on_device, t.chatgpt_plan, "API"],
-                PROVIDERS.iter().position(|p| *p == s.settings.provider),
-            )
-            .width(None)
-            .on_pick(|s: &mut State, i, _| s.set_provider(PROVIDERS[i]))
-            .build(&sk),
-        )
-        .child(match s.settings.provider {
-            Provider::OnDevice => on_device(s, k),
-            Provider::ChatGpt => chatgpt(s, k),
-            Provider::Api => api(s, k),
-        })
-        .children(model(s, k, layer))
-        // Apple's model has no reasoning effort to set.
-        .children((s.settings.provider != Provider::OnDevice).then(|| {
-            labeled(
-                k,
-                t.reasoning,
-                SegmentedControl::new(
-                    &t.reasoning_levels,
-                    Reasoning::ALL
-                        .iter()
-                        .position(|r| *r == s.settings.reasoning),
-                )
-                .width(None)
-                .on_pick(|s: &mut State, i, _| s.set_reasoning(Reasoning::ALL[i]))
-                .build(&sk),
-            )
-        }))
-        .child(divider(k))
-        .child(section(k, t.general))
-        .child(labeled(
+
+    let mut model_rows = vec![provider(s, k, &sk)];
+    if s.settings.provider == Provider::Api {
+        model_rows.extend(api(s, k));
+    }
+    model_rows.extend(model(s, k, layer));
+    // Apple's model has no reasoning to turn on.
+    if s.settings.provider != Provider::OnDevice {
+        model_rows.push(compact(
+            k,
+            t.reasoning,
+            Some(t.reasoning_hint),
+            Switch::new(s.settings.reasoning_enabled)
+                .hide_label()
+                .label(t.reasoning)
+                .on_toggle(|s: &mut State| s.toggle_reasoning())
+                .build(k),
+        ));
+    }
+
+    let general_rows = vec![
+        wide(
             k,
             t.appearance,
             SegmentedControl::new(
@@ -88,9 +80,9 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             .width(None)
             .on_pick(|s: &mut State, i, _| s.set_appearance(Appearance::ALL[i]))
             .build(&sk),
-        ))
-        .child(labeled(k, t.app_language, app_language(s, k, layer)))
-        .child(labeled(
+        ),
+        wide(k, t.app_language, app_language(s, k, layer)),
+        wide(
             k,
             t.shortcut,
             ShortcutRecorder::new("shortcut", &s.form.shortcut, |s: &mut State| {
@@ -99,22 +91,54 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             .label(t.open_fettle)
             .on_change(|s: &mut State, shortcut, _| s.change_shortcut(shortcut))
             .error_message(shortcut_error_message)
-            .width(200.0)
+            .width(CONTROL)
             .build(k),
-        ))
-        .child(labeled(
+        ),
+        compact(
             k,
             t.start_at_login,
+            None,
             Switch::new(s.form.at_login)
                 .hide_label()
                 .label(t.start_at_login)
                 .on_toggle(|s: &mut State| s.toggle_at_login())
                 .build(k),
-        ))
-        .child(labeled(k, t.accessibility, accessibility(s, k)))
-        .child(divider(k))
-        .child(footer(s, k))
+        ),
+        compact(k, t.accessibility, None, accessibility(s, k)),
+    ];
+
+    page.child(section(k, t.model))
+        .child(group(k, model_rows))
+        .child(section(k, t.general))
+        .child(group(k, general_rows))
+        .child(col().w_full().pt(8.0).child(group(k, vec![about(s, k)])))
         .child(credits(s, k))
+}
+
+/// The provider picker, with whether the picked one is ready under it.
+fn provider(s: &State, k: &Kit, sk: &Kit) -> El {
+    let t = s.t();
+    let status = match s.settings.provider {
+        Provider::OnDevice => Some(on_device(s, k)),
+        Provider::ChatGpt => Some(chatgpt(s, k)),
+        // Its URL and key follow as rows of their own.
+        Provider::Api => None,
+    };
+    col()
+        .w_full()
+        .padding(PAD)
+        .gap(10.0)
+        .child(
+            SegmentedControl::new(
+                // The full "OpenAI-compatible API" doesn't fit a third of the row.
+                &[t.on_device, t.chatgpt_plan, "API"],
+                PROVIDERS.iter().position(|p| *p == s.settings.provider),
+            )
+            .width(None)
+            .on_pick(|s: &mut State, i, _| s.set_provider(PROVIDERS[i]))
+            .build(sk),
+        )
+        .children(status)
 }
 
 /// The window's language: System, then each language in its own name.
@@ -130,7 +154,7 @@ fn app_language(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     Select::new("app-language", &options)
         .label(t.app_language)
         .appearance(SelectAppearance::Field)
-        .width(200.0)
+        .width(CONTROL)
         .current(Some(current))
         .placement(Placement::BottomStart)
         .open(s.menu_open(Menu::AppLanguage))
@@ -152,7 +176,7 @@ fn segmented_kit(k: &Kit) -> Kit {
 }
 
 /// Who made Fettle, its license, the licenses of what it's built from, and its
-/// source, each a link.
+/// source, each a link, centred under the groups.
 fn credits(s: &State, k: &Kit) -> El {
     let t = s.t();
     let faint = |label: &str| text(label).font(k.ty.text_small).color(k.c.text_faint);
@@ -167,6 +191,8 @@ fn credits(s: &State, k: &Kit) -> El {
         .w_full()
         .center_y()
         .gap(5.0)
+        .pt(4.0)
+        .child(spacer())
         .child(faint(t.made_by))
         .child(link(AUTHOR, AUTHOR_URL).help(t.buy_coffee))
         .child(faint("·"))
@@ -175,32 +201,45 @@ fn credits(s: &State, k: &Kit) -> El {
         .child(link(t.notices, NOTICES_URL))
         .child(faint("·"))
         .child(link("GitHub", REPO_URL))
+        .child(spacer())
 }
 
-/// The version, the update button, and Quit.
-fn footer(s: &State, k: &Kit) -> El {
+/// The version and where updating stands, with the update and Quit buttons.
+fn about(s: &State, k: &Kit) -> El {
     let t = s.t();
-    let mut bar = row().w_full().center_y().gap(8.0).child(
-        text(format!("Fettle {}", crate::VERSION))
-            .font(k.ty.text_small)
-            .color(k.c.text_faint),
-    );
     let status = |label: String| text(label).font(k.ty.text_small).color(k.c.text_muted);
-    let check = || {
-        Button::new(t.check_updates)
-            .variant(ButtonVariant::Ghost)
-            .on_press(|s: &mut State| s.check_update())
-            .build(k)
+    let state = match &s.update {
+        Update::Idle | Update::Failed(_) | Update::Available(_) => None,
+        Update::Checking => Some(
+            row()
+                .gap(6.0)
+                .center_y()
+                .child(Spinner::new().size(11.0).build(k))
+                .child(status(t.checking.into())),
+        ),
+        Update::Latest => Some(
+            row()
+                .gap(4.0)
+                .center_y()
+                .child(icon(&icons::CHECK, 12.0).color(k.c.success.icon))
+                .child(status(t.up_to_date.into())),
+        ),
+        Update::Installing(version) => Some(
+            row()
+                .gap(6.0)
+                .center_y()
+                .child(Spinner::new().size(11.0).build(k))
+                .child(status(fill(t.updating, version))),
+        ),
     };
-    bar = match &s.update {
-        Update::Idle | Update::Failed(_) => bar.child(check()),
-        Update::Checking => bar
-            .child(Spinner::new().size(12.0).build(k))
-            .child(status(t.checking.into())),
-        Update::Latest => bar
-            .child(icon(&icons::CHECK, 14.0).color(k.c.success.icon))
-            .child(status(t.up_to_date.into())),
-        Update::Available(version) => bar.child(buttons::button(
+    let update = match &s.update {
+        Update::Idle | Update::Failed(_) | Update::Latest => Some(
+            Button::new(t.check_updates)
+                .variant(ButtonVariant::Outline)
+                .on_press(|s: &mut State| s.check_update())
+                .build(k),
+        ),
+        Update::Available(version) => Some(buttons::button(
             k,
             Tone::Primary,
             &fill(t.update_to, version),
@@ -210,25 +249,36 @@ fn footer(s: &State, k: &Kit) -> El {
                     .on_press(|s: &mut State| s.install_update())
             },
         )),
-        Update::Installing(version) => bar
-            .child(Spinner::new().size(12.0).build(k))
-            .child(status(fill(t.updating, version))),
+        Update::Checking | Update::Installing(_) => None,
     };
-    bar = bar.child(spacer()).child(
-        Button::new(t.quit)
-            .variant(ButtonVariant::GhostMuted)
-            .shortcut("⌘Q")
-            .on_press_tx(|s: &mut State, tx| s.quit(tx))
-            .build(k),
-    );
-    match &s.update {
-        Update::Failed(e) => col()
-            .w_full()
-            .gap(6.0)
-            .child(note(k, e, NoteKind::Failure))
-            .child(bar),
-        _ => bar,
+    let line = row()
+        .w_full()
+        .center_y()
+        .gap(8.0)
+        .child(
+            col()
+                .grow(1.0)
+                .gap(2.0)
+                .child(
+                    text(format!("Fettle {}", crate::VERSION))
+                        .font(k.ty.ui_medium)
+                        .color(k.c.text_base),
+                )
+                .children(state),
+        )
+        .children(update)
+        .child(
+            Button::new(t.quit)
+                .variant(ButtonVariant::Outline)
+                .shortcut("⌘Q")
+                .on_press_tx(|s: &mut State, tx| s.quit(tx))
+                .build(k),
+        );
+    let mut block = col().w_full().padding(PAD).gap(8.0).child(line);
+    if let Update::Failed(e) = &s.update {
+        block = block.child(note(k, e, NoteKind::Failure));
     }
+    block
 }
 
 /// Whether Apple's on-device model can run, with a way to System Settings when
@@ -267,7 +317,7 @@ pub(super) fn on_device(s: &State, k: &Kit) -> El {
     if fixable {
         line = line.child(
             Button::new(t.open_system_settings)
-                .variant(ButtonVariant::Ghost)
+                .variant(ButtonVariant::Outline)
                 .on_press(|s: &mut State| s.open_apple_intelligence())
                 .build(k),
         );
@@ -280,11 +330,16 @@ pub(super) fn chatgpt(s: &State, k: &Kit) -> El {
     let line = row().w_full().center_y().gap(8.0);
     match (&s.settings.chatgpt, &s.form.login) {
         (_, Login::Waiting(_)) => line
-            .child(text(t.finish_sign_in).font(k.ty.ui).color(k.c.text_muted))
-            .child(spacer())
+            .child(
+                text(t.finish_sign_in)
+                    .font(k.ty.ui)
+                    .color(k.c.text_muted)
+                    .wrap()
+                    .grow(1.0),
+            )
             .child(
                 Button::new(t.cancel)
-                    .variant(ButtonVariant::Ghost)
+                    .variant(ButtonVariant::Outline)
                     .on_press(|s: &mut State| s.cancel_sign_in())
                     .build(k),
             ),
@@ -302,7 +357,7 @@ pub(super) fn chatgpt(s: &State, k: &Kit) -> El {
             )
             .child(
                 Button::new(t.sign_out)
-                    .variant(ButtonVariant::Ghost)
+                    .variant(ButtonVariant::Outline)
                     .on_press(|s: &mut State| s.sign_out())
                     .build(k),
             ),
@@ -322,12 +377,11 @@ pub(super) fn chatgpt(s: &State, k: &Kit) -> El {
     }
 }
 
-fn api(s: &State, k: &Kit) -> El {
+/// The API's URL and key rows.
+fn api(s: &State, k: &Kit) -> [El; 2] {
     let t = s.t();
-    col()
-        .w_full()
-        .gap(8.0)
-        .child(labeled(
+    [
+        wide(
             k,
             t.api_url,
             TextInput::new(&s.form.api_base)
@@ -337,8 +391,8 @@ fn api(s: &State, k: &Kit) -> El {
                 .on_edit(|s: &mut State| &mut s.form.api_base)
                 .on_change(|s: &mut State, _| s.api_edited())
                 .build(k),
-        ))
-        .child(labeled(
+        ),
+        wide(
             k,
             t.api_key,
             TextInput::new(&s.form.api_key)
@@ -349,7 +403,8 @@ fn api(s: &State, k: &Kit) -> El {
                 .on_edit(|s: &mut State| &mut s.form.api_key)
                 .on_change(|s: &mut State, _| s.api_edited())
                 .build(k),
-        ))
+        ),
+    ]
 }
 
 /// The model dropdown, once the provider can list its models.
@@ -385,23 +440,26 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
         .on_close(|s: &mut State| s.menu = None)
         .on_choose(|s: &mut State, model, _| s.pick_model(model))
         .build(k, layer);
-    let mut block = col().w_full().gap(6.0).child(labeled(k, t.model, select));
-    if let Models::Failed(e) = &s.form.models {
-        block = block.child(
+    let Models::Failed(e) = &s.form.models else {
+        return Some(wide(k, t.model, select));
+    };
+    Some(
+        col().w_full().child(wide(k, t.model, select)).child(
             row()
                 .w_full()
+                .px(PAD)
+                .pb(PAD)
                 .center_y()
                 .gap(8.0)
                 .child(note(k, e, NoteKind::Failure).grow(1.0))
                 .child(
                     Button::new(t.try_again)
-                        .variant(ButtonVariant::Ghost)
+                        .variant(ButtonVariant::Outline)
                         .on_press(|s: &mut State| s.load_models())
                         .build(k),
                 ),
-        );
-    }
-    Some(block)
+        ),
+    )
 }
 
 pub(super) fn accessibility(s: &State, k: &Kit) -> El {
@@ -416,28 +474,56 @@ pub(super) fn accessibility(s: &State, k: &Kit) -> El {
     row()
         .gap(8.0)
         .center_y()
+        .child(
+            Button::new(t.check_again)
+                .variant(ButtonVariant::Outline)
+                .on_press(|s: &mut State| s.recheck_accessibility())
+                .build(k),
+        )
         .child(buttons::button(k, Tone::Primary, t.allow, None, |b| {
             b.help(t.allow_help)
                 .on_press(|s: &mut State| s.ask_accessibility())
         }))
-        .child(
-            Button::new(t.check_again)
-                .variant(ButtonVariant::Ghost)
-                .on_press(|s: &mut State| s.recheck_accessibility())
-                .build(k),
-        )
 }
 
+/// A group's title, above it.
 fn section(k: &Kit, title: &str) -> El {
-    text(title.to_owned())
-        .font(k.ty.text_small_medium)
-        .color(k.c.text_muted)
+    col().w_full().pt(8.0).pl(4.0).child(
+        text(title.to_owned())
+            .font(k.ty.text_small_medium)
+            .color(k.c.text_muted),
+    )
 }
 
-/// `control` with `label` on its left, in a fixed column so the controls line up.
-fn labeled(k: &Kit, label: &str, control: El) -> El {
+/// `rows` in a rounded box, with a line between each two.
+fn group(k: &Kit, rows: Vec<El>) -> El {
+    // In dark mode, a lift over the window: the dark base would hide the fields in it.
+    let fill = if k.dark {
+        k.light(0.05)
+    } else {
+        k.c.bg_base.alpha(0.85)
+    };
+    let mut card = col()
+        .w_full()
+        .radius(k.radius.lg)
+        .fill(fill)
+        .border(1.0, k.c.border_muted);
+    for (i, line) in rows.into_iter().enumerate() {
+        if i > 0 {
+            card = card.child(divider(k));
+        }
+        card = card.child(line);
+    }
+    card
+}
+
+/// A row with `label` on the left and a wide `control` filling the column on its right.
+fn wide(k: &Kit, label: &str, control: El) -> El {
     row()
         .w_full()
+        .px(PAD)
+        .py(8.0)
+        .min_h(44.0)
         .center_y()
         .gap(12.0)
         .child(
@@ -448,5 +534,36 @@ fn labeled(k: &Kit, label: &str, control: El) -> El {
                 .wrap()
                 .w(LABEL),
         )
-        .child(col().grow(1.0).child(control))
+        .child(col().w(CONTROL).child(control))
+}
+
+/// A row with `label`, and `hint` under it, on the left, and a compact
+/// `control` at the right edge.
+fn compact(k: &Kit, label: &str, hint: Option<&str>, control: El) -> El {
+    let hint = hint.map(|h| {
+        text(h.to_owned())
+            .font(k.ty.text_small)
+            .color(k.c.text_muted)
+            .wrap()
+    });
+    row()
+        .w_full()
+        .px(PAD)
+        .py(8.0)
+        .min_h(44.0)
+        .center_y()
+        .gap(12.0)
+        .child(
+            col()
+                .grow(1.0)
+                .gap(2.0)
+                .child(
+                    text(label.to_owned())
+                        .font(k.ty.ui)
+                        .color(k.c.text_base)
+                        .wrap(),
+                )
+                .children(hint),
+        )
+        .child(control)
 }

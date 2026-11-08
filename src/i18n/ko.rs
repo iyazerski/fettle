@@ -69,7 +69,7 @@ pub static STRINGS: Strings = Strings {
     done: "완료",
     sample: "어제 나는 친구랑 도서관에 갔는데, 고양이에 대한 책을 세 권을 찾았어요. 정말 재미있었어요요.",
     reasoning: "추론",
-    reasoning_levels: ["기본", "끄기", "낮음", "보통", "높음"],
+    reasoning_hint: "모델이 답하기 전에 생각합니다. 이런 작업에는 거의 필요 없고, 답변이 더 오래 걸립니다.",
     general: "일반",
     appearance: "화면 모드",
     appearances: ["시스템", "라이트", "다크"],

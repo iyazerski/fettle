@@ -98,7 +98,7 @@ pub async fn stream(
     ask: &Ask,
     mut on_delta: impl FnMut(&str),
 ) -> Result<()> {
-    let mut body = json!({
+    let body = json!({
         "model": ask.model,
         "store": false,
         "stream": true,
@@ -109,10 +109,8 @@ pub async fn stream(
             "content": [{ "type": "input_text", "text": ask.text }],
         }],
         "text": { "verbosity": "low" },
+        "reasoning": { "effort": ask.effort },
     });
-    if let Some(effort) = ask.effort {
-        body["reasoning"] = json!({ "effort": effort });
-    }
     let request = http
         .post(format!("{CODEX_URL}/responses"))
         .bearer_auth(&auth.access)

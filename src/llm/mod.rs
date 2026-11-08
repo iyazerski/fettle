@@ -19,8 +19,8 @@ pub struct Ask {
     pub system: String,
     pub text: String,
     pub model: String,
-    /// The reasoning effort, or `None` for the model's default.
-    pub effort: Option<&'static str>,
+    /// The reasoning effort, like `none` or `low`.
+    pub effort: &'static str,
 }
 
 /// Where requests go, with what they need.

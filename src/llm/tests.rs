@@ -43,7 +43,7 @@ async fn serve_once(
     (base, task)
 }
 
-fn ask(effort: Option<&'static str>) -> Ask {
+fn ask(effort: &'static str) -> Ask {
     Ask {
         system: "Fix it.".into(),
         text: "teh text".into(),
@@ -67,7 +67,7 @@ async fn api_streams_the_answer() {
     };
     let mut answer = String::new();
     backend
-        .stream(&http().unwrap(), &ask(Some("low")), |d| answer.push_str(d))
+        .stream(&http().unwrap(), &ask("low"), |d| answer.push_str(d))
         .await
         .unwrap();
     assert_eq!(answer, "the text");
@@ -99,7 +99,7 @@ async fn api_errors_carry_the_servers_message() {
         key: String::new(),
     };
     let error = backend
-        .stream(&http().unwrap(), &ask(None), |_| {})
+        .stream(&http().unwrap(), &ask("none"), |_| {})
         .await
         .unwrap_err();
     assert_eq!(
@@ -149,7 +149,7 @@ async fn api_answers_count_only_when_the_stream_says_they_are_done() {
             key: String::new(),
         };
         let got = backend
-            .stream(&http().unwrap(), &ask(None), |_| {})
+            .stream(&http().unwrap(), &ask("none"), |_| {})
             .await
             .map_err(|e| e.to_string());
         assert_eq!(got, want.map_err(str::to_owned), "ending {end:?}");

@@ -198,8 +198,8 @@ pub struct Strings {
     /// A sentence with mistakes for Fix to correct.
     pub sample: &'static str,
     pub reasoning: &'static str,
-    /// Default, Off, Low, Medium, High.
-    pub reasoning_levels: [&'static str; 5],
+    /// What turning reasoning on does, under its switch.
+    pub reasoning_hint: &'static str,
     pub general: &'static str,
     pub appearance: &'static str,
     /// System, Light, Dark.
