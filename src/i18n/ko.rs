@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "단축키",
     open_fettle: "Fettle 열기",
     underline: "실수에 밑줄 표시",
-    underline_hint: "다른 앱에서 입력할 때 이 Mac의 macOS 검사기로 맞춤법과 문법 실수에 밑줄을 긋습니다. 밑줄을 클릭하면 해당 단락을 고칩니다.",
+    underline_hint: "다른 앱에서 입력할 때 실수에 밑줄을 긋습니다. 클릭하면 고칩니다.",
     start_at_login: "로그인 시 시작",
     accessibility: "손쉬운 사용",
     allowed: "허용됨",

@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "الاختصار",
     open_fettle: "فتح Fettle",
     underline: "وضع خط تحت الأخطاء",
-    underline_hint: "يحدد الأخطاء الإملائية والنحوية أثناء الكتابة في التطبيقات الأخرى، باستخدام مدقق macOS على هذا الـ Mac. انقر على خط لتصحيح فقرته.",
+    underline_hint: "يحدد الأخطاء أثناء الكتابة في التطبيقات الأخرى. انقر لتصحيحها.",
     start_at_login: "التشغيل عند تسجيل الدخول",
     accessibility: "تسهيلات الاستخدام",
     allowed: "مسموح",

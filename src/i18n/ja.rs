@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "ショートカット",
     open_fettle: "Fettle を開く",
     underline: "ミスに下線を引く",
-    underline_hint: "ほかのアプリで入力中に、このMacのmacOSのチェック機能でスペルと文法のミスに下線を引きます。下線をクリックすると、その段落を修正します。",
+    underline_hint: "ほかのアプリで入力中のミスに下線を引きます。クリックで修正します。",
     start_at_login: "ログイン時に起動",
     accessibility: "アクセシビリティ",
     allowed: "許可済み",

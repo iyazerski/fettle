@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "Kurzbefehl",
     open_fettle: "Fettle öffnen",
     underline: "Fehler unterstreichen",
-    underline_hint: "Markiert Rechtschreib- und Grammatikfehler beim Tippen in anderen Apps, mit der Prüfung von macOS auf diesem Mac. Klicke auf eine Unterstreichung, um den Absatz zu korrigieren.",
+    underline_hint: "Markiert Fehler beim Tippen in anderen Apps. Klicke darauf, um sie zu korrigieren.",
     start_at_login: "Bei Anmeldung starten",
     accessibility: "Bedienungshilfen",
     allowed: "Erlaubt",

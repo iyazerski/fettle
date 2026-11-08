@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "शॉर्टकट",
     open_fettle: "Fettle खोलें",
     underline: "गलतियों को रेखांकित करें",
-    underline_hint: "दूसरे ऐप में लिखते समय, इस Mac पर macOS के जाँचक से वर्तनी और व्याकरण की गलतियाँ चिह्नित करता है। उसका अनुच्छेद ठीक करने के लिए रेखा पर क्लिक करें।",
+    underline_hint: "दूसरे ऐप में लिखते समय गलतियाँ चिह्नित करता है। ठीक करने के लिए क्लिक करें।",
     start_at_login: "लॉगिन पर शुरू करें",
     accessibility: "ऐक्सेसिबिलिटी",
     allowed: "अनुमति है",

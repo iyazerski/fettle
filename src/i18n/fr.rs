@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "Raccourci",
     open_fettle: "Ouvrir Fettle",
     underline: "Souligner les fautes",
-    underline_hint: "Signale les fautes d'orthographe et de grammaire pendant que vous tapez dans d'autres apps, avec le correcteur de macOS sur ce Mac. Cliquez sur un soulignement pour corriger son paragraphe.",
+    underline_hint: "Signale les fautes pendant que vous tapez dans d'autres apps. Cliquez pour corriger.",
     start_at_login: "Ouvrir à la connexion",
     accessibility: "Accessibilité",
     allowed: "Autorisé",

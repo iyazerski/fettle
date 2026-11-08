@@ -79,7 +79,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "Shortcut",
     open_fettle: "Open Fettle",
     underline: "Underline mistakes",
-    underline_hint: "Marks spelling and grammar mistakes as you type in other apps, using macOS's checker on this Mac. Click an underline to fix its paragraph.",
+    underline_hint: "Marks mistakes as you type in other apps. Click one to fix it.",
     start_at_login: "Start at login",
     accessibility: "Accessibility",
     allowed: "Allowed",
