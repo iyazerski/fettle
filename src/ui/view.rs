@@ -23,7 +23,8 @@ use crate::prompts::{Action, Style};
 
 /// The window's corner radius.
 pub const CORNER: f32 = 16.0;
-pub const WIDTH: f32 = 520.0;
+/// Wide enough for Fix, Translate to English and Rewrite on one line in every locale.
+pub const WIDTH: f32 = 560.0;
 /// The tallest the answer gets before it scrolls.
 const ANSWER_MAX: f32 = 320.0;
 /// The tallest the language list gets before it scrolls.
