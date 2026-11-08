@@ -32,8 +32,8 @@ const TOP_MARGIN: f32 = 120.0;
 /// How long the window waits, hidden, before pasting, so the app the text
 /// came from has its key window back.
 const PASTE_DELAY: Duration = Duration::from_millis(120);
-/// How long the window takes to grow for a dropdown.
-const MENU_DELAY: Duration = Duration::from_millis(200);
+/// How long a dropdown's list waits for the window to grow for it: a few frames.
+const MENU_DELAY: Duration = Duration::from_millis(50);
 
 pub struct State {
     pub app: AppHandle<State>,
@@ -53,9 +53,9 @@ pub struct State {
     system_locale: Locale,
     /// The dropdown that's open.
     pub menu: Option<Menu>,
-    /// Whether the open dropdown's list shows yet: it waits for the window to
-    /// grow, since a window that fits its content doesn't lay out again when
-    /// its height changes, and the list would be cut to the old height.
+    /// Whether the open dropdown's list shows yet: it waits a few frames for the
+    /// window to grow, since a window that fits its content doesn't lay out
+    /// again when its height changes, and the list would be cut to the old height.
     pub menu_shown: bool,
     /// Whether Fettle may copy and paste in other apps.
     pub trusted: bool,
@@ -350,8 +350,13 @@ impl State {
             self.menu = None;
             return;
         }
-        self.menu = Some(menu);
-        self.menu_shown = false;
+        // Grow at once rather than on a spring, so the list waits only for
+        // the frame that grows the window.
+        self.app.update(move |s, tx| {
+            tx.instant();
+            s.menu = Some(menu);
+            s.menu_shown = false;
+        });
         let app = self.app.clone();
         self.rt.spawn(async move {
             tokio::time::sleep(MENU_DELAY).await;

@@ -145,10 +145,9 @@ impl State {
 
     /// Open or close the model list, loading it first if needed.
     pub fn toggle_models(&mut self) {
+        let opening = self.menu != Some(Menu::Model);
         self.toggle_menu(Menu::Model);
-        if self.menu == Some(Menu::Model)
-            && !matches!(self.form.models, Models::Ready(_) | Models::Loading(_))
-        {
+        if opening && !matches!(self.form.models, Models::Ready(_) | Models::Loading(_)) {
             self.load_models();
         }
     }
