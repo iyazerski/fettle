@@ -581,11 +581,23 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
         }
         return true;
     }
+    if key.is_command(',') {
+        s.open_settings();
+    } else if key.is_command('w') {
+        s.hide();
+    } else if key.is_command('q') {
+        s.quit(tx);
+    } else {
+        return s.page == Page::Main && on_main_key(s, key);
+    }
+    true
+}
+
+/// Handle the shortcuts for the main page's actions and answer.
+fn on_main_key(s: &mut State, key: &KeyEvent) -> bool {
     if key.key == Key::Enter && key.mods.cmd {
         s.replace();
-        return true;
-    }
-    if key.is_command('1') {
+    } else if key.is_command('1') {
         s.start(Action::Fix);
     } else if key.is_command('2') {
         s.start(Action::Translate);
@@ -593,12 +605,6 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
         s.toggle_menu(Menu::Rewrite);
     } else if key.is_command('c') && key.mods.shift {
         s.copy();
-    } else if key.is_command(',') {
-        s.open_settings();
-    } else if key.is_command('w') {
-        s.hide();
-    } else if key.is_command('q') {
-        s.quit(tx);
     } else {
         return false;
     }

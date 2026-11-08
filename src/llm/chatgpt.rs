@@ -74,11 +74,14 @@ pub async fn login(http: &reqwest::Client, open: impl FnOnce(&str)) -> Result<Ch
     tokens.into_auth(None)
 }
 
-/// `auth` refreshed if it's about to expire, else `None`.
-pub async fn fresh(http: &reqwest::Client, auth: &ChatGptAuth) -> Result<Option<ChatGptAuth>> {
-    if auth.expires_at - now() > REFRESH_EARLY {
-        return Ok(None);
-    }
+/// Whether `auth`'s access token expires soon enough to refresh it first.
+pub fn expiring(auth: &ChatGptAuth) -> bool {
+    auth.expires_at - now() <= REFRESH_EARLY
+}
+
+/// Trade `auth`'s refresh token for new tokens. The old refresh token stops
+/// working, so refresh one sign-in only once.
+pub async fn refresh(http: &reqwest::Client, auth: &ChatGptAuth) -> Result<ChatGptAuth> {
     let tokens = token(
         http,
         &[
@@ -89,7 +92,7 @@ pub async fn fresh(http: &reqwest::Client, auth: &ChatGptAuth) -> Result<Option<
     )
     .await
     .context("the ChatGPT sign-in expired: sign in again in Settings")?;
-    tokens.into_auth(Some(auth)).map(Some)
+    tokens.into_auth(Some(auth))
 }
 
 pub async fn stream(

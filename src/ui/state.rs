@@ -3,10 +3,14 @@
 //! part is in [`settings_state`](super::settings_state).
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
+
+use anyhow::Context;
 
 use rune::{AppHandle, Phase, ShortcutId, TextEdit, Tx};
 use tokio::runtime::Handle;
+use tokio::sync::{Mutex, oneshot};
 use tokio::task::JoinHandle;
 
 use super::onboarding::Step;
@@ -35,6 +39,8 @@ pub struct State {
     pub app: AppHandle<State>,
     pub(super) rt: Handle,
     pub(super) http: reqwest::Client,
+    /// Held while the ChatGPT sign-in refreshes, so requests take turns.
+    pub(super) refreshing: Arc<Mutex<()>>,
     pub settings: Settings,
     pub(super) settings_path: PathBuf,
     /// The credentials as the keychain holds them, to write only changes.
@@ -143,6 +149,7 @@ impl State {
             app,
             rt,
             http,
+            refreshing: Arc::default(),
             settings,
             settings_path,
             saved_credentials,
@@ -352,12 +359,13 @@ impl State {
             model: self.settings.model().trim().to_owned(),
             effort: self.settings.effort(),
         };
-        let (app, http) = (self.app.clone(), self.http.clone());
+        let (app, http, refreshing) =
+            (self.app.clone(), self.http.clone(), self.refreshing.clone());
         let t = self.t();
         let job = self.rt.spawn(async move {
             let mut streamed = String::new();
             let result = async {
-                let backend = fresh_backend(&app, &http, backend).await?;
+                let backend = fresh_backend(&app, &http, &refreshing, backend).await?;
                 backend
                     .stream(&http, &ask, |delta| {
                         streamed.push_str(delta);
@@ -556,21 +564,40 @@ fn complete(action: Action, original: &str, text: &str, empty: &str) -> Status {
     }
 }
 
-/// `backend` with a fresh ChatGPT token, saving a refreshed one.
+/// Return `backend` with a fresh ChatGPT token, refreshing and saving it if it
+/// expires soon.
+///
+/// A refresh token works once, so refreshes take turns on `refreshing`, and
+/// each starts from the sign-in the settings hold by then.
 pub(super) async fn fresh_backend(
     app: &AppHandle<State>,
     http: &reqwest::Client,
+    refreshing: &Mutex<()>,
     backend: Backend,
 ) -> anyhow::Result<Backend> {
     let Backend::ChatGpt(auth) = &backend else {
         return Ok(backend);
     };
-    match chatgpt::fresh(http, auth).await? {
-        Some(auth) => {
-            let saved = auth.clone();
-            app.update(move |s, _| s.saved_auth(saved));
-            Ok(Backend::ChatGpt(auth))
-        }
-        None => Ok(backend),
+    if !chatgpt::expiring(auth) {
+        return Ok(backend);
     }
+    let _turn = refreshing.lock().await;
+    let (tx, rx) = oneshot::channel();
+    app.update(move |s, _| {
+        let _ = tx.send(s.settings.chatgpt.clone());
+    });
+    let auth = rx
+        .await
+        .ok()
+        .flatten()
+        .context("signed out of ChatGPT: sign in again in Settings")?;
+    // The request before this one may have refreshed it already.
+    if !chatgpt::expiring(&auth) {
+        return Ok(Backend::ChatGpt(auth));
+    }
+    let fresh = chatgpt::refresh(http, &auth).await?;
+    let saved = fresh.clone();
+    // Queued before the turn ends, so the next request reads the refreshed sign-in.
+    app.update(move |s, _| s.saved_auth(&auth.refresh, saved));
+    Ok(Backend::ChatGpt(fresh))
 }

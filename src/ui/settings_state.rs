@@ -177,10 +177,11 @@ impl State {
         let Ok(backend) = Backend::of(&self.settings) else {
             return;
         };
-        let (app, http) = (self.app.clone(), self.http.clone());
+        let (app, http, refreshing) =
+            (self.app.clone(), self.http.clone(), self.refreshing.clone());
         let job = self.rt.spawn(async move {
             let result = async {
-                let backend = fresh_backend(&app, &http, backend).await?;
+                let backend = fresh_backend(&app, &http, &refreshing, backend).await?;
                 backend.models(&http).await
             }
             .await;
@@ -253,7 +254,17 @@ impl State {
         self.save();
     }
 
-    pub(super) fn saved_auth(&mut self, auth: ChatGptAuth) {
+    /// Keep `auth`, refreshed from the sign-in with refresh token `old_refresh`,
+    /// unless that sign-in has since been signed out or replaced.
+    pub(super) fn saved_auth(&mut self, old_refresh: &str, auth: ChatGptAuth) {
+        if self
+            .settings
+            .chatgpt
+            .as_ref()
+            .is_none_or(|current| current.refresh != old_refresh)
+        {
+            return;
+        }
         self.settings.chatgpt = Some(auth);
         self.save();
     }
