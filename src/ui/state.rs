@@ -13,6 +13,7 @@ use rune::{AppHandle, Phase, ShortcutId, Tx};
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex, oneshot};
 
+use super::checker::{Checker, Target};
 use super::draft::{Draft, Status, complete};
 use super::onboarding::Step;
 use super::saver::Saver;
@@ -24,6 +25,7 @@ use crate::llm::{Ask, Backend, chatgpt};
 use crate::mac;
 use crate::prompts::{self, Action};
 use crate::settings::{Credentials, Settings};
+use crate::spelling::Mistake;
 
 /// How far below the top of the screen the window opens.
 const TOP_MARGIN: f32 = 120.0;
@@ -66,6 +68,10 @@ pub struct State {
     /// over the first one's borrowed pasteboard.
     capturing: bool,
     placement: Placement,
+    checker: Checker,
+    /// Where the text came from when a click on an underline brought it, to
+    /// paste the answer back over.
+    target: Option<Target>,
 }
 
 /// Where the window is, and the drag moving it.
@@ -174,6 +180,8 @@ impl State {
             shortcut: None,
             capturing: false,
             placement: Placement::default(),
+            checker: Checker::default(),
+            target: None,
         }
     }
 
@@ -182,6 +190,7 @@ impl State {
     pub fn started(&mut self, start: Start) {
         self.apply_appearance();
         self.register_saved_shortcut();
+        self.apply_underlines();
         // Rewrite the file without the credentials versions before 0.3 kept in it.
         self.save();
         eprintln!(
@@ -229,8 +238,45 @@ impl State {
         });
     }
 
+    /// Underline mistakes in other apps if the settings say so, else stop.
+    pub(super) fn apply_underlines(&mut self) {
+        if self.settings.underline_mistakes {
+            self.checker.start(&self.app, &self.rt);
+        } else {
+            self.checker.stop();
+        }
+    }
+
+    /// Underline the mistakes in the focused field, unless the window shows.
+    pub fn check_field(&mut self) {
+        if self.app.is_visible() || self.capturing {
+            self.checker.pause();
+        } else {
+            self.checker.refresh();
+        }
+    }
+
+    /// The answer to the field check `id`.
+    pub fn field_checked(&mut self, id: u64, found: Vec<Mistake>) {
+        self.checker.finished(id, found);
+    }
+
+    /// A click at `point` in another app: on an underline, open its paragraph and fix it.
+    pub fn underline_clicked(&mut self, point: (f64, f64)) {
+        if self.app.is_visible() || self.capturing {
+            return;
+        }
+        let Some(target) = self.checker.clicked(point) else {
+            return;
+        };
+        self.show_text(Some(target.text.clone()));
+        self.target = Some(target);
+        self.start(Action::Fix);
+    }
+
     fn show_text(&mut self, text: Option<String>) {
         self.capturing = false;
+        self.target = None;
         self.stop();
         self.page = Page::Main;
         self.menu = None;
@@ -383,6 +429,12 @@ impl State {
         let Some(text) = self.draft.result().map(str::to_owned) else {
             return;
         };
+        if let Some(target) = &self.target
+            && !target.select()
+        {
+            self.draft.notice = Some(self.t().text_moved.into());
+            return;
+        }
         self.hide();
         self.rt.spawn_blocking(move || {
             std::thread::sleep(PASTE_DELAY);

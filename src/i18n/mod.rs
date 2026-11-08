@@ -156,6 +156,8 @@ pub struct Strings {
     pub replace_help: &'static str,
     pub no_selection: &'static str,
     pub no_text: &'static str,
+    /// Replace found the clicked text gone from where it was.
+    pub text_moved: &'static str,
     pub stopped: &'static str,
     pub empty_answer: &'static str,
     /// `{}`: the error.
@@ -209,6 +211,9 @@ pub struct Strings {
     pub system_language: &'static str,
     pub shortcut: &'static str,
     pub open_fettle: &'static str,
+    pub underline: &'static str,
+    /// What underlining does, under its switch.
+    pub underline_hint: &'static str,
     pub start_at_login: &'static str,
     pub accessibility: &'static str,
     pub allowed: &'static str,

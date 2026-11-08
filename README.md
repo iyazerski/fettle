@@ -39,7 +39,8 @@ A free, open-source AI writing assistant for macOS that can run entirely on your
 - **Translate into 40 languages.** Fettle keeps the tone, formatting, names, links and code. Star the languages you use most to keep them at the top.
 - **Paste it back in one keystroke.** <kbd>⌘</kbd><kbd>↩</kbd> replaces your selection with the result. Your clipboard stays as it was.
 - **Or use a bigger model.** Sign in with ChatGPT, or point Fettle at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
-- **Native and tiny.** Written in Rust, a 10 MB download, about 12 MB of memory when idle, and no CPU use until you call it.
+- **Underline mistakes as you type.** Turn it on in Settings, and macOS's own spell and grammar checker marks mistakes in other apps, on your Mac. Click an underline to fix its paragraph with the model.
+- **Native and tiny.** Written in Rust, a 10 MB download, about 12 MB of memory when idle, and no CPU use until you call it, unless you turn on underlines.
 - **Private by design.** No account, no telemetry, no servers of ours. Your text stays on your Mac, or goes only to the model you pick.
 - **Free and open source** under the MIT license.
 
@@ -69,7 +70,7 @@ To fettle is an old English word for to tidy up or put right, and "in fine fettl
 <details>
 <summary><b>Is Fettle a Grammarly alternative?</b></summary>
 
-Yes, for the core job: fixing grammar, spelling and phrasing in any app, with a clear view of what changed. It doesn't underline mistakes as you type. You select the text and press the shortcut when you want a check.
+Yes, for the core job: fixing grammar, spelling and phrasing in any app, with a clear view of what changed. Select the text and press the shortcut when you want a check. Or turn on **Underline mistakes** in Settings: macOS's checker marks mistakes as you type, on your Mac, and a click on an underline sends just that paragraph to the model. Underlines show in apps that tell macOS where their text is on screen, which most native Mac apps do.
 
 </details>
 <details>

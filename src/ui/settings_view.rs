@@ -110,6 +110,16 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
                 .on_toggle(|s: &mut State| s.toggle_at_login())
                 .build(k),
         ),
+        compact(
+            k,
+            t.underline,
+            Some(t.underline_hint),
+            Switch::new(s.settings.underline_mistakes)
+                .hide_label()
+                .label(t.underline)
+                .on_toggle(|s: &mut State| s.toggle_underlines())
+                .build(k),
+        ),
         compact(k, t.accessibility, None, accessibility(s, k)),
     ];
 

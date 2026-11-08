@@ -271,6 +271,12 @@ impl State {
         self.save();
     }
 
+    pub fn toggle_underlines(&mut self) {
+        self.settings.underline_mistakes = !self.settings.underline_mistakes;
+        self.apply_underlines();
+        self.save();
+    }
+
     pub fn toggle_at_login(&mut self) {
         let result = if self.form.at_login {
             login_item::disable()

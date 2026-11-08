@@ -87,6 +87,8 @@ pub struct Settings {
     /// The global shortcut, like `ctrl+alt+e`.
     pub shortcut: String,
     pub appearance: Appearance,
+    /// Whether mistakes in other apps' text fields get underlined as the user types.
+    pub underline_mistakes: bool,
     /// The language the window speaks; `None` follows macOS.
     pub app_language: Option<Locale>,
     /// Whether the welcome steps are done.
@@ -106,6 +108,7 @@ impl Default for Settings {
             favourite_languages: Vec::new(),
             shortcut: DEFAULT_SHORTCUT.to_owned(),
             appearance: Appearance::System,
+            underline_mistakes: false,
             app_language: None,
             onboarded: false,
         }

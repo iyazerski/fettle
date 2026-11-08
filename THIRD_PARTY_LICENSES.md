@@ -4563,6 +4563,7 @@ Used by:
 - naga-types 30.0.1
 - naga 30.0.1
 - objc2-app-kit 0.3.2
+- objc2-application-services 0.3.2
 - objc2-av-foundation 0.3.2
 - objc2-core-foundation 0.3.2
 - objc2-core-graphics 0.3.2

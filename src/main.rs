@@ -5,7 +5,9 @@
 //! asks the configured model ([`llm`]) with the [`prompts`], and shows the
 //! answer, with a word diff ([`diff`]) for fixes.
 
+mod ax;
 mod diff;
+mod document;
 mod i18n;
 mod json_file;
 mod keychain;
@@ -14,7 +16,9 @@ mod login_item;
 mod mac;
 mod prompts;
 mod settings;
+mod spelling;
 mod ui;
+mod underlines;
 mod update;
 
 use anyhow::Result;
