@@ -88,6 +88,10 @@ impl State {
         self.set_trusted(mac::accessibility_trusted());
         self.recheck_on_device();
         self.form.at_login = login_item::enabled();
+        // A release may have come out since the last check, so offer to check again.
+        if matches!(self.update, Update::Latest) {
+            self.update = Update::Idle;
+        }
         self.menu = None;
         self.page = Page::Settings;
         if matches!(self.form.models, Models::Idle) && Backend::of(&self.settings).is_ok() {
