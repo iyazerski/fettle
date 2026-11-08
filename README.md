@@ -4,9 +4,9 @@
 
 # Fettle
 
-**Fix grammar and translate text in any Mac app with one shortcut.**
+**Fix grammar, rewrite and translate text in any Mac app with one shortcut.**
 
-Select text, press <kbd>⌃</kbd><kbd>⌥</kbd><kbd>E</kbd>, and click **Fix** or **Translate**.<br>
+Select text, press <kbd>⌃</kbd><kbd>⌥</kbd><kbd>E</kbd>, and click **Fix**, **Translate** or **Rewrite**.<br>
 A free, open-source AI writing assistant for macOS, and a lightweight alternative to Grammarly.
 
 [![Download Fettle.dmg](https://img.shields.io/github/v/release/iyazerski/fettle?label=download&color=3b6cf6)](https://github.com/iyazerski/fettle/releases/latest/download/Fettle.dmg)
@@ -16,10 +16,16 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
 [![Buy me a coffee](https://img.shields.io/badge/buy%20me%20a%20coffee-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/iyazerski)
 
 **Fix**<br>
-<img src="docs/demo/fix.gif" width="600" alt="Selecting a Gmail draft, pressing the shortcut, and clicking Fix: Fettle shows each change, with removed words struck through in red and new words in green, then Replace puts the fixed text back into Gmail">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/fix-dark.png">
+  <img src="docs/screenshots/fix-light.png" width="540" alt="Fettle fixing the grammar of an email, with removed words struck through in red and new words in green">
+</picture>
 
 **Translate**<br>
-<img src="docs/demo/translate.gif" width="600" alt="Selecting a Gmail draft, pressing the shortcut, and picking Spanish next to Translate: Fettle translates the English reply, then Replace puts it back into Gmail">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/translate-dark.png">
+  <img src="docs/screenshots/translate-light.png" width="540" alt="Fettle translating a short English message into Spanish">
+</picture>
 
 </div>
 
@@ -27,6 +33,8 @@ A free, open-source AI writing assistant for macOS, and a lightweight alternativ
 
 - **Works in every app.** Mail, Slack, Notes, your browser, your code editor. If you can select the text, Fettle can fix it.
 - **See every change.** Fixes show up word by word, like track changes.
+- **Any language.** Fix and Rewrite work in any language the model knows, and keep your text in the language you wrote it in.
+- **Rewrite in one click.** Make text more formal, friendlier, shorter or clearer.
 - **Translate into 40 languages.** Fettle keeps the tone, formatting, names, links and code. Star the languages you use most to keep them at the top.
 - **Paste it back in one keystroke.** <kbd>⌘</kbd><kbd>↩</kbd> replaces your selection with the result. Your clipboard stays as it was.
 - **Use your ChatGPT plan or your own API.** Sign in with ChatGPT, or point Fettle at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
@@ -67,6 +75,12 @@ Yes, for the core job: fixing grammar, spelling and phrasing in any app, with a 
 <summary><b>Which apps does it work in?</b></summary>
 
 Any app where you can select text and copy it with <kbd>⌘</kbd><kbd>C</kbd>. **Replace** needs a text field you can type into.
+
+</details>
+<details>
+<summary><b>Which languages does it support?</b></summary>
+
+Fix and Rewrite work in any language the model knows, whatever language the app is in. Your text stays in the language you wrote it in. Translate goes into 40 languages. The app itself is in English, Spanish, French, German, Portuguese, Polish, Russian, Chinese, Japanese, Korean, Hindi and Arabic, and follows your Mac's language unless you pick one in Settings.
 
 </details>
 <details>
