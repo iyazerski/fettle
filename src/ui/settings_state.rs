@@ -283,12 +283,19 @@ impl State {
         }
     }
 
+    /// Ask macOS for Accessibility: its own prompt the first time, which lists
+    /// Fettle in System Settings, then System Settings itself, since macOS
+    /// prompts only once per launch.
     pub fn ask_accessibility(&mut self) {
-        let trusted = mac::request_accessibility();
-        self.set_trusted(trusted);
-        if !trusted {
-            mac::open_accessibility_settings();
+        if self.asked_accessibility {
+            self.recheck_accessibility();
+            if !self.trusted {
+                mac::open_accessibility_settings();
+            }
+            return;
         }
+        self.asked_accessibility = true;
+        self.set_trusted(mac::request_accessibility());
     }
 
     pub fn recheck_accessibility(&mut self) {

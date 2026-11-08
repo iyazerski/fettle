@@ -57,6 +57,8 @@ pub struct State {
     pub menu_shown: bool,
     /// Whether Fettle may copy and paste in other apps.
     pub trusted: bool,
+    /// Whether macOS's Accessibility prompt was asked for since launch.
+    pub(super) asked_accessibility: bool,
     pub form: Form,
     pub update: Update,
     pub(super) shortcut: Option<ShortcutId>,
@@ -166,6 +168,7 @@ impl State {
             menu: None,
             menu_shown: false,
             trusted: mac::accessibility_trusted(),
+            asked_accessibility: false,
             form,
             update: Update::Idle,
             shortcut: None,
@@ -253,9 +256,11 @@ impl State {
         self.app.hide();
     }
 
-    /// The window lost focus: hide it, unless it's pinned.
+    /// The window lost focus: hide it, unless it's pinned or shows the
+    /// welcome steps, which a new user can't open again without the shortcut.
     pub fn blurred(&mut self) {
-        if !self.pinned && !self.form.shortcut.is_recording() {
+        let onboarding = matches!(self.page, Page::Onboarding(_));
+        if !self.pinned && !onboarding && !self.form.shortcut.is_recording() {
             self.hide();
         }
     }
