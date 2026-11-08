@@ -3,6 +3,7 @@
 //! selection and opens it; model calls run on a small tokio runtime beside it.
 
 mod buttons;
+mod draft;
 mod icons;
 mod onboarding;
 mod saver;

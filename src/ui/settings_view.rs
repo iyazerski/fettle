@@ -165,7 +165,7 @@ fn app_language(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .placement(Placement::BottomStart)
         .open(s.menu_open(Menu::AppLanguage))
         .on_toggle(|s: &mut State| s.toggle_menu(Menu::AppLanguage))
-        .on_close(|s: &mut State| s.menu = None)
+        .on_close(|s: &mut State| s.close_menu())
         .on_choose(|s: &mut State, name, _| s.pick_app_language(name))
         .build(k, layer)
 }
@@ -445,7 +445,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
         .placement(Placement::BottomStart)
         .open(s.menu_open(Menu::Model) && !models.is_empty())
         .on_toggle(|s: &mut State| s.toggle_models())
-        .on_close(|s: &mut State| s.menu = None)
+        .on_close(|s: &mut State| s.close_menu())
         .on_choose(|s: &mut State, model, _| s.pick_model(model))
         .build(k, layer);
     let Models::Failed(e) = &s.form.models else {

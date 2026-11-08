@@ -1,6 +1,7 @@
 //! The window's state and what changes it on the main page: showing the
-//! selection, running an action, and moving the window. The settings page's
-//! part is in [`settings_state`](super::settings_state).
+//! selection, running an action, and moving the window. The text and answer
+//! are in [`draft`](super::draft), the settings page's part in
+//! [`settings_state`](super::settings_state).
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -8,16 +9,15 @@ use std::time::Duration;
 
 use anyhow::Context;
 
-use rune::{AppHandle, Phase, ShortcutId, TextEdit, Tx};
+use rune::{AppHandle, Phase, ShortcutId, Tx};
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex, oneshot};
-use tokio::task::JoinHandle;
 
+use super::draft::{Draft, Status, complete};
 use super::onboarding::Step;
 use super::saver::Saver;
 use super::settings_state::{Form, FormError, Update};
 use super::view::WIDTH;
-use crate::diff::{self, Piece};
 use crate::i18n::{Locale, Strings, fill};
 use crate::llm::on_device::{self, Availability, Refusal};
 use crate::llm::{Ask, Backend, chatgpt};
@@ -44,11 +44,7 @@ pub struct State {
     /// Whether Apple's on-device model can run, as last checked.
     pub on_device: Availability,
     pub page: Page,
-    /// The text to work on: the selection, editable.
-    pub source: TextEdit,
-    pub answer: Option<Answer>,
-    /// Show the fixed text as a word diff rather than plain text.
-    pub show_changes: bool,
+    pub draft: Draft,
     /// Keep the window open when another app takes focus.
     pub pinned: bool,
     /// The language macOS prefers, of those the window speaks.
@@ -59,8 +55,6 @@ pub struct State {
     /// grow, since a window that fits its content doesn't lay out again when
     /// its height changes, and the list would be cut to the old height.
     pub menu_shown: bool,
-    /// A one-line note under the text: nothing selected, copied, a save error.
-    pub notice: Option<String>,
     /// Whether Fettle may copy and paste in other apps.
     pub trusted: bool,
     pub form: Form,
@@ -69,8 +63,12 @@ pub struct State {
     /// Whether the selection is being copied, so a second press can't copy
     /// over the first one's borrowed pasteboard.
     capturing: bool,
-    /// Counts runs, so a late piece of an old answer is dropped.
-    run: u64,
+    placement: Placement,
+}
+
+/// Where the window is, and the drag moving it.
+#[derive(Default)]
+struct Placement {
     /// The window's top-left in physical pixels, once Fettle has placed it.
     position: Option<(i32, i32)>,
     /// Where a drag of the window began.
@@ -82,6 +80,34 @@ pub struct State {
 struct Drag {
     pointer: (f64, f64),
     origin: (i32, i32),
+}
+
+impl Placement {
+    /// Follow a drag's `phase` with the pointer at `pointer`, and return
+    /// where the window moves to, if it moves.
+    fn drag(&mut self, phase: Phase, pointer: Option<(f64, f64)>) -> Option<(i32, i32)> {
+        match phase {
+            Phase::Down => {
+                self.drag = pointer
+                    .zip(self.position)
+                    .map(|(pointer, origin)| Drag { pointer, origin });
+                None
+            }
+            Phase::Move => {
+                let (Drag { pointer, origin }, now) = self.drag.zip(pointer)?;
+                let at = (
+                    origin.0 + (now.0 - pointer.0).round() as i32,
+                    origin.1 + (now.1 - pointer.1).round() as i32,
+                );
+                self.position = Some(at);
+                Some(at)
+            }
+            Phase::Up => {
+                self.drag = None;
+                None
+            }
+        }
+    }
 }
 
 /// How Fettle starts.
@@ -106,27 +132,6 @@ pub enum Menu {
     Model,
     AppLanguage,
     Rewrite,
-}
-
-pub struct Answer {
-    pub action: Action,
-    pub status: Status,
-}
-
-pub enum Status {
-    /// Streaming run `run`'s answer into `text`.
-    Running {
-        run: u64,
-        job: JoinHandle<()>,
-        text: String,
-    },
-    Done {
-        text: String,
-        /// For Fix: the word diff from the original to `text`.
-        changes: Vec<Piece>,
-        copied: bool,
-    },
-    Failed(String),
 }
 
 impl State {
@@ -155,22 +160,17 @@ impl State {
             saver,
             on_device: on_device::availability(),
             page: Page::Main,
-            source: TextEdit::new(""),
-            answer: None,
-            show_changes: true,
+            draft: Draft::new(),
             pinned: false,
             system_locale: Locale::from_preferred(&mac::preferred_languages()),
             menu: None,
             menu_shown: false,
-            notice: None,
             trusted: mac::accessibility_trusted(),
             form,
             update: Update::Idle,
             shortcut: None,
             capturing: false,
-            run: 0,
-            position: None,
-            drag: None,
+            placement: Placement::default(),
         }
     }
 
@@ -228,15 +228,11 @@ impl State {
 
     fn show_text(&mut self, text: Option<String>) {
         self.capturing = false;
-        self.cancel();
+        self.stop();
         self.page = Page::Main;
-        self.answer = None;
         self.menu = None;
-        self.notice = match &text {
-            Some(_) => None,
-            None => Some(self.t().no_selection.into()),
-        };
-        self.source.replace_text(text.unwrap_or_default());
+        let notice = text.is_none().then(|| self.t().no_selection.into());
+        self.draft.reset(text.unwrap_or_default(), notice);
         self.show();
     }
 
@@ -245,14 +241,14 @@ impl State {
         if !self.app.is_visible()
             && let Some(position) = mac::top_center_under_pointer(WIDTH, TOP_MARGIN)
         {
-            self.position = Some(position);
+            self.placement.position = Some(position);
             self.app.set_position(position);
         }
         self.app.open();
     }
 
     pub fn hide(&mut self) {
-        self.cancel();
+        self.stop();
         self.menu = None;
         self.app.hide();
     }
@@ -278,33 +274,24 @@ impl State {
         self.pinned = !self.pinned;
     }
 
+    pub fn toggle_changes(&mut self) {
+        self.draft.show_changes = !self.draft.show_changes;
+    }
+
     pub fn clear_source(&mut self) {
-        self.source.replace_text(String::new());
+        self.draft.source.replace_text(String::new());
     }
 
     /// Move the window with the pointer. The panel is outside winit's reach, so
     /// `.window_drag()` can't move it.
     pub fn drag(&mut self, phase: Phase) {
-        match phase {
-            Phase::Down => {
-                self.drag = mac::pointer()
-                    .zip(self.position)
-                    .map(|(pointer, origin)| Drag { pointer, origin });
-            }
-            Phase::Move => {
-                let (Some(Drag { pointer, origin }), Some(now)) = (self.drag, mac::pointer())
-                else {
-                    return;
-                };
-                let at = (
-                    origin.0 + (now.0 - pointer.0).round() as i32,
-                    origin.1 + (now.1 - pointer.1).round() as i32,
-                );
-                self.position = Some(at);
-                self.app.set_position(at);
-            }
-            Phase::Up => self.drag = None,
+        if let Some(at) = self.placement.drag(phase, mac::pointer()) {
+            self.app.set_position(at);
         }
+    }
+
+    pub fn close_menu(&mut self) {
+        self.menu = None;
     }
 
     pub fn toggle_menu(&mut self, menu: Menu) {
@@ -329,32 +316,28 @@ impl State {
     /// Run `action` on the text in the window.
     pub fn start(&mut self, action: Action) {
         self.menu = None;
-        if self.source.text.trim().is_empty() {
-            self.notice = Some(self.t().no_text.into());
+        let t = self.t();
+        if self.draft.source.text.trim().is_empty() {
+            self.draft.notice = Some(t.no_text.into());
             return;
         }
-        self.notice = None;
-        self.cancel();
+        self.draft.notice = None;
+        let run = self.draft.cancel(t.stopped);
         let (backend, model) = match Backend::with_model(&self.settings) {
             Ok(chosen) => chosen,
             Err(missing) => {
-                self.answer = Some(Answer {
-                    action,
-                    status: Status::Failed(self.t().missing(missing).into()),
-                });
+                self.draft.fail(action, t.missing(missing).into());
                 return;
             }
         };
-        let run = self.run;
         let ask = Ask {
             system: prompts::system(action, &self.settings.language),
-            text: self.source.text.clone(),
+            text: self.draft.source.text.clone(),
             model,
             effort: self.settings.effort(),
         };
         let (app, http, refreshing) =
             (self.app.clone(), self.http.clone(), self.refreshing.clone());
-        let t = self.t();
         let job = self.rt.spawn(async move {
             let mut streamed = String::new();
             let result = async {
@@ -363,7 +346,7 @@ impl State {
                     .stream(&http, &ask, |delta| {
                         streamed.push_str(delta);
                         let delta = delta.to_owned();
-                        app.update(move |s, _| s.delta(run, &delta));
+                        app.update(move |s, _| s.draft.delta(run, &delta));
                     })
                     .await
             }
@@ -380,69 +363,19 @@ impl State {
                     None => format!("{e:#}"),
                 }),
             };
-            app.update(move |s, _| s.finished(run, status));
+            app.update(move |s, _| s.draft.finished(run, status));
         });
-        self.answer = Some(Answer {
-            action,
-            status: Status::Running {
-                run,
-                job,
-                text: String::new(),
-            },
-        });
+        self.draft.running(action, run, job);
     }
 
-    /// The text run `run` is streaming into, if it's still the one running.
-    fn running_text(&mut self, run: u64) -> Option<&mut String> {
-        match &mut self.answer.as_mut()?.status {
-            Status::Running {
-                run: current, text, ..
-            } if *current == run => Some(text),
-            _ => None,
-        }
-    }
-
-    fn delta(&mut self, run: u64, delta: &str) {
-        if let Some(text) = self.running_text(run) {
-            text.push_str(delta);
-        }
-    }
-
-    fn finished(&mut self, run: u64, status: Status) {
-        if self.running_text(run).is_none() {
-            return;
-        }
-        if let Some(answer) = self.answer.as_mut() {
-            answer.status = status;
-        }
-    }
-
-    fn cancel(&mut self) {
-        self.run += 1;
-        let stopped = self.t().stopped;
-        if let Some(answer) = self.answer.as_mut()
-            && let Status::Running { job, .. } = &answer.status
-        {
-            job.abort();
-            answer.status = Status::Failed(stopped.into());
-        }
-    }
-
+    /// Stop the running answer, if any.
     pub fn stop(&mut self) {
-        self.cancel();
-    }
-
-    /// The finished answer's text.
-    pub fn result(&self) -> Option<&str> {
-        match &self.answer.as_ref()?.status {
-            Status::Done { text, .. } => Some(text),
-            _ => None,
-        }
+        self.draft.cancel(self.t().stopped);
     }
 
     /// Hide the window and paste the answer over the selection.
     pub fn replace(&mut self) {
-        let Some(text) = self.result().map(str::to_owned) else {
+        let Some(text) = self.draft.result().map(str::to_owned) else {
             return;
         };
         self.hide();
@@ -453,28 +386,18 @@ impl State {
     }
 
     pub fn copy(&mut self) {
-        let Some(text) = self.result().map(str::to_owned) else {
+        let Some(text) = self.draft.result() else {
             return;
         };
-        mac::copy(&text);
-        if let Some(Answer {
-            status: Status::Done { copied, .. },
-            ..
-        }) = self.answer.as_mut()
-        {
-            *copied = true;
-        }
+        mac::copy(text);
+        self.draft.copied();
     }
 
     pub fn set_language(&mut self, language: &str) {
         self.menu = None;
         self.settings.language = language.to_owned();
         self.save();
-        if self
-            .answer
-            .as_ref()
-            .is_some_and(|a| a.action == Action::Translate)
-        {
+        if self.draft.translated() {
             self.start(Action::Translate);
         }
     }
@@ -503,30 +426,9 @@ impl State {
     /// Show `message` on the page that's open.
     pub(super) fn report(&mut self, message: String) {
         match self.page {
-            Page::Main | Page::Onboarding(_) => self.notice = Some(message),
+            Page::Main | Page::Onboarding(_) => self.draft.notice = Some(message),
             Page::Settings => self.form.error = Some(FormError::Other(message)),
         }
-    }
-}
-
-/// The status of an `action` on `original` whose answer streamed in full as
-/// `text`: done, with Fix's word diff, unless the model returned nothing, which
-/// fails with `empty`.
-fn complete(action: Action, original: &str, text: &str, empty: &str) -> Status {
-    if text.trim().is_empty() {
-        return Status::Failed(empty.into());
-    }
-    // Models often add or drop a final newline; keep the selection's.
-    let end = &original[original.trim_end().len()..];
-    let text = format!("{}{end}", text.trim_end());
-    let changes = match action {
-        Action::Fix => diff::words(original, &text),
-        Action::Translate | Action::Rewrite(_) => Vec::new(),
-    };
-    Status::Done {
-        text,
-        changes,
-        copied: false,
     }
 }
 

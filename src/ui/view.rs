@@ -13,8 +13,9 @@ use rune_kit::{
 };
 
 use super::buttons::{self, Tone};
+use super::draft::{Answer, Status};
 use super::icons;
-use super::state::{Answer, Menu, Page, State, Status};
+use super::state::{Menu, Page, State};
 use super::{onboarding, settings_view};
 use crate::diff::{self, Kind, Piece};
 use crate::i18n::fill;
@@ -105,11 +106,11 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .gap(12.0)
         .child(header(s, k, Lead::Mark, "Fettle", main_tools(s, k)))
         .child(source(s, k));
-    if let Some(notice) = &s.notice {
+    if let Some(notice) = &s.draft.notice {
         page = page.child(note(k, notice, NoteKind::Info));
     }
     page = page.child(actions(s, k, layer));
-    if let Some(answer) = &s.answer {
+    if let Some(answer) = &s.draft.answer {
         page = page.child(answer_view(s, answer, k));
     }
     page
@@ -118,16 +119,16 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
 /// The editable text, with a button in its corner that clears it.
 fn source(s: &State, k: &Kit) -> El {
     let t = s.t();
-    let field = TextArea::new(&s.source)
+    let field = TextArea::new(&s.draft.source)
         .label(t.text)
         .placeholder(t.placeholder)
         .width(None)
         .auto_grow(2, 8)
-        .on_edit(|s: &mut State| &mut s.source)
+        .on_edit(|s: &mut State| &mut s.draft.source)
         .build(k)
         // Kit tints fields under the pointer like buttons; a text box shouldn't.
         .hover(Color::TRANSPARENT);
-    if s.source.text.is_empty() {
+    if s.draft.source.text.is_empty() {
         return field;
     }
     let clear = IconButton::new(&icons::CLOSE)
@@ -239,7 +240,7 @@ fn rewrite(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .placement(Placement::BottomStart)
         .label(t.rewrite)
         .padding(4.0)
-        .on_close(|s: &mut State| s.menu = None);
+        .on_close(|s: &mut State| s.close_menu());
     // A closed popover drops its content, so skip building the list.
     if open {
         menu = menu.child(col().w(200.0).gap(2.0).children(Style::ALL.map(|style| {
@@ -279,7 +280,7 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .placement(Placement::BottomStart)
         .label(t.translation_language)
         .padding(4.0)
-        .on_close(|s: &mut State| s.menu = None);
+        .on_close(|s: &mut State| s.close_menu());
     // A closed popover drops its content, so skip building the list.
     if open {
         picker = picker.child(languages(s, k));
@@ -427,9 +428,9 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     }
     if changed {
         top = top.child(
-            Switch::new(s.show_changes)
+            Switch::new(s.draft.show_changes)
                 .label(t.show_changes)
-                .on_toggle(|s: &mut State| s.show_changes = !s.show_changes)
+                .on_toggle(|s: &mut State| s.toggle_changes())
                 .build(k),
         );
     }
@@ -451,7 +452,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         Status::Done { .. } if answer.action == Action::Fix && !changed => {
             note(k, t.nothing_to_fix, NoteKind::Info)
         }
-        Status::Done { changes, .. } if changed && s.show_changes => {
+        Status::Done { changes, .. } if changed && s.draft.show_changes => {
             scroll_box(diff_text(changes, k))
         }
         Status::Done { text: done, .. } => plain(done),
@@ -581,7 +582,7 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     if key.key == Key::Escape {
         match s.page {
             _ if s.form.shortcut.is_recording() => return false,
-            _ if s.menu.is_some() => s.menu = None,
+            _ if s.menu.is_some() => s.close_menu(),
             Page::Settings => s.back(),
             Page::Main | Page::Onboarding(_) => s.hide(),
         }
