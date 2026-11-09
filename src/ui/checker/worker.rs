@@ -272,7 +272,7 @@ impl Worker {
             self.watch = Watch::new(pid, move || changed.set(true)).map(|w| (pid, w));
         }
         let same = self.session.as_ref().is_some_and(|s| s.field == field);
-        if (!same && field.is_secure()) || !field.read(MAX_TEXT, &mut self.buffer) {
+        if (!same && !field.is_text_area()) || !field.read(MAX_TEXT, &mut self.buffer) {
             self.pause();
             return;
         }

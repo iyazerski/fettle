@@ -183,11 +183,13 @@ pub struct Field {
 }
 
 impl Field {
-    /// Whether this is a password field.
-    pub fn is_secure(&self) -> bool {
-        attribute(&self.element, "AXSubrole")
+    /// Whether this is a text area, where people write prose: message
+    /// composers, notes and editable web content are, while single-line
+    /// fields such as address bars, search boxes and passwords aren't.
+    pub fn is_text_area(&self) -> bool {
+        attribute(&self.element, "AXRole")
             .and_then(|v| v.downcast::<CFString>().ok())
-            .is_some_and(|role| *role == *CFString::from_static_str("AXSecureTextField"))
+            .is_some_and(|role| *role == *CFString::from_static_str("AXTextArea"))
     }
 
     /// Read the field's text into `buffer`. Returns false, leaving `buffer`
