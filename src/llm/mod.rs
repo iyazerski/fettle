@@ -9,11 +9,16 @@ mod sse;
 
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
 use serde_json::Value;
 
 use crate::settings::{ChatGptAuth, Missing, Provider, Settings};
+
+/// The longest an answer may take in all: the HTTP client only limits each
+/// read, so a server that keeps the stream open without finishing it could
+/// hold a request, and the check or dictation waiting on it, forever.
+const MAX_ANSWER: Duration = Duration::from_secs(300);
 
 /// One request: the system prompt and the text it applies to.
 pub struct Ask {
@@ -85,17 +90,26 @@ impl Backend {
     }
 
     /// Stream the answer to `ask`, calling `on_delta` with each piece.
+    ///
+    /// # Errors
+    ///
+    /// Fails if the backend does, or if the answer takes longer than [`MAX_ANSWER`].
     pub async fn stream(
         &self,
         http: &reqwest::Client,
         ask: &Ask,
         on_delta: impl FnMut(&str),
     ) -> Result<()> {
-        match self {
-            Backend::OnDevice => on_device::stream(ask, on_delta).await,
-            Backend::ChatGpt(auth) => chatgpt::stream(http, auth, ask, on_delta).await,
-            Backend::Api { base, key } => compat::stream(http, base, key, ask, on_delta).await,
-        }
+        let answer = async {
+            match self {
+                Backend::OnDevice => on_device::stream(ask, on_delta).await,
+                Backend::ChatGpt(auth) => chatgpt::stream(http, auth, ask, on_delta).await,
+                Backend::Api { base, key } => compat::stream(http, base, key, ask, on_delta).await,
+            }
+        };
+        tokio::time::timeout(MAX_ANSWER, answer)
+            .await
+            .map_err(|_| anyhow!("the model took too long to answer"))?
     }
 
     /// The models this backend offers, sorted; none to pick from on device.
