@@ -38,27 +38,27 @@ const MENU_DELAY: Duration = Duration::from_millis(50);
 const WORD_GAP: f64 = 6.0;
 
 pub struct State {
-    pub app: AppHandle<State>,
+    pub(super) app: AppHandle<State>,
     pub(super) client: Client,
-    pub settings: Settings,
+    pub(super) settings: Settings,
     saver: Saver,
     /// Whether Apple's on-device model can run, as last checked.
-    pub on_device: Availability,
-    pub page: Page,
-    pub draft: Draft,
-    pub dictation: Option<Dictation>,
+    pub(super) on_device: Availability,
+    pub(super) page: Page,
+    pub(super) draft: Draft,
+    pub(super) dictation: Option<Dictation>,
     /// Keep the window open when another app takes focus.
-    pub pinned: bool,
+    pub(super) pinned: bool,
     /// The language macOS prefers, of those the window speaks.
     system_locale: Locale,
     /// The dropdown that's open.
-    pub menu: Option<Dropdown>,
+    pub(super) menu: Option<Dropdown>,
     /// Whether Fettle may copy and paste in other apps.
-    pub trusted: bool,
+    pub(super) trusted: bool,
     /// Whether macOS's Accessibility prompt was asked for since launch.
     pub(super) asked_accessibility: bool,
-    pub form: Form,
-    pub update: Update,
+    pub(super) form: Form,
+    pub(super) update: Update,
     pub(super) shortcut: Option<ShortcutId>,
     /// Whether the selection is being copied, so a second press can't copy
     /// over the first one's borrowed pasteboard.
@@ -73,13 +73,13 @@ pub struct State {
 /// An open dropdown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dropdown {
-    pub menu: Menu,
+    pub(super) menu: Menu,
     /// This opening of it, so the wait for an earlier one can't show its list.
     opened: Ticket,
     /// Whether its list shows yet: it waits a few frames for the window to
     /// grow, since a window that fits its content doesn't lay out again when
     /// its height changes, and the list would be cut to the old height.
-    pub shown: bool,
+    pub(super) shown: bool,
 }
 
 /// Where the window is, and the drag moving it.

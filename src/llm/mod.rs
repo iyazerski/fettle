@@ -13,7 +13,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::settings::{ChatGptAuth, Missing, Provider, Settings};
+use crate::settings::{ChatGptAuth, Provider, Settings};
 
 /// The longest an answer may take in all: the HTTP client only limits each
 /// read, so a server that keeps the stream open without finishing it could
@@ -42,6 +42,15 @@ impl Ask {
     fn model(&self) -> Result<&str> {
         self.model.as_deref().context("no model is chosen")
     }
+}
+
+/// What the settings lack before the model can be called.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Missing {
+    OnDevice(on_device::Availability),
+    SignIn,
+    ApiUrl,
+    Model,
 }
 
 /// Where requests go, with what they need.

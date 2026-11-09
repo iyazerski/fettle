@@ -5,6 +5,7 @@ use rune::TextEdit;
 use tokio::task::JoinHandle;
 
 use crate::diff::{self, Piece};
+use crate::hyphens;
 use crate::prompts::Action;
 
 /// The text to work on and the answer about it.
@@ -151,9 +152,6 @@ impl Draft {
     }
 }
 
-/// Dashes models put in place of a hyphen, often dropping its spaces too.
-const DASHES: [char; 2] = ['—', '–'];
-
 /// Return the status of an `action` on `original` whose answer streamed in
 /// full as `text`: done, with Fix's word diff, unless the model returned
 /// nothing, which fails with `empty`. Dashes `original` doesn't use become
@@ -164,7 +162,7 @@ pub fn complete(action: Action, original: &str, text: &str, empty: &str) -> Stat
     }
     // Models often add or drop a final newline; keep the selection's.
     let end = &original[original.trim_end().len()..];
-    let text = format!("{}{end}", hyphens(original, text.trim_end()));
+    let text = format!("{}{end}", hyphens::restore(original, text.trim_end()));
     let changes = match action {
         Action::Fix => diff::words(original, &text),
         Action::Translate | Action::Rewrite(_) => Vec::new(),
@@ -174,43 +172,6 @@ pub fn complete(action: Action, original: &str, text: &str, empty: &str) -> Stat
         changes,
         copied: false,
     }
-}
-
-/// Replace the [`DASHES`] in `text` that `original` lacks with spaced
-/// hyphens, or bare ones between digits, as in ranges.
-pub fn hyphens(original: &str, text: &str) -> String {
-    let dashes: Vec<char> = DASHES
-        .into_iter()
-        .filter(|d| !original.contains(*d))
-        .collect();
-    if !text.contains(dashes.as_slice()) {
-        return text.to_owned();
-    }
-    let blank = |c: char| c == ' ' || c == '\t' || c == '\u{a0}';
-    let mut out = String::with_capacity(text.len());
-    let mut chars = text.chars().peekable();
-    while let Some(c) = chars.next() {
-        if !dashes.contains(&c) {
-            out.push(c);
-            continue;
-        }
-        let range = out.ends_with(|c: char| c.is_ascii_digit())
-            && chars.peek().is_some_and(char::is_ascii_digit);
-        if range {
-            out.push('-');
-            continue;
-        }
-        out.truncate(out.trim_end_matches(blank).len());
-        if !out.is_empty() && !out.ends_with('\n') {
-            out.push(' ');
-        }
-        out.push('-');
-        while chars.next_if(|&c| blank(c)).is_some() {}
-        if chars.peek().is_some_and(|&c| c != '\n') {
-            out.push(' ');
-        }
-    }
-    out
 }
 
 #[cfg(test)]

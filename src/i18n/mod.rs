@@ -17,9 +17,10 @@ mod zh;
 use serde::{Deserialize, Serialize};
 
 use crate::dictation::Problem;
+use crate::llm::Missing;
 use crate::llm::on_device::{Availability, Refusal};
 use crate::prompts::Style;
-use crate::settings::{LANGUAGES, Missing};
+use crate::settings::LANGUAGES;
 
 /// A language the window can be shown in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

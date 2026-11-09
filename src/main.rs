@@ -9,6 +9,7 @@ mod ax;
 mod dictation;
 mod diff;
 mod document;
+mod hyphens;
 mod i18n;
 mod json_file;
 mod keychain;

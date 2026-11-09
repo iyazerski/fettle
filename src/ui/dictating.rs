@@ -5,10 +5,10 @@
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
-use super::draft::hyphens;
 use super::pending::Ticket;
 use super::state::State;
 use crate::dictation::{self, Heard, Listening, Problem};
+use crate::hyphens;
 use crate::llm::{Ask, Backend};
 use crate::prompts;
 
@@ -176,7 +176,7 @@ impl State {
         match result {
             // Models add dashes speech never has.
             Ok(text) if !text.trim().is_empty() => {
-                self.add_dictated(&hyphens(&heard, text.trim()));
+                self.add_dictated(&hyphens::restore(&heard, text.trim()));
             }
             Ok(_) => self.add_dictated(&heard),
             Err(e) => {

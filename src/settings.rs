@@ -11,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use crate::i18n::Locale;
 use crate::json_file;
 use crate::llm::Effort;
-use crate::llm::on_device::Availability;
 
 pub const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
 pub const DEFAULT_API_BASE: &str = "https://api.openai.com/v1";
@@ -241,15 +240,6 @@ impl Settings {
             .copied()
             .partition(|l| self.is_favourite(l))
     }
-}
-
-/// What the settings lack before the model can be called.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Missing {
-    OnDevice(Availability),
-    SignIn,
-    ApiUrl,
-    Model,
 }
 
 pub fn home() -> PathBuf {
