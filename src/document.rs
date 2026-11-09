@@ -174,6 +174,13 @@ impl Document {
         true
     }
 
+    /// Take every edit as checked, with the mistakes known before it, and
+    /// drop the running check's answer.
+    pub fn skip(&mut self) {
+        self.unchecked.clear();
+        self.check = Check::Idle;
+    }
+
     /// Add `span` to the unchecked spans, merging it with those it meets.
     fn mark(&mut self, mut span: Range<usize>) {
         let from = self.unchecked.partition_point(|s| s.end < span.start);
@@ -328,6 +335,13 @@ mod tests {
         doc.edit(&units("xa\nxbcde"));
         let request = doc.next(3).unwrap();
         assert!(!doc.finish(request.id, None));
+        assert_eq!(marked(&doc), ["xbcd"]);
+        // Without a model, edits go unchecked and a running check is dropped.
+        doc.edit(&units("xa\nxbcdef"));
+        let request = doc.next(4).unwrap();
+        doc.skip();
+        assert!(doc.next(5).is_none());
+        assert!(!doc.finish(request.id, Some(Vec::new())));
         assert_eq!(marked(&doc), ["xbcd"]);
     }
 

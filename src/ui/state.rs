@@ -15,6 +15,7 @@ use super::client::Client;
 use super::dictating::Dictation;
 use super::draft::{Answer, Draft, Status, complete};
 use super::onboarding::Step;
+use super::pending::Pending;
 use super::saver::Saver;
 use super::settings_state::{Form, FormError, Update};
 use super::view::WIDTH;
@@ -281,24 +282,26 @@ impl State {
         }
     }
 
-    /// The model's `fix` of the field's paragraph `text`, asked as check `id`.
-    pub fn field_checked(&mut self, id: u64, text: &str, fix: Option<Fix>) {
-        let check = self.checker.finished(id, text, fix);
+    /// The model's `fix` of the field's paragraph `units`, asked as check `id`.
+    pub fn field_checked(&mut self, id: u64, units: Vec<u16>, fix: Option<Fix>) {
+        let check = self.checker.finished(id, units, fix);
         self.proofread(check);
     }
 
+    /// The model or where it runs changed: fixes from the old one no longer count.
+    pub(super) fn model_changed(&mut self) {
+        self.checker.forget();
+    }
+
     /// Ask the model to fix a paragraph of the focused field, as the Fix
-    /// action does. Without a model to ask, the paragraph goes unchecked.
-    fn proofread(&mut self, mut check: Option<checker::Check>) {
-        let (checker::Check { id, text }, (backend, model)) = loop {
-            let next = check.take();
-            let Some(next) = next else {
-                return;
-            };
-            match Backend::with_model(&self.settings) {
-                Ok(chosen) => break (next, chosen),
-                Err(_) => check = self.checker.finished(next.id, &next.text, None),
-            }
+    /// action does. Without a model to ask, the field's edits go unchecked.
+    fn proofread(&mut self, check: Option<checker::Check>) {
+        let Some(checker::Check { id, units, text }) = check else {
+            return;
+        };
+        let Ok((backend, model)) = Backend::with_model(&self.settings) else {
+            self.checker.skip();
+            return;
         };
         let ask = Ask {
             system: prompts::system(Action::Fix, ""),
@@ -307,7 +310,7 @@ impl State {
             effort: self.settings.effort(),
         };
         let client = self.client.clone();
-        self.client.spawn(async move {
+        let request = Pending::spawn(&self.client, |_| async move {
             let result = client.answer(backend, &ask).await;
             let text = ask.text;
             let fix = match result.map(|fixed| complete(Action::Fix, &text, &fixed, "")) {
@@ -320,8 +323,9 @@ impl State {
             };
             client
                 .app()
-                .update(move |s, _| s.field_checked(id, &text, fix));
+                .update(move |s, _| s.field_checked(id, units, fix));
         });
+        self.checker.asking(id, request);
     }
 
     /// A click at `point` in another app: on an underline, open its paragraph and fix it.

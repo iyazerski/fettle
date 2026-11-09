@@ -116,6 +116,7 @@ impl State {
         }
         self.settings.provider = provider;
         self.form.models = Models::Idle;
+        self.model_changed();
         self.save();
         self.load_models();
     }
@@ -142,7 +143,11 @@ impl State {
 
     /// Copy the API fields from the form into the settings.
     pub fn api_edited(&mut self) {
-        self.settings.api_base = self.form.api_base.text.trim().to_owned();
+        let base = self.form.api_base.text.trim();
+        if self.settings.api_base != base {
+            self.settings.api_base = base.to_owned();
+            self.model_changed();
+        }
         self.settings.credentials.api_key = self.form.api_key.text.trim().to_owned();
         self.form.models = Models::Idle;
         self.save();
@@ -159,8 +164,11 @@ impl State {
 
     pub fn pick_model(&mut self, model: &str) {
         self.menu = None;
-        if let Some(current) = self.settings.model_mut() {
+        if let Some(current) = self.settings.model_mut()
+            && current != model
+        {
             *current = model.to_owned();
+            self.model_changed();
             self.save();
         }
     }

@@ -14,6 +14,7 @@ use tokio::runtime::Handle;
 use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
 
+use super::pending::Pending;
 use super::state::State;
 use crate::ax::{Apps, Field, Focus, Runs, Watch};
 use crate::diff::{self, Piece};
@@ -62,6 +63,8 @@ pub struct Fix {
 #[derive(Debug)]
 pub struct Check {
     pub id: u64,
+    /// The paragraph as the field holds it, which its fix is kept by.
+    pub units: Vec<u16>,
     pub text: String,
 }
 
@@ -116,6 +119,8 @@ struct Session {
     doc: Document,
     edited: Option<Instant>,
     layout: Layout,
+    /// The model request for check `.0`; dropping the session stops it.
+    request: Option<(u64, Pending)>,
 }
 
 /// Where words showed, while the field kept its place, scroll and text
@@ -198,7 +203,7 @@ impl Checker {
             running.watch = watch.map(|w| (pid, w));
         }
         let same = running.session.as_ref().is_some_and(|s| s.field == field);
-        if !same && field.is_secure() || !field.read(MAX_TEXT, &mut self.buffer) {
+        if (!same && field.is_secure()) || !field.read(MAX_TEXT, &mut self.buffer) {
             self.pause();
             return None;
         }
@@ -222,6 +227,7 @@ impl Checker {
                     doc,
                     edited: None,
                     layout: Layout::default(),
+                    request: None,
                 });
             }
         }
@@ -230,17 +236,46 @@ impl Checker {
         check
     }
 
-    /// Take the model's `fix` of `text`, asked as check `id`, or `None` if
-    /// the request failed, and return the paragraph to ask about next.
-    pub fn finished(&mut self, id: u64, text: &str, fix: Option<Fix>) -> Option<Check> {
+    /// Keep `request`, which asks the model about check `id`, until it
+    /// finishes or the field's session ends.
+    pub fn asking(&mut self, id: u64, request: Pending) {
+        if let Some(session) = self.session_mut() {
+            session.request = Some((id, request));
+        }
+    }
+
+    /// Take the model's `fix` of paragraph `units`, asked as check `id`, or
+    /// `None` if the request failed, and return the paragraph to ask about next.
+    pub fn finished(&mut self, id: u64, units: Vec<u16>, fix: Option<Fix>) -> Option<Check> {
         let found = fix.as_ref().map(|f| diff::marks(&f.changes));
         if let Some(fix) = fix {
-            self.remember(text.encode_utf16().collect(), fix);
+            self.remember(units, fix);
         }
-        self.session_mut()?.doc.finish(id, found);
+        let session = self.session_mut()?;
+        if session
+            .request
+            .as_ref()
+            .is_some_and(|(asked, _)| *asked == id)
+        {
+            session.request = None;
+        }
+        session.doc.finish(id, found);
         let check = self.request();
         self.draw();
         check
+    }
+
+    /// Leave the field's edits unchecked: there's no model to ask.
+    pub fn skip(&mut self) {
+        if let Some(session) = self.session_mut() {
+            session.request = None;
+            session.doc.skip();
+        }
+    }
+
+    /// Forget the fixes known: they came from another model.
+    pub fn forget(&mut self) {
+        self.fixes.clear();
     }
 
     /// Keep the model's `fix` of `target`'s paragraph, so it isn't sent again.
@@ -299,6 +334,7 @@ impl Checker {
                 return Some(Check {
                     id: request.id,
                     text: String::from_utf16_lossy(&request.text),
+                    units: request.text,
                 });
             }
         }
