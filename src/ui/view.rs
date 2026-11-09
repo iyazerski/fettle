@@ -1,7 +1,9 @@
 //! What the window draws: the text at the top, the actions under it, and the
 //! answer at the bottom; or the settings ([`settings_view`](super::settings_view)).
 
+use std::collections::VecDeque;
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use rune::{
     Color, Cx, El, Key, KeyEvent, ScrollSpec, Span, SystemMaterial, Tx, col, el, icon, rich, row,
@@ -13,7 +15,7 @@ use rune_kit::{
 };
 
 use super::buttons::{self, Tone};
-use super::dictating::{Dictation, LEVELS_KEPT, Recording};
+use super::dictating::{Dictation, LEVELS_KEPT};
 use super::draft::{Answer, Status};
 use super::icons;
 use super::state::{Menu, Page, State};
@@ -128,8 +130,22 @@ const SOURCE_MIN: f32 = 51.0;
 fn source(s: &State, k: &Kit) -> El {
     let t = s.t();
     let asking = match &s.dictation {
-        Some(Dictation::Listening(recording)) => return recorder(s, recording, false, k),
-        Some(Dictation::Writing(recording)) => return recorder(s, recording, true, k),
+        Some(Dictation::Listening(recording)) => {
+            let stop = IconButton::new(&icons::MIC)
+                .variant(IconButtonVariant::Contrast)
+                .label(t.stop_dictating)
+                .on_press(|s: &mut State| s.dictate())
+                .build(k);
+            return recorder(&recording.levels, recording.duration(), stop, k);
+        }
+        Some(Dictation::Writing(write_up)) => {
+            // As wide as the stop button, so nothing moves.
+            let spinner = row()
+                .size(24.0, 24.0)
+                .center()
+                .child(Spinner::new().size(14.0).build(k));
+            return recorder(&write_up.levels, write_up.took, spinner, k);
+        }
         Some(Dictation::Asking) => true,
         None => false,
     };
@@ -173,29 +189,15 @@ fn source(s: &State, k: &Kit) -> El {
 }
 
 /// While dictating, what stands in for the text: a waveform of the
-/// microphone's loudness, the time, and a button that stops. Once `writing`,
-/// the waveform holds still and a spinner stands in for the button until the
-/// words land in the text.
-fn recorder(s: &State, recording: &Recording, writing: bool, k: &Kit) -> El {
-    let bars = recording.levels.iter().map(|level| {
+/// microphone's `levels`, the time it `took`, and `end`: a button that
+/// stops, or once listening ends, a spinner until the words land in the text.
+fn recorder(levels: &VecDeque<f32>, took: Duration, end: El, k: &Kit) -> El {
+    let bars = levels.iter().map(|level| {
         el().size(2.0, (2.0 + level * 17.0).round())
             .radius(1.0)
             .fill(k.c.text_accent)
     });
-    let secs = recording.duration().as_secs();
-    let end = if writing {
-        // As wide as the button, so nothing moves.
-        row()
-            .size(24.0, 24.0)
-            .center()
-            .child(Spinner::new().size(14.0).build(k))
-    } else {
-        IconButton::new(&icons::MIC)
-            .variant(IconButtonVariant::Contrast)
-            .label(s.t().stop_dictating)
-            .on_press(|s: &mut State| s.dictate())
-            .build(k)
-    };
+    let secs = took.as_secs();
     row()
         .key("recorder")
         .w_full()
@@ -536,6 +538,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     };
     let body = match &answer.status {
         Status::Failed(e) => note(k, e, NoteKind::Failure),
+        Status::Stopped => note(k, s.t().stopped, NoteKind::Failure),
         Status::Running { text: partial, .. } if partial.is_empty() => {
             text(t.thinking).font(k.ty.body).color(k.c.text_faint)
         }

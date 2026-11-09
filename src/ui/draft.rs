@@ -32,6 +32,8 @@ pub enum Status {
         job: JoinHandle<()>,
         text: String,
     },
+    /// The user stopped the run.
+    Stopped,
     Done {
         text: String,
         /// For Fix: the word diff from the original to `text`.
@@ -59,15 +61,14 @@ impl Draft {
         self.source.replace_text(text);
     }
 
-    /// Stop the running answer, if any, marking it `stopped`, and return the
-    /// number of the next run.
-    pub fn cancel(&mut self, stopped: &str) -> u64 {
+    /// Stop the running answer, if any, and return the number of the next run.
+    pub fn cancel(&mut self) -> u64 {
         self.run += 1;
         if let Some(answer) = self.answer.as_mut()
             && let Status::Running { job, .. } = &answer.status
         {
             job.abort();
-            answer.status = Status::Failed(stopped.into());
+            answer.status = Status::Stopped;
         }
         self.run
     }
@@ -239,16 +240,17 @@ mod tests {
         match &draft.answer.as_ref()?.status {
             Status::Running { text, .. } | Status::Done { text, .. } => Some(text),
             Status::Failed(message) => Some(message),
+            Status::Stopped => Some("stopped"),
         }
     }
 
     #[tokio::test]
     async fn late_pieces_of_a_stopped_run_are_dropped() {
         let mut draft = Draft::new();
-        let first = draft.cancel("stopped");
+        let first = draft.cancel();
         draft.running(Action::Fix, first, tokio::spawn(async {}));
         draft.delta(first, "a");
-        let second = draft.cancel("stopped");
+        let second = draft.cancel();
         assert_eq!(text(&draft), Some("stopped"));
 
         draft.running(Action::Fix, second, tokio::spawn(async {}));

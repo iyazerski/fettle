@@ -10,8 +10,16 @@ use tokio::task::JoinHandle;
 use super::client::Client;
 
 /// Names one piece of background work, so its result can be matched to it.
+/// Tickets are never reused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ticket(u64);
+
+impl Ticket {
+    pub fn new() -> Self {
+        static NEXT: AtomicU64 = AtomicU64::new(0);
+        Self(NEXT.fetch_add(1, Ordering::Relaxed))
+    }
+}
 
 /// Running work; dropping it aborts the work.
 #[derive(Debug)]
@@ -27,8 +35,7 @@ impl Pending {
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        let ticket = Ticket(NEXT.fetch_add(1, Ordering::Relaxed));
+        let ticket = Ticket::new();
         Self {
             ticket,
             job: client.spawn(work(ticket)),

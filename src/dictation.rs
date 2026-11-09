@@ -229,11 +229,11 @@ impl Transcript {
         if self
             .kept
             .as_deref()
-            .is_some_and(|kept| words(kept) == words(current))
+            .is_some_and(|kept| same_words(kept, current))
         {
             return self.said.clone();
         }
-        if !self.said.is_empty() && words(current).starts_with(&words(&self.said)) {
+        if !self.said.is_empty() && starts_with_words(current, &self.said) {
             return current.to_owned();
         }
         let words = join(&self.said, current);
@@ -245,12 +245,36 @@ impl Transcript {
     }
 }
 
-/// The words of `s`, to compare transcriptions whatever their case and punctuation.
-fn words(s: &str) -> Vec<String> {
+/// The words of `s`, to compare transcriptions whatever their punctuation.
+fn words(s: &str) -> impl Iterator<Item = &str> {
     s.split(|c: char| !c.is_alphanumeric())
         .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
+}
+
+/// Whether `a` and `b` are one word, whatever their case.
+fn same_word(a: &str, b: &str) -> bool {
+    a.chars()
+        .flat_map(char::to_lowercase)
+        .eq(b.chars().flat_map(char::to_lowercase))
+}
+
+/// Whether the words of `s` start with those of `prefix`. Stops at the
+/// first that differs, as a new transcription after a pause does at once.
+fn starts_with_words(s: &str, prefix: &str) -> bool {
+    let mut words_of_s = words(s);
+    words(prefix).all(|p| words_of_s.next().is_some_and(|w| same_word(w, p)))
+}
+
+/// Whether `a` and `b` have the same words.
+fn same_words(a: &str, b: &str) -> bool {
+    let (mut a, mut b) = (words(a), words(b));
+    loop {
+        match (a.next(), b.next()) {
+            (None, None) => return true,
+            (Some(x), Some(y)) if same_word(x, y) => {}
+            _ => return false,
+        }
+    }
 }
 
 /// `before`, then `after`, with a space between when both have text.

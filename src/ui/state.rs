@@ -15,7 +15,7 @@ use super::client::Client;
 use super::dictating::Dictation;
 use super::draft::{Answer, Draft, Status, complete};
 use super::onboarding::Step;
-use super::pending::Pending;
+use super::pending::{Pending, Ticket};
 use super::saver::Saver;
 use super::settings_state::{Form, FormError, Update};
 use super::view::WIDTH;
@@ -47,8 +47,6 @@ pub struct State {
     pub page: Page,
     pub draft: Draft,
     pub dictation: Option<Dictation>,
-    /// The next dictation session's id; ids are never reused.
-    pub(super) next_dictation: u64,
     /// Keep the window open when another app takes focus.
     pub pinned: bool,
     /// The language macOS prefers, of those the window speaks.
@@ -76,6 +74,8 @@ pub struct State {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dropdown {
     pub menu: Menu,
+    /// This opening of it, so the wait for an earlier one can't show its list.
+    opened: Ticket,
     /// Whether its list shows yet: it waits a few frames for the window to
     /// grow, since a window that fits its content doesn't lay out again when
     /// its height changes, and the list would be cut to the old height.
@@ -182,7 +182,6 @@ impl State {
             page: Page::Main,
             draft: Draft::new(),
             dictation: None,
-            next_dictation: 0,
             pinned: false,
             system_locale: Locale::from_preferred(&mac::preferred_languages()),
             menu: None,
@@ -454,16 +453,21 @@ impl State {
         }
         // Grow at once rather than on a spring, so the list waits only for
         // the frame that grows the window.
+        let opened = Ticket::new();
         self.app.update(move |s, tx| {
             tx.instant();
-            s.menu = Some(Dropdown { menu, shown: false });
+            s.menu = Some(Dropdown {
+                menu,
+                opened,
+                shown: false,
+            });
         });
         let app = self.app.clone();
         self.client.spawn(async move {
             tokio::time::sleep(MENU_DELAY).await;
             app.update(move |s, _| {
                 if let Some(open) = &mut s.menu
-                    && open.menu == menu
+                    && open.opened == opened
                 {
                     open.shown = true;
                 }
@@ -491,7 +495,7 @@ impl State {
             return;
         }
         self.draft.notice = None;
-        let run = self.draft.cancel(t.stopped);
+        let run = self.draft.cancel();
         let (backend, model) = match Backend::with_model(&self.settings) {
             Ok(chosen) => chosen,
             Err(missing) => {
@@ -554,7 +558,7 @@ impl State {
 
     /// Stop the running answer, if any.
     pub fn stop(&mut self) {
-        self.draft.cancel(self.t().stopped);
+        self.draft.cancel();
     }
 
     /// Hide the window and paste the answer over the selection, or over the

@@ -6,6 +6,7 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use super::draft::hyphens;
+use super::pending::Ticket;
 use super::state::State;
 use crate::dictation::{self, Heard, Listening, Problem};
 use crate::llm::{Ask, Backend};
@@ -20,27 +21,45 @@ pub enum Dictation {
     Asking,
     Listening(Recording),
     /// Done listening; the model is turning what was heard into written text.
-    Writing(Recording),
+    Writing(WriteUp),
 }
 
-/// A dictation session, and what the window shows of it.
+/// A dictation session that's listening, and what the window shows of it.
 pub struct Recording {
     /// Which session this is, so a late report of an ended one is dropped.
-    id: u64,
+    id: Ticket,
     session: Listening,
     started: Instant,
-    /// When listening ended, which stops the clock.
-    ended: Option<Instant>,
     /// What's heard so far.
     heard: String,
     /// Recent loudness, 0 to 1, oldest first.
     pub levels: VecDeque<f32>,
 }
 
+/// What a session heard, while the model writes it up.
+pub struct WriteUp {
+    id: Ticket,
+    heard: String,
+    /// The loudness the session ended with, oldest first.
+    pub levels: VecDeque<f32>,
+    /// How long the session listened.
+    pub took: Duration,
+}
+
 impl Recording {
-    /// Return how long the session listened, or has so far.
+    /// Return how long the session has listened so far.
     pub fn duration(&self) -> Duration {
-        self.ended.unwrap_or_else(Instant::now) - self.started
+        self.started.elapsed()
+    }
+
+    /// Stop the clock and let go of the microphone: what was heard goes to the model.
+    fn into_write_up(self) -> WriteUp {
+        WriteUp {
+            took: self.duration(),
+            id: self.id,
+            heard: self.heard,
+            levels: self.levels,
+        }
     }
 }
 
@@ -71,8 +90,7 @@ impl State {
         if let Err(problem) = allowed {
             return self.dictation_failed(&problem);
         }
-        let id = self.next_dictation;
-        self.next_dictation += 1;
+        let id = Ticket::new();
         let app = self.app.clone();
         let heard = move |heard: Heard| app.update(move |s, _| s.heard(id, heard));
         match Listening::start(heard) {
@@ -81,7 +99,6 @@ impl State {
                     id,
                     session,
                     started: Instant::now(),
-                    ended: None,
                     heard: String::new(),
                     levels: VecDeque::with_capacity(LEVELS_KEPT),
                 }));
@@ -91,7 +108,7 @@ impl State {
     }
 
     /// Take what session `id` reports. Once it ends, what it heard is written up.
-    fn heard(&mut self, id: u64, heard: Heard) {
+    fn heard(&mut self, id: Ticket, heard: Heard) {
         let Some(Dictation::Listening(recording)) = &mut self.dictation else {
             return;
         };
@@ -107,12 +124,11 @@ impl State {
                 recording.levels.push_back(level);
             }
             Heard::Done => {
-                let Some(Dictation::Listening(mut recording)) = self.dictation.take() else {
+                let Some(Dictation::Listening(recording)) = self.dictation.take() else {
                     return;
                 };
                 if !recording.heard.trim().is_empty() {
-                    recording.ended = Some(Instant::now());
-                    self.write_up(recording);
+                    self.write_up(recording.into_write_up());
                 }
             }
             Heard::Failed(why) => {
@@ -122,23 +138,23 @@ impl State {
         }
     }
 
-    /// Have the model turn what `recording` heard into written text, then add
+    /// Have the model turn what `write_up` heard into written text, then add
     /// it. Without a model, the words go in as heard.
-    fn write_up(&mut self, recording: Recording) {
+    fn write_up(&mut self, write_up: WriteUp) {
         let (backend, model) = match Backend::with_model(&self.settings) {
             Ok(chosen) => chosen,
-            Err(_) => return self.add_dictated(&recording.heard),
+            Err(_) => return self.add_dictated(&write_up.heard),
         };
         let (id, ask) = (
-            recording.id,
+            write_up.id,
             Ask {
                 system: prompts::dictation(),
-                text: recording.heard.clone(),
+                text: write_up.heard.clone(),
                 model,
                 effort: self.settings.effort(),
             },
         );
-        self.dictation = Some(Dictation::Writing(recording));
+        self.dictation = Some(Dictation::Writing(write_up));
         let client = self.client.clone();
         self.client.spawn(async move {
             let result = client.answer(backend, &ask).await;
@@ -148,15 +164,15 @@ impl State {
 
     /// Add the model's write-up of session `id`, or what it heard as is if the
     /// model failed: dictation is input, so a failed write-up isn't an error.
-    fn written_up(&mut self, id: u64, result: anyhow::Result<String>) {
+    fn written_up(&mut self, id: Ticket, result: anyhow::Result<String>) {
         // Hiding the window while the model worked gave up on the words.
-        let Some(Dictation::Writing(recording)) = self
+        let Some(Dictation::Writing(write_up)) = self
             .dictation
-            .take_if(|d| matches!(d, Dictation::Writing(recording) if recording.id == id))
+            .take_if(|d| matches!(d, Dictation::Writing(write_up) if write_up.id == id))
         else {
             return;
         };
-        let heard = recording.heard;
+        let heard = write_up.heard;
         match result {
             // Models add dashes speech never has.
             Ok(text) if !text.trim().is_empty() => {
