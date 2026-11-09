@@ -87,7 +87,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "Atalho",
     open_fettle: "Abrir o Fettle",
     underline: "Sublinhar erros",
-    underline_hint: "Marca erros enquanto você digita em outros apps, usando o modelo. Cada parágrafo editado é uma solicitação, então modelos pagos custam bem mais.",
+    underline_hint: "Marca erros enquanto você digita. Modelos pagos vão custar mais.",
     start_at_login: "Abrir ao iniciar sessão",
     menu_bar: "Mostrar na barra de menus",
     accessibility: "Acessibilidade",

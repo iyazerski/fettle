@@ -87,7 +87,7 @@ pub static STRINGS: Strings = Strings {
     shortcut: "快捷键",
     open_fettle: "打开 Fettle",
     underline: "标出错误",
-    underline_hint: "在其他应用中输入时，用模型标出错误。每个编辑过的段落都是一次请求，因此付费模型的费用会高很多。",
+    underline_hint: "在你输入时标出错误。付费模型的费用会增加。",
     start_at_login: "登录时启动",
     menu_bar: "在菜单栏中显示",
     accessibility: "辅助功能",
