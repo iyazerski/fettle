@@ -41,7 +41,6 @@ pub static STRINGS: Strings = Strings {
     copied: "تم النسخ",
     replace: "استبدال",
     replace_help: "لصق فوق النص المحدد",
-    no_selection: "لم يتم تحديد أي نص. اكتبه أو الصقه هنا.",
     no_text: "لا يوجد نص للعمل عليه.",
     text_moved: "تغيّر النص منذ أن نقرت عليه. انسخ النتيجة، أو حدد النص واضغط الاختصار.",
     stopped: "تم الإيقاف.",

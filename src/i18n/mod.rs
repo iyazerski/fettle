@@ -167,7 +167,6 @@ pub struct Strings {
     pub copied: &'static str,
     pub replace: &'static str,
     pub replace_help: &'static str,
-    pub no_selection: &'static str,
     pub no_text: &'static str,
     /// Replace found the clicked text gone from where it was.
     pub text_moved: &'static str,

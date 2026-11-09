@@ -41,7 +41,6 @@ pub static STRINGS: Strings = Strings {
     copied: "Copiado",
     replace: "Reemplazar",
     replace_help: "Pegar sobre el texto seleccionado",
-    no_selection: "No hay texto seleccionado. Escríbelo o pégalo aquí.",
     no_text: "No hay texto con el que trabajar.",
     text_moved: "El texto cambió desde que hiciste clic. Copia la respuesta, o selecciona el texto y pulsa el atajo.",
     stopped: "Detenido.",

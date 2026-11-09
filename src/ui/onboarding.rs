@@ -66,7 +66,7 @@ impl State {
     /// Finish the welcome steps on the main page, with a sample to try.
     fn try_sample(&mut self) {
         self.end_onboarding();
-        self.draft.reset(self.t().sample.to_owned(), None);
+        self.draft.reset(self.t().sample.to_owned());
     }
 
     fn end_onboarding(&mut self) {

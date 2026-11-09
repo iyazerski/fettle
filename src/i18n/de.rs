@@ -41,7 +41,6 @@ pub static STRINGS: Strings = Strings {
     copied: "Kopiert",
     replace: "Ersetzen",
     replace_help: "Über den markierten Text einfügen",
-    no_selection: "Kein Text markiert. Tippe oder füge ihn hier ein.",
     no_text: "Es gibt keinen Text zum Bearbeiten.",
     text_moved: "Der Text hat sich seit deinem Klick geändert. Kopiere die Antwort oder markiere den Text und drücke das Tastenkürzel.",
     stopped: "Gestoppt.",

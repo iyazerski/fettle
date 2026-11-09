@@ -382,8 +382,7 @@ impl State {
         self.stop();
         self.page = Page::Main;
         self.menu = None;
-        let notice = text.is_none().then(|| self.t().no_selection.into());
-        self.draft.reset(text.unwrap_or_default(), notice);
+        self.draft.reset(text.unwrap_or_default());
         self.show();
     }
 

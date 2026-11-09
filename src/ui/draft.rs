@@ -55,10 +55,10 @@ impl Draft {
         }
     }
 
-    /// Start over on `text`, with `notice` under it.
-    pub fn reset(&mut self, text: String, notice: Option<String>) {
+    /// Start over on `text`.
+    pub fn reset(&mut self, text: String) {
         self.answer = None;
-        self.notice = notice;
+        self.notice = None;
         self.source.replace_text(text);
     }
 

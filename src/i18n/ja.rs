@@ -41,7 +41,6 @@ pub static STRINGS: Strings = Strings {
     copied: "コピーしました",
     replace: "置き換え",
     replace_help: "選択したテキストに上書きして貼り付け",
-    no_selection: "テキストが選択されていません。ここに入力するか貼り付けてください。",
     no_text: "処理するテキストがありません。",
     text_moved: "クリックしたあとにテキストが変わりました。結果をコピーするか、テキストを選択してショートカットを押してください。",
     stopped: "停止しました。",
