@@ -95,6 +95,7 @@ pub static STRINGS: Strings = Strings {
     underline: "Underline mistakes",
     underline_hint: "Marks mistakes as you type in other apps, using the model. Each paragraph you edit is a request, so paid models cost much more.",
     start_at_login: "Start at login",
+    menu_bar: "Show in menu bar",
     accessibility: "Accessibility",
     allowed: "Allowed",
     allow: "Allow…",

@@ -95,6 +95,7 @@ pub static STRINGS: Strings = Strings {
     underline: "ミスに下線を引く",
     underline_hint: "ほかのアプリで入力中のミスを、モデルを使って示します。編集した段落ごとにリクエストが送られるため、有料モデルでは費用が大幅に増えます。",
     start_at_login: "ログイン時に起動",
+    menu_bar: "メニューバーに表示",
     accessibility: "アクセシビリティ",
     allowed: "許可済み",
     allow: "許可…",

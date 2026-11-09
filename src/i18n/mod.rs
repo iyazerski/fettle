@@ -229,6 +229,7 @@ pub struct Strings {
     /// What underlining does, under its switch.
     pub underline_hint: &'static str,
     pub start_at_login: &'static str,
+    pub menu_bar: &'static str,
     pub accessibility: &'static str,
     pub allowed: &'static str,
     pub allow: &'static str,

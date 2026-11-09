@@ -95,6 +95,7 @@ pub static STRINGS: Strings = Strings {
     underline: "Subrayar errores",
     underline_hint: "Marca errores mientras escribes en otras apps, con el modelo. Cada párrafo que editas es una solicitud, así que los modelos de pago cuestan mucho más.",
     start_at_login: "Abrir al iniciar sesión",
+    menu_bar: "Mostrar en la barra de menús",
     accessibility: "Accesibilidad",
     allowed: "Permitido",
     allow: "Permitir…",

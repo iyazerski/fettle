@@ -95,6 +95,7 @@ pub static STRINGS: Strings = Strings {
     underline: "标出错误",
     underline_hint: "在其他应用中输入时，用模型标出错误。每个编辑过的段落都是一次请求，因此付费模型的费用会高很多。",
     start_at_login: "登录时启动",
+    menu_bar: "在菜单栏中显示",
     accessibility: "辅助功能",
     allowed: "已允许",
     allow: "允许…",

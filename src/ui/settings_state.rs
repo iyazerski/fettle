@@ -284,6 +284,12 @@ impl State {
         self.save();
     }
 
+    pub fn toggle_menu_bar(&mut self) {
+        self.settings.menu_bar = !self.settings.menu_bar;
+        self.apply_menu_bar();
+        self.save();
+    }
+
     pub fn toggle_at_login(&mut self) {
         let result = if self.form.at_login {
             login_item::disable()

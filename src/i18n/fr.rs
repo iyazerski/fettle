@@ -95,6 +95,7 @@ pub static STRINGS: Strings = Strings {
     underline: "Souligner les fautes",
     underline_hint: "Signale les fautes pendant que vous tapez dans d'autres apps, avec le modèle. Chaque paragraphe modifié est une requête : avec un modèle payant, cela coûte bien plus cher.",
     start_at_login: "Ouvrir à la connexion",
+    menu_bar: "Afficher dans la barre des menus",
     accessibility: "Accessibilité",
     allowed: "Autorisé",
     allow: "Autoriser…",

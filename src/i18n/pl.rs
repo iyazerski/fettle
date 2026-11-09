@@ -95,6 +95,7 @@ pub static STRINGS: Strings = Strings {
     underline: "Podkreślaj błędy",
     underline_hint: "Zaznacza błędy podczas pisania w innych aplikacjach za pomocą modelu. Każdy edytowany akapit to osobne zapytanie, więc płatne modele kosztują znacznie więcej.",
     start_at_login: "Uruchamiaj po zalogowaniu",
+    menu_bar: "Pokaż na pasku menu",
     accessibility: "Dostępność",
     allowed: "Dozwolone",
     allow: "Zezwól…",

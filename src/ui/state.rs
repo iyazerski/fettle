@@ -14,6 +14,7 @@ use super::checker::{Check, Checker, Fix, Target};
 use super::client::Client;
 use super::dictating::Dictation;
 use super::draft::{Answer, Draft, Status, complete};
+use super::menu_bar::MenuBar;
 use super::onboarding::Step;
 use super::pending::{Pending, Ticket};
 use super::saver::Saver;
@@ -65,6 +66,7 @@ pub struct State {
     capturing: bool,
     placement: Placement,
     checker: Checker,
+    menu_bar: Option<MenuBar>,
     /// Where the text came from when a click on an underline brought it, to
     /// paste the answer back over.
     target: Option<Target>,
@@ -193,6 +195,7 @@ impl State {
             capturing: false,
             placement: Placement::default(),
             checker: Checker::default(),
+            menu_bar: None,
             target: None,
         }
     }
@@ -204,6 +207,7 @@ impl State {
         self.apply_labels();
         self.register_saved_shortcut();
         self.apply_underlines();
+        self.apply_menu_bar();
         // Rewrite the file without the credentials versions before 0.3 kept in it.
         self.save();
         eprintln!(
@@ -232,6 +236,9 @@ impl State {
             Label::Paste => Some(t.paste.to_owned()),
             _ => None,
         });
+        if let Some(menu_bar) = &self.menu_bar {
+            menu_bar.set_labels(t);
+        }
     }
 
     /// The shortcut: hide the window if it shows, else copy the selection
@@ -261,6 +268,25 @@ impl State {
             let text = mac::copy_selection();
             app.update(move |s, _| s.show_text(text, None));
         });
+    }
+
+    /// The menu bar's Open Fettle: what the shortcut does, except that it
+    /// leaves a shown window open.
+    pub fn open_from_menu_bar(&mut self) {
+        if self.app.is_visible() {
+            self.app.focus();
+        } else {
+            self.summon();
+        }
+    }
+
+    /// Show the menu bar item if the settings say so, else take it away.
+    pub(super) fn apply_menu_bar(&mut self) {
+        if !self.settings.menu_bar {
+            self.menu_bar = None;
+        } else if self.menu_bar.is_none() {
+            self.menu_bar = MenuBar::new(self.app.clone(), self.t());
+        }
     }
 
     /// Underline mistakes in other apps if the settings say so, else stop.

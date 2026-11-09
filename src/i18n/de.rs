@@ -95,6 +95,7 @@ pub static STRINGS: Strings = Strings {
     underline: "Fehler unterstreichen",
     underline_hint: "Markiert Fehler beim Tippen in anderen Apps mithilfe des Modells. Jeder bearbeitete Absatz ist eine Anfrage, daher kosten bezahlte Modelle deutlich mehr.",
     start_at_login: "Bei Anmeldung starten",
+    menu_bar: "In der Menüleiste anzeigen",
     accessibility: "Bedienungshilfen",
     allowed: "Erlaubt",
     allow: "Erlauben…",

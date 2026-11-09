@@ -95,6 +95,7 @@ pub static STRINGS: Strings = Strings {
     underline: "실수에 밑줄 표시",
     underline_hint: "다른 앱에서 입력할 때 모델로 실수를 표시합니다. 편집한 단락마다 요청이 하나씩 가므로 유료 모델은 비용이 훨씬 많이 듭니다.",
     start_at_login: "로그인 시 시작",
+    menu_bar: "메뉴 막대에 표시",
     accessibility: "손쉬운 사용",
     allowed: "허용됨",
     allow: "허용…",

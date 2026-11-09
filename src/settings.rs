@@ -88,6 +88,8 @@ pub struct Settings {
     pub appearance: Appearance,
     /// Whether mistakes in other apps' text fields get underlined as the user types.
     pub underline_mistakes: bool,
+    /// Whether Fettle shows an item in the menu bar.
+    pub menu_bar: bool,
     /// The language the window speaks; `None` follows macOS.
     pub app_language: Option<Locale>,
     /// Whether the welcome steps are done.
@@ -108,6 +110,7 @@ impl Default for Settings {
             shortcut: DEFAULT_SHORTCUT.to_owned(),
             appearance: Appearance::System,
             underline_mistakes: false,
+            menu_bar: true,
             app_language: None,
             onboarded: false,
         }
@@ -275,6 +278,7 @@ mod tests {
         let loaded = Settings::load(&path);
         assert_eq!(loaded.api_base, "http://x");
         assert_eq!(loaded.shortcut, DEFAULT_SHORTCUT);
+        assert!(loaded.menu_bar);
     }
 
     #[test]

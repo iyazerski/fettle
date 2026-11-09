@@ -112,6 +112,16 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         ),
         compact(
             k,
+            t.menu_bar,
+            None,
+            Switch::new(s.settings.menu_bar)
+                .hide_label()
+                .label(t.menu_bar)
+                .on_toggle(|s: &mut State| s.toggle_menu_bar())
+                .build(k),
+        ),
+        compact(
+            k,
             t.underline,
             Some(t.underline_hint),
             Switch::new(s.settings.underline_mistakes)

@@ -8,6 +8,7 @@ mod client;
 mod dictating;
 mod draft;
 mod icons;
+mod menu_bar;
 mod onboarding;
 mod pending;
 mod saver;
