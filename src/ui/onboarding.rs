@@ -41,7 +41,7 @@ impl State {
     pub fn open_onboarding(&mut self) {
         self.recheck_accessibility();
         self.recheck_on_device();
-        self.menu = None;
+        self.close_menu();
         if !matches!(self.page, Page::Onboarding(_)) {
             self.page = Page::Onboarding(Step::Welcome);
         }

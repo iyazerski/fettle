@@ -35,6 +35,9 @@ const TOP_MARGIN: f32 = 120.0;
 const PASTE_DELAY: Duration = Duration::from_millis(120);
 /// How long a dropdown's list waits for the window to grow for it: a few frames.
 const MENU_DELAY: Duration = Duration::from_millis(50);
+/// How long a closed dropdown's list takes to fade out: rune-kit's 0.25 s
+/// close spring, plus a little to settle.
+const MENU_FADE: Duration = Duration::from_millis(300);
 /// How far the window opened from an underline sits from its word, in points.
 const WORD_GAP: f64 = 6.0;
 
@@ -78,10 +81,20 @@ pub struct Dropdown {
     pub(super) menu: Menu,
     /// This opening of it, so the wait for an earlier one can't show its list.
     opened: Ticket,
-    /// Whether its list shows yet: it waits a few frames for the window to
-    /// grow, since a window that fits its content doesn't lay out again when
-    /// its height changes, and the list would be cut to the old height.
-    pub(super) shown: bool,
+    stage: Stage,
+}
+
+/// Where an open dropdown is between growing the window and giving the room back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stage {
+    /// The list waits a few frames for the window to grow, since a window that
+    /// fits its content doesn't lay out again when its height changes, and the
+    /// list would be cut to the old height.
+    Growing,
+    Shown,
+    /// The list fades out. The window keeps its room until it's gone, or the
+    /// fading list would flip above its trigger.
+    Closing,
 }
 
 /// Where the window is, and the drag moving it.
@@ -381,7 +394,7 @@ impl State {
         self.target = None;
         self.stop();
         self.page = Page::Main;
-        self.menu = None;
+        self.close_menu();
         self.draft.reset(text.unwrap_or_default());
         self.show();
     }
@@ -467,13 +480,30 @@ impl State {
         }
     }
 
+    /// Close the open dropdown, and give its room back once its list faded out.
     pub fn close_menu(&mut self) {
-        self.menu = None;
+        let Some(open) = &mut self.menu else {
+            return;
+        };
+        if open.stage == Stage::Closing {
+            return;
+        }
+        open.stage = Stage::Closing;
+        let opened = open.opened;
+        let app = self.app.clone();
+        self.client.spawn(async move {
+            tokio::time::sleep(MENU_FADE).await;
+            app.update(move |s, _| {
+                if s.menu.is_some_and(|open| open.opened == opened) {
+                    s.menu = None;
+                }
+            });
+        });
     }
 
     pub fn toggle_menu(&mut self, menu: Menu) {
         if self.menu_is(menu) {
-            self.menu = None;
+            self.close_menu();
             return;
         }
         // Grow at once rather than on a spring, so the list waits only for
@@ -484,7 +514,7 @@ impl State {
             s.menu = Some(Dropdown {
                 menu,
                 opened,
-                shown: false,
+                stage: Stage::Growing,
             });
         });
         let app = self.app.clone();
@@ -493,8 +523,9 @@ impl State {
             app.update(move |s, _| {
                 if let Some(open) = &mut s.menu
                     && open.opened == opened
+                    && open.stage == Stage::Growing
                 {
-                    open.shown = true;
+                    open.stage = Stage::Shown;
                 }
             });
         });
@@ -502,18 +533,24 @@ impl State {
 
     /// Whether `menu` is the dropdown that's open.
     pub fn menu_is(&self, menu: Menu) -> bool {
-        self.menu.is_some_and(|open| open.menu == menu)
+        self.menu
+            .is_some_and(|open| open.menu == menu && open.stage != Stage::Closing)
+    }
+
+    /// Whether any dropdown is open.
+    pub fn any_menu(&self) -> bool {
+        self.menu.is_some_and(|open| open.stage != Stage::Closing)
     }
 
     /// Whether `menu`'s list shows.
     pub fn menu_open(&self, menu: Menu) -> bool {
         self.menu
-            .is_some_and(|open| open.menu == menu && open.shown)
+            .is_some_and(|open| open.menu == menu && open.stage == Stage::Shown)
     }
 
     /// Run `action` on the text in the window.
     pub fn start(&mut self, action: Action) {
-        self.menu = None;
+        self.close_menu();
         let t = self.t();
         if self.draft.source.text.trim().is_empty() {
             self.draft.notice = Some(t.no_text.into());
@@ -633,7 +670,7 @@ impl State {
     }
 
     pub fn set_language(&mut self, language: &str) {
-        self.menu = None;
+        self.close_menu();
         self.settings.language = language.to_owned();
         self.save();
         if self.draft.translated() {

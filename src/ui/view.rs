@@ -699,7 +699,7 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     if key.key == Key::Escape {
         match s.page {
             _ if s.form.shortcut.is_recording() => return false,
-            _ if s.menu.is_some() => s.close_menu(),
+            _ if s.any_menu() => s.close_menu(),
             Page::Settings => s.back(),
             Page::Main | Page::Onboarding(_) => s.hide(),
         }

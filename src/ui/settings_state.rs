@@ -97,7 +97,7 @@ impl State {
         if matches!(self.update, Update::Latest) {
             self.update = Update::Idle;
         }
-        self.menu = None;
+        self.close_menu();
         self.page = Page::Settings;
         if matches!(self.form.models, Models::Idle) {
             self.load_models();
@@ -107,7 +107,7 @@ impl State {
 
     pub fn back(&mut self) {
         self.page = Page::Main;
-        self.menu = None;
+        self.close_menu();
         self.form.error = None;
     }
 
@@ -136,7 +136,7 @@ impl State {
     /// Show the window in the language the picker lists as `name`, or follow
     /// macOS for any other choice.
     pub fn pick_app_language(&mut self, name: &str) {
-        self.menu = None;
+        self.close_menu();
         self.settings.app_language = Locale::ALL.into_iter().find(|l| l.native_name() == name);
         self.apply_labels();
         self.save();
@@ -164,7 +164,7 @@ impl State {
     }
 
     pub fn pick_model(&mut self, model: &str) {
-        self.menu = None;
+        self.close_menu();
         if let Some(current) = self.settings.model_mut()
             && current != model
         {
@@ -203,7 +203,7 @@ impl State {
             Err(e) => Models::Failed(fill(self.t().list_models_failed, format_args!("{e:#}"))),
         };
         if !matches!(self.form.models, Models::Ready(_)) && self.menu_is(Menu::Model) {
-            self.menu = None;
+            self.close_menu();
         }
     }
 
@@ -258,7 +258,7 @@ impl State {
     pub fn sign_out(&mut self) {
         self.settings.credentials.chatgpt = None;
         self.form.models = Models::Idle;
-        self.menu = None;
+        self.close_menu();
         self.save();
     }
 
