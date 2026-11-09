@@ -28,6 +28,7 @@ pub struct Form {
 }
 
 /// A problem on the settings page, kept apart by what clears it.
+#[derive(Debug)]
 pub enum FormError {
     /// Fettle may not copy and paste: cleared once it may.
     Accessibility,

@@ -9,7 +9,7 @@ use super::icons;
 /// The capsule's height, as a large push button's, and so its corner radius.
 const HEIGHT: f32 = 28.0;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
     /// The accent fill, as a switch that is on: the main action.
     Primary,

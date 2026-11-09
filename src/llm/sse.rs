@@ -49,6 +49,7 @@ impl Decoder {
 }
 
 /// What to do after an event.
+#[derive(Debug)]
 pub enum Flow {
     More,
     Done,

@@ -133,6 +133,27 @@ impl Apps {
     }
 }
 
+/// Append the UTF-16 units of `text` to `buffer`.
+fn append_units(text: &CFString, buffer: &mut Vec<u16>) {
+    let Ok(len) = usize::try_from(text.length()) else {
+        return;
+    };
+    buffer.reserve(len);
+    let start = buffer.len();
+    // SAFETY: CFStringGetCharacters fills exactly `len` units past `start`,
+    // which the buffer has room for.
+    unsafe {
+        text.characters(
+            CFRange {
+                location: 0,
+                length: text.length(),
+            },
+            buffer.as_mut_ptr().add(start),
+        );
+        buffer.set_len(start + len);
+    }
+}
+
 /// Whether Fettle leaves the app with bundle ID `id` alone.
 fn is_skipped(id: &str) -> bool {
     SKIPPED_APPS.contains(&id) || SKIPPED_VENDORS.iter().any(|v| id.starts_with(v))
@@ -166,7 +187,7 @@ impl Field {
     pub fn is_secure(&self) -> bool {
         attribute(&self.element, "AXSubrole")
             .and_then(|v| v.downcast::<CFString>().ok())
-            .is_some_and(|role| role.to_string() == "AXSecureTextField")
+            .is_some_and(|role| *role == *CFString::from_static_str("AXSecureTextField"))
     }
 
     /// Read the field's text into `buffer`. Returns false, leaving `buffer`
@@ -185,26 +206,12 @@ impl Field {
         else {
             return false;
         };
-        let Ok(len) = usize::try_from(text.length()) else {
-            return false;
-        };
-        if len > max {
-            return false;
+        if usize::try_from(text.length()).is_ok_and(|len| len <= max) {
+            append_units(&text, buffer);
+            true
+        } else {
+            false
         }
-        buffer.reserve(len);
-        // SAFETY: CFStringGetCharacters fills exactly `len` units, which the
-        // buffer has room for.
-        unsafe {
-            text.characters(
-                CFRange {
-                    location: 0,
-                    length: text.length(),
-                },
-                buffer.as_mut_ptr(),
-            );
-            buffer.set_len(len);
-        }
-        true
     }
 
     /// Return the selected range, or the caret as an empty one.
@@ -247,6 +254,8 @@ impl Field {
     pub fn runs(&self, text: &[u16]) -> Runs {
         let mut runs = Vec::new();
         let mut cursor = 0;
+        let static_text = CFString::from_static_str("AXStaticText");
+        let mut units = Vec::new();
         let mut stack = children(&self.element);
         let mut seen = 0;
         while let Some(element) = stack.pop() {
@@ -255,7 +264,7 @@ impl Field {
                 break;
             }
             let role = attribute(&element, "AXRole").and_then(|v| v.downcast::<CFString>().ok());
-            if !role.is_some_and(|r| r.to_string() == "AXStaticText") {
+            if !role.is_some_and(|r| *r == *static_text) {
                 stack.extend(children(&element));
                 continue;
             }
@@ -264,7 +273,8 @@ impl Field {
             else {
                 continue;
             };
-            let units: Vec<u16> = value.to_string().encode_utf16().collect();
+            units.clear();
+            append_units(&value, &mut units);
             if units.is_empty() {
                 continue;
             }

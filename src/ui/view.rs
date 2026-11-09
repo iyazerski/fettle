@@ -230,6 +230,7 @@ fn recorder(levels: &VecDeque<f32>, took: Duration, end: El, k: &Kit) -> El {
 }
 
 /// What starts a header: Fettle's mark, or a button back.
+#[derive(Debug)]
 pub enum Lead {
     Mark,
     Back(fn(&mut State)),
@@ -644,7 +645,7 @@ fn scroll_box(content: El) -> El {
 }
 
 /// What a [`note`] says, which sets how it looks.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NoteKind {
     Info,
     Failure,

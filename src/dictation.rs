@@ -21,6 +21,7 @@ use objc2_speech::{
 const NO_SPEECH: isize = 1110;
 
 /// Why dictation can't run.
+#[derive(Debug)]
 pub enum Problem {
     /// Speech recognition isn't allowed in System Settings.
     SpeechOff,
@@ -33,6 +34,7 @@ pub enum Problem {
 }
 
 /// What a session reports.
+#[derive(Debug)]
 pub enum Heard {
     /// Everything heard since the session started, as text.
     Words(String),

@@ -133,7 +133,7 @@ impl Placement {
 }
 
 /// How Fettle starts.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Start {
     /// Show the settings.
     Shown,
@@ -141,7 +141,7 @@ pub enum Start {
     Hidden,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Page {
     Main,
     Settings,

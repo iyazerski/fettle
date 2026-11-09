@@ -12,7 +12,7 @@ use super::view::{Lead, header};
 use crate::i18n::fill;
 use crate::settings::Provider;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
     Welcome,
     Model,
