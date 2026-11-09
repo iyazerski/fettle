@@ -6,7 +6,7 @@ use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use super::draft::hyphens;
-use super::state::{State, fresh_backend};
+use super::state::State;
 use crate::dictation::{self, Heard, Listening, Problem};
 use crate::llm::{Ask, Backend};
 use crate::prompts;
@@ -139,19 +139,10 @@ impl State {
             },
         );
         self.dictation = Some(Dictation::Writing(recording));
-        let (app, http, refreshing) =
-            (self.app.clone(), self.http.clone(), self.refreshing.clone());
-        self.rt.spawn(async move {
-            let result = async {
-                let backend = fresh_backend(&app, &http, &refreshing, backend).await?;
-                let mut text = String::new();
-                backend
-                    .stream(&http, &ask, |delta| text.push_str(delta))
-                    .await?;
-                anyhow::Ok(text)
-            }
-            .await;
-            app.update(move |s, _| s.written_up(id, result));
+        let client = self.client.clone();
+        self.client.spawn(async move {
+            let result = client.answer(backend, &ask).await;
+            client.app().update(move |s, _| s.written_up(id, result));
         });
     }
 

@@ -4,17 +4,14 @@
 //! [`settings_state`](super::settings_state).
 
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
-
-use anyhow::Context;
 
 use objc2_core_foundation::CGRect;
 use rune::{AppHandle, Label, Phase, ShortcutId};
 use tokio::runtime::Handle;
-use tokio::sync::{Mutex, oneshot};
 
 use super::checker::{self, Checker, Fix, Target};
+use super::client::Client;
 use super::dictating::Dictation;
 use super::draft::{Answer, Draft, Status, complete};
 use super::onboarding::Step;
@@ -23,7 +20,7 @@ use super::settings_state::{Form, FormError, Update};
 use super::view::WIDTH;
 use crate::i18n::{Locale, Strings, fill};
 use crate::llm::on_device::{self, Availability, Refusal};
-use crate::llm::{Ask, Backend, chatgpt};
+use crate::llm::{Ask, Backend};
 use crate::mac;
 use crate::prompts::{self, Action};
 use crate::settings::{Credentials, Settings};
@@ -40,10 +37,7 @@ const WORD_GAP: f64 = 6.0;
 
 pub struct State {
     pub app: AppHandle<State>,
-    pub(super) rt: Handle,
-    pub(super) http: reqwest::Client,
-    /// Held while the ChatGPT sign-in refreshes, so requests take turns.
-    pub(super) refreshing: Arc<Mutex<()>>,
+    pub(super) client: Client,
     pub settings: Settings,
     saver: Saver,
     /// Whether Apple's on-device model can run, as last checked.
@@ -178,10 +172,8 @@ impl State {
             saved_credentials,
         );
         Self {
+            client: Client::new(app.clone(), rt, http),
             app,
-            rt,
-            http,
-            refreshing: Arc::default(),
             settings,
             saver,
             on_device: on_device::availability(),
@@ -264,7 +256,7 @@ impl State {
         self.capturing = true;
         let app = self.app.clone();
         // Copying waits for the other app, off the UI thread.
-        self.rt.spawn_blocking(move || {
+        self.client.rt().spawn_blocking(move || {
             let text = mac::copy_selection();
             app.update(move |s, _| s.show_text(text, None));
         });
@@ -273,7 +265,7 @@ impl State {
     /// Underline mistakes in other apps if the settings say so, else stop.
     pub(super) fn apply_underlines(&mut self) {
         if self.settings.underline_mistakes {
-            self.checker.start(&self.app, &self.rt);
+            self.checker.start(&self.app, self.client.rt());
         } else {
             self.checker.stop();
         }
@@ -308,28 +300,16 @@ impl State {
                 Err(_) => check = self.checker.finished(next.id, &next.text, None),
             }
         };
-        let (effort, app, http, refreshing) = (
-            self.settings.effort(),
-            self.app.clone(),
-            self.http.clone(),
-            self.refreshing.clone(),
-        );
-        self.rt.spawn(async move {
-            let result = async {
-                let backend = fresh_backend(&app, &http, &refreshing, backend).await?;
-                let ask = Ask {
-                    system: prompts::system(Action::Fix, ""),
-                    text: text.clone(),
-                    model,
-                    effort,
-                };
-                let mut fixed = String::new();
-                backend
-                    .stream(&http, &ask, |delta| fixed.push_str(delta))
-                    .await?;
-                anyhow::Ok(fixed)
-            }
-            .await;
+        let ask = Ask {
+            system: prompts::system(Action::Fix, ""),
+            text,
+            model,
+            effort: self.settings.effort(),
+        };
+        let client = self.client.clone();
+        self.client.spawn(async move {
+            let result = client.answer(backend, &ask).await;
+            let text = ask.text;
             let fix = match result.map(|fixed| complete(Action::Fix, &text, &fixed, "")) {
                 Ok(Status::Done { text, changes, .. }) => Some(Fix { text, changes }),
                 Ok(_) => None,
@@ -338,7 +318,9 @@ impl State {
                     None
                 }
             };
-            app.update(move |s, _| s.field_checked(id, &text, fix));
+            client
+                .app()
+                .update(move |s, _| s.field_checked(id, &text, fix));
         });
     }
 
@@ -475,7 +457,7 @@ impl State {
             s.menu = Some(Dropdown { menu, shown: false });
         });
         let app = self.app.clone();
-        self.rt.spawn(async move {
+        self.client.spawn(async move {
             tokio::time::sleep(MENU_DELAY).await;
             app.update(move |s, _| {
                 if let Some(open) = &mut s.menu
@@ -521,21 +503,17 @@ impl State {
             model,
             effort: self.settings.effort(),
         };
-        let (app, http, refreshing) =
-            (self.app.clone(), self.http.clone(), self.refreshing.clone());
-        let job = self.rt.spawn(async move {
+        let client = self.client.clone();
+        let job = self.client.spawn(async move {
+            let app = client.app();
             let mut streamed = String::new();
-            let result = async {
-                let backend = fresh_backend(&app, &http, &refreshing, backend).await?;
-                backend
-                    .stream(&http, &ask, |delta| {
-                        streamed.push_str(delta);
-                        let delta = delta.to_owned();
-                        app.update(move |s, _| s.draft.delta(run, &delta));
-                    })
-                    .await
-            }
-            .await;
+            let result = client
+                .stream(backend, &ask, |delta| {
+                    streamed.push_str(delta);
+                    let delta = delta.to_owned();
+                    app.update(move |s, _| s.draft.delta(run, &delta));
+                })
+                .await;
             let status = match result {
                 // The diff can take a while on a long text: keep it off the UI thread.
                 Ok(()) => tokio::task::spawn_blocking(move || {
@@ -589,7 +567,7 @@ impl State {
             return;
         }
         self.hide();
-        self.rt.spawn_blocking(move || {
+        self.client.rt().spawn_blocking(move || {
             std::thread::sleep(PASTE_DELAY);
             mac::paste(&text);
         });
@@ -640,42 +618,4 @@ impl State {
             Page::Settings => self.form.error = Some(FormError::Other(message)),
         }
     }
-}
-
-/// Return `backend` with a fresh ChatGPT token, refreshing and saving it if it
-/// expires soon.
-///
-/// A refresh token works once, so refreshes take turns on `refreshing`, and
-/// each starts from the sign-in the settings hold by then.
-pub(super) async fn fresh_backend(
-    app: &AppHandle<State>,
-    http: &reqwest::Client,
-    refreshing: &Mutex<()>,
-    backend: Backend,
-) -> anyhow::Result<Backend> {
-    let Backend::ChatGpt(auth) = &backend else {
-        return Ok(backend);
-    };
-    if !chatgpt::expiring(auth) {
-        return Ok(backend);
-    }
-    let _turn = refreshing.lock().await;
-    let (tx, rx) = oneshot::channel();
-    app.update(move |s, _| {
-        let _ = tx.send(s.settings.credentials.chatgpt.clone());
-    });
-    let auth = rx
-        .await
-        .ok()
-        .flatten()
-        .context("signed out of ChatGPT: sign in again in Settings")?;
-    // The request before this one may have refreshed it already.
-    if !chatgpt::expiring(&auth) {
-        return Ok(Backend::ChatGpt(auth));
-    }
-    let fresh = chatgpt::refresh(http, &auth).await?;
-    let saved = fresh.clone();
-    // Queued before the turn ends, so the next request reads the refreshed sign-in.
-    app.update(move |s, _| s.saved_auth(&auth.refresh, saved));
-    Ok(Backend::ChatGpt(fresh))
 }

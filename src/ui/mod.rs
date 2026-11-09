@@ -4,6 +4,7 @@
 
 mod buttons;
 mod checker;
+mod client;
 mod dictating;
 mod draft;
 mod icons;

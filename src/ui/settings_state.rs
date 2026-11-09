@@ -6,7 +6,7 @@ use rune::{Shortcut, ShortcutError, TextEdit, Tx};
 use rune_kit::ShortcutRecorderState;
 use tokio::task::JoinHandle;
 
-use super::state::{Menu, Page, State, fresh_backend};
+use super::state::{Menu, Page, State};
 use crate::i18n::{Locale, Strings, fill};
 use crate::llm::{Backend, chatgpt, on_device};
 use crate::settings::{Appearance, ChatGptAuth, Provider, Settings};
@@ -178,15 +178,10 @@ impl State {
         let Ok(backend) = Backend::of(&self.settings) else {
             return;
         };
-        let (app, http, refreshing) =
-            (self.app.clone(), self.http.clone(), self.refreshing.clone());
-        let job = self.rt.spawn(async move {
-            let result = async {
-                let backend = fresh_backend(&app, &http, &refreshing, backend).await?;
-                backend.models(&http).await
-            }
-            .await;
-            app.update(move |s, _| {
+        let client = self.client.clone();
+        let job = self.client.spawn(async move {
+            let result = client.models(backend).await;
+            client.app().update(move |s, _| {
                 s.form.models = match result {
                     Ok(models) if models.is_empty() => Models::Failed(s.t().no_models.into()),
                     Ok(models) => Models::Ready(models),
@@ -204,9 +199,9 @@ impl State {
         if let Login::Waiting(job) = &self.form.login {
             job.abort();
         }
-        let (app, http) = (self.app.clone(), self.http.clone());
-        let job = self.rt.spawn(async move {
-            let result = chatgpt::login(&http, |url| {
+        let client = self.client.clone();
+        let job = self.client.spawn(async move {
+            let result = chatgpt::login(client.http(), |url| {
                 if let Err(e) = std::process::Command::new("/usr/bin/open")
                     .arg(url)
                     .status()
@@ -215,7 +210,9 @@ impl State {
                 }
             })
             .await;
-            app.update(move |s, _| s.signed_in(result.map_err(|e| format!("{e:#}"))));
+            client
+                .app()
+                .update(move |s, _| s.signed_in(result.map_err(|e| format!("{e:#}"))));
         });
         self.form.login = Login::Waiting(job);
         // The window floats above every app, so it would cover the browser's sign-in
@@ -379,10 +376,10 @@ impl State {
 
     pub fn check_update(&mut self) {
         self.update = Update::Checking;
-        let (app, http) = (self.app.clone(), self.http.clone());
-        self.rt.spawn(async move {
-            let result = update::available(&http).await;
-            app.update(move |s, _| {
+        let client = self.client.clone();
+        self.client.spawn(async move {
+            let result = update::available(client.http()).await;
+            client.app().update(move |s, _| {
                 s.update = match result {
                     Ok(Some(version)) => Update::Available(version),
                     Ok(None) => Update::Latest,
@@ -399,10 +396,10 @@ impl State {
         };
         let version = version.clone();
         self.update = Update::Installing(version.clone());
-        let (app, http) = (self.app.clone(), self.http.clone());
-        self.rt.spawn(async move {
-            let result = update::install(&http, &version).await;
-            app.update(move |s, tx: &mut Tx| {
+        let client = self.client.clone();
+        self.client.spawn(async move {
+            let result = update::install(client.http(), &version).await;
+            client.app().update(move |s, tx: &mut Tx| {
                 match result.and_then(|bundle| update::relaunch(&bundle)) {
                     Ok(()) => tx.quit(),
                     Err(e) => {
