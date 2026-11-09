@@ -85,12 +85,12 @@ pub fn run(start: Start) -> Result<()> {
             true
         })
         .on_frame_drawn({
-            let mut height = 0.0;
+            let mut size = (0.0, 0.0);
             move |rt| {
-                if rt.viewport.1 != height {
-                    height = rt.viewport.1;
-                    frames.update_if(move |s, _| {
-                        s.laid_out(height);
+                if rt.viewport != size {
+                    size = rt.viewport;
+                    frames.update_if(move |s, tx| {
+                        s.laid_out(size, tx);
                         false
                     });
                 }

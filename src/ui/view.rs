@@ -26,8 +26,11 @@ use crate::prompts::{Action, Style};
 
 /// The window's corner radius.
 pub const CORNER: f32 = 16.0;
-/// Wide enough for Fix, Translate to English and Rewrite on one line in every locale.
+/// The window's width until the main page's actions lay out; then it's as
+/// wide as they are on one line, at least [`MIN_WIDTH`].
 pub const WIDTH: f32 = 560.0;
+/// The narrowest the window gets, so the settings still fit.
+pub const MIN_WIDTH: f32 = 480.0;
 /// The tallest the answer gets before it scrolls.
 const ANSWER_MAX: f32 = 320.0;
 /// The tallest the language list gets before it scrolls.
@@ -296,12 +299,12 @@ fn main_tools(s: &State, k: &Kit) -> Vec<El> {
 
 fn actions(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
-    row()
-        .w_full()
-        // Long labels and language names don't fit one line in some languages.
-        .flex_wrap()
+    let line = row()
+        .key("actions")
         .center_y()
         .gap(8.0)
+        // The window takes the line's width, padded on both sides as on its left.
+        .on_layout_tx(|s: &mut State, [x, _, w, _], tx| s.fit_width(w + 2.0 * x, tx))
         .child(buttons::button(
             k,
             Tone::Primary,
@@ -313,7 +316,9 @@ fn actions(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             },
         ))
         .child(translate(s, k, layer))
-        .child(rewrite(s, k, layer))
+        .child(rewrite(s, k, layer));
+    // In a row, so the line keeps its own width rather than stretching to the page's.
+    row().w_full().child(line)
 }
 
 /// Rewrite and the style it writes in, joined in one control as Translate is.

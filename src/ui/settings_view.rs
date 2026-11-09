@@ -17,7 +17,7 @@ use super::buttons::{self, Tone};
 use super::icons;
 use super::settings_state::{Login, Models, Update};
 use super::state::{Menu, State};
-use super::view::{Lead, NoteKind, WIDTH, divider, header, note};
+use super::view::{Lead, NoteKind, divider, header, note};
 use crate::i18n::{Locale, fill};
 use crate::llm::Backend;
 use crate::llm::on_device::Availability;
@@ -38,7 +38,9 @@ const PAD: f32 = 12.0;
 /// The label column's width.
 const LABEL: f32 = 130.0;
 /// A wide control's width: the window less its padding, the group's, the label and the gap.
-const CONTROL: f32 = WIDTH - 2.0 * 14.0 - 2.0 * PAD - LABEL - 12.0;
+fn control(s: &State) -> f32 {
+    s.width - 2.0 * 14.0 - 2.0 * PAD - LABEL - 12.0
+}
 
 pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
@@ -97,7 +99,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             .label(t.open_fettle)
             .on_change(|s: &mut State, shortcut, _| s.change_shortcut(shortcut))
             .error_message(shortcut_error_message)
-            .width(CONTROL)
+            .width(control(s))
             .build(field_kit(k)),
         ),
         compact(
@@ -180,7 +182,7 @@ fn app_language(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     Select::new("app-language", &options)
         .label(t.app_language)
         .appearance(SelectAppearance::Field)
-        .width(CONTROL)
+        .width(control(s))
         .current(Some(current))
         .placement(Placement::BottomStart)
         .open(s.menu_open(Menu::AppLanguage))
@@ -477,7 +479,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
     let select = Select::new("model", models)
         .label(t.model)
         .appearance(SelectAppearance::Field)
-        .width(CONTROL)
+        .width(control(s))
         .current(current)
         .placeholder(if loading {
             t.loading_models
@@ -584,7 +586,7 @@ fn wide(k: &Kit, label: &str, control: El) -> El {
                 .wrap()
                 .w(LABEL),
         )
-        .child(col().w(CONTROL).child(control))
+        .child(col().grow(1.0).child(control))
 }
 
 /// A row with `label`, and `hint` under it, on the left, and a compact

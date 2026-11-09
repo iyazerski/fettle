@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use objc2_core_foundation::CGRect;
-use rune::{AppHandle, Label, Phase, ShortcutId};
+use rune::{AppHandle, Label, Phase, ShortcutId, Tx};
 use tokio::runtime::Handle;
 
 use super::checker::{Check, Checker, Fix, Target};
@@ -19,7 +19,7 @@ use super::onboarding::Step;
 use super::pending::{Pending, Ticket};
 use super::saver::Saver;
 use super::settings_state::{Form, FormError, Update};
-use super::view::WIDTH;
+use super::view::{MIN_WIDTH, WIDTH};
 use crate::i18n::{Locale, Strings, fill};
 use crate::llm::on_device::{self, Availability, Refusal};
 use crate::llm::{Ask, Backend};
@@ -68,6 +68,8 @@ pub struct State {
     /// over the first one's borrowed pasteboard.
     capturing: bool,
     placement: Placement,
+    /// The window's width in points: what the main page's actions take.
+    pub(super) width: f32,
     checker: Checker,
     menu_bar: Option<MenuBar>,
     /// Where the text came from when a click on an underline brought it, to
@@ -107,8 +109,8 @@ struct Placement {
     /// The word the window sits over until dragged, in points from the
     /// primary screen's top-left: the underline it opened from.
     over: Option<CGRect>,
-    /// The window's height in points, as last laid out.
-    height: f32,
+    /// The window's width and height in points, as last laid out.
+    size: (f32, f32),
 }
 
 /// The pointer and the window's top-left when a drag of the window began.
@@ -207,6 +209,7 @@ impl State {
             shortcut: None,
             capturing: false,
             placement: Placement::default(),
+            width: WIDTH,
             checker: Checker::default(),
             menu_bar: None,
             target: None,
@@ -402,8 +405,8 @@ impl State {
     pub(super) fn show(&mut self) {
         // Not `AppHandle::place`: it pins the window's size, and the window fits its content.
         let place = || match self.placement.over {
-            Some(word) => mac::over_word(word, WIDTH, self.placement.height, WORD_GAP),
-            None => mac::top_center_under_pointer(WIDTH, TOP_MARGIN),
+            Some(word) => mac::over_word(word, self.width, self.placement.size.1, WORD_GAP),
+            None => mac::top_center_under_pointer(self.width, TOP_MARGIN),
         };
         if !self.app.is_visible()
             && let Some(position) = place()
@@ -414,19 +417,36 @@ impl State {
         self.app.open();
     }
 
-    /// The window was laid out `height` points tall: keep it over its word.
-    pub fn laid_out(&mut self, height: f32) {
-        self.placement.height = height;
+    /// The window was laid out `size` points large: keep it as wide as
+    /// it should be, and over its word.
+    pub fn laid_out(&mut self, size: (f32, f32), tx: &mut Tx) {
+        self.placement.size = size;
+        // Also here, so a width the window didn't take is asked for again.
+        self.resize(tx);
         // A dropdown grows the window for its list; the window stays put for it.
         if self.menu.is_some() || !self.app.is_visible() {
             return;
         }
         if let Some(word) = self.placement.over
-            && let Some(position) = mac::over_word(word, WIDTH, height, WORD_GAP)
+            && let Some(position) = mac::over_word(word, size.0, size.1, WORD_GAP)
             && self.placement.position != Some(position)
         {
             self.placement.position = Some(position);
             self.app.set_position(position);
+        }
+    }
+
+    /// Make the window `width` points wide, as the main page's actions need
+    /// to fit on one line, or [`MIN_WIDTH`] if that's wider.
+    pub fn fit_width(&mut self, width: f32, tx: &mut Tx) {
+        self.width = width.ceil().max(MIN_WIDTH);
+        self.resize(tx);
+    }
+
+    /// Resize the window to `width`, unless it's that wide already.
+    fn resize(&self, tx: &mut Tx) {
+        if (self.width - self.placement.size.0).abs() > 0.5 {
+            tx.resize_window_instant((self.width, self.placement.size.1));
         }
     }
 
