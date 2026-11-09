@@ -254,7 +254,12 @@ impl Worker {
                     session.doc.skip();
                 }
             }
-            Command::Forget => self.fixes.clear(),
+            // Fields' documents hold the old model's marks, and their checks ask it.
+            Command::Forget => {
+                self.fixes.clear();
+                self.session = None;
+                self.recent.clear();
+            }
             Command::Learn { units, fix } => self.remember(units, fix),
             Command::Open(line) => self.open(line),
             Command::Select(units) => {
@@ -329,10 +334,15 @@ impl Worker {
                 }
             }
             _ => {
+                // Taken out before parking the current field, which may drop the oldest.
+                let back = self
+                    .recent
+                    .iter()
+                    .position(|s| s.field == field)
+                    .map(|i| self.recent.remove(i));
                 self.park();
-                let session = match self.recent.iter().position(|s| s.field == field) {
-                    Some(i) => {
-                        let mut session = self.recent.remove(i);
+                let session = match back {
+                    Some(mut session) => {
                         // It may have moved or changed while away.
                         session.layout = Layout::default();
                         if session.doc.edit(&self.buffer).is_some() {
@@ -364,12 +374,10 @@ impl Worker {
     }
 
     /// Take the model's `fix` of paragraph `units`, asked as check `id`, and
-    /// ask about the next paragraph if its field is the one underlined.
+    /// ask about the next paragraph if its field is the one underlined. A
+    /// check no field waits for, dropped or asked of a model since changed,
+    /// counts for nothing.
     fn finished(&mut self, id: u64, units: Vec<u16>, fix: Option<Fix>) {
-        let found = fix.as_ref().map(|f| diff::marks(&f.changes));
-        if let Some(fix) = fix {
-            self.remember(units, fix);
-        }
         let current = self
             .session
             .as_ref()
@@ -378,7 +386,12 @@ impl Worker {
             return;
         };
         session.request = None;
-        session.doc.finish(id, found);
+        session
+            .doc
+            .finish(id, fix.as_ref().map(|f| diff::marks(&f.changes)));
+        if let Some(fix) = fix {
+            self.remember(units, fix);
+        }
         if current {
             self.request();
             self.draw();

@@ -84,11 +84,12 @@ const NOTIFICATIONS: [&str; 5] = [
 ];
 
 /// The apps Fettle reads from, remembering which it asked to expose their
-/// web content, and how, to undo it once dropped: the content costs them
-/// memory and speed, and the browsers animate their windows differently.
+/// web content, and the attribute it turned on in each, to turn it off once
+/// dropped: the content costs them memory and speed, and the browsers
+/// animate their windows differently.
 #[derive(Debug, Default)]
 pub struct Apps {
-    asked: HashMap<i32, &'static str>,
+    asked: HashMap<i32, Option<&'static str>>,
 }
 
 /// The app in front and its focused element, if Fettle may read it.
@@ -168,6 +169,9 @@ impl Drop for Apps {
             return;
         }
         for (pid, attribute) in self.asked.drain() {
+            let Some(attribute) = attribute else {
+                continue;
+            };
             // SAFETY: a plain CF object for the app with `pid`.
             let app = unsafe { AXUIElement::new_application(pid) };
             let name = CFString::from_static_str(attribute);
@@ -179,8 +183,9 @@ impl Drop for Apps {
 
 /// Ask an Electron app or a Chromium browser, `id`, to build its web
 /// content's accessibility tree, which they only do for screen readers
-/// unless asked, and return the attribute set. Other apps ignore it.
-fn expose_web_content(app: &AXUIElement, id: &str) -> &'static str {
+/// unless asked. Returns the attribute it turned on, unless the app ignores
+/// it or another client, such as a screen reader, had turned it on already.
+fn expose_web_content(app: &AXUIElement, id: &str) -> Option<&'static str> {
     // Chromium browsers ignore Electron's attribute and take the one
     // VoiceOver sets, after a 2-second wait. It changes how other apps
     // animate their windows, so it's only set on the browsers.
@@ -189,10 +194,16 @@ fn expose_web_content(app: &AXUIElement, id: &str) -> &'static str {
     } else {
         "AXManualAccessibility"
     };
+    let on = attribute(app, name)
+        .and_then(|v| v.downcast::<CFBoolean>().ok())
+        .is_some_and(|v| v.as_bool());
+    if on {
+        return None;
+    }
     let attribute = CFString::from_static_str(name);
-    // SAFETY: the attribute takes a CFBoolean. Apps without it return an error, which is fine.
-    unsafe { app.set_attribute_value(&attribute, CFBoolean::new(true)) };
-    name
+    // SAFETY: the attribute takes a CFBoolean. Apps without it return an error.
+    let set = unsafe { app.set_attribute_value(&attribute, CFBoolean::new(true)) };
+    (set == AXError::Success).then_some(name)
 }
 
 /// A text field in another app.
