@@ -8,39 +8,59 @@ async fn serve_once(
     status: &str,
     content_type: &str,
     body: &str,
-) -> (String, tokio::task::JoinHandle<String>) {
+) -> (String, tokio::task::JoinHandle<Vec<String>>) {
+    serve(&[(status, content_type, body)]).await
+}
+
+/// Serve a request for each of `replies`, `(status, content type, body)`,
+/// in turn, and hand back the requests.
+async fn serve(replies: &[(&str, &str, &str)]) -> (String, tokio::task::JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}/v1", listener.local_addr().unwrap());
-    let reply = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
-        body.len()
-    );
+    let replies: Vec<String> = replies
+        .iter()
+        .map(|(status, content_type, body)| {
+            format!(
+                "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                body.len()
+            )
+        })
+        .collect();
     let task = tokio::spawn(async move {
-        let (mut socket, _) = listener.accept().await.unwrap();
-        let mut request = Vec::new();
-        let mut buf = [0u8; 4096];
-        loop {
-            let n = socket.read(&mut buf).await.unwrap();
-            request.extend_from_slice(&buf[..n]);
-            let text = String::from_utf8_lossy(&request);
-            if let Some((head, body)) = text.split_once("\r\n\r\n") {
-                let length = head
-                    .lines()
-                    .find_map(|l| {
-                        l.to_ascii_lowercase()
-                            .strip_prefix("content-length: ")
-                            .map(|v| v.parse::<usize>().unwrap())
-                    })
-                    .unwrap_or(0);
-                if body.len() >= length {
-                    break;
-                }
-            }
+        let mut requests = Vec::new();
+        for reply in replies {
+            requests.push(answer_one(&listener, &reply).await);
         }
-        socket.write_all(reply.as_bytes()).await.unwrap();
-        String::from_utf8(request).unwrap()
+        requests
     });
     (base, task)
+}
+
+/// Answer the next request on `listener` with `reply`, and return the request.
+async fn answer_one(listener: &TcpListener, reply: &str) -> String {
+    let (mut socket, _) = listener.accept().await.unwrap();
+    let mut request = Vec::new();
+    let mut buf = [0u8; 4096];
+    loop {
+        let n = socket.read(&mut buf).await.unwrap();
+        request.extend_from_slice(&buf[..n]);
+        let text = String::from_utf8_lossy(&request);
+        if let Some((head, body)) = text.split_once("\r\n\r\n") {
+            let length = head
+                .lines()
+                .find_map(|l| {
+                    l.to_ascii_lowercase()
+                        .strip_prefix("content-length: ")
+                        .map(|v| v.parse::<usize>().unwrap())
+                })
+                .unwrap_or(0);
+            if body.len() >= length {
+                break;
+            }
+        }
+    }
+    socket.write_all(reply.as_bytes()).await.unwrap();
+    String::from_utf8(request).unwrap()
 }
 
 fn ask(effort: Effort) -> Ask {
@@ -72,7 +92,7 @@ async fn api_streams_the_answer() {
         .unwrap();
     assert_eq!(answer, "the text");
 
-    let request = request.await.unwrap();
+    let request = request.await.unwrap().remove(0);
     assert!(request.starts_with("POST /v1/chat/completions "));
     assert!(
         request
@@ -84,6 +104,40 @@ async fn api_streams_the_answer() {
     assert_eq!(body["reasoning_effort"], "low");
     assert_eq!(body["messages"][0]["content"], "Fix it.");
     assert_eq!(body["messages"][1]["content"], "teh text");
+}
+
+#[tokio::test]
+async fn a_model_that_rejects_the_effort_is_asked_again_without_one() {
+    let rejected = r#"{"error":{"message":"Unsupported value: 'reasoning_effort' does not support 'none' with this model."}}"#;
+    let events = concat!(
+        "data: {\"choices\":[{\"delta\":{\"content\":\"fine\"}}]}\n\n",
+        "data: [DONE]\n\n",
+    );
+    let (base, requests) = serve(&[
+        ("400 Bad Request", "application/json", rejected),
+        ("200 OK", "text/event-stream", events),
+    ])
+    .await;
+    let backend = Backend::Api {
+        base,
+        key: String::new(),
+    };
+    let mut answer = String::new();
+    backend
+        .stream(&http().unwrap(), &ask(Effort::None), |d| answer.push_str(d))
+        .await
+        .unwrap();
+    assert_eq!(answer, "fine");
+    let efforts: Vec<Value> = requests
+        .await
+        .unwrap()
+        .iter()
+        .map(|r| {
+            let body: Value = serde_json::from_str(r.split_once("\r\n\r\n").unwrap().1).unwrap();
+            body["reasoning_effort"].clone()
+        })
+        .collect();
+    assert_eq!(efforts, [Value::from("none"), Value::Null]);
 }
 
 #[tokio::test]
