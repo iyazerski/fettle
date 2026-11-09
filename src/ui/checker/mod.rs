@@ -109,9 +109,10 @@ impl Checker {
         self.send(Command::Finished { id, units, fix });
     }
 
-    /// Leave the field's edits unchecked: there's no model to ask.
-    pub fn skip(&self) {
-        self.send(Command::Skip);
+    /// Leave the edits of the field that asked for check `id` unchecked:
+    /// there's no model to ask.
+    pub fn skip(&self, id: u64) {
+        self.send(Command::Skip(id));
     }
 
     /// Forget the fixes known: they came from another model.

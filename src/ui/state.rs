@@ -331,7 +331,7 @@ impl State {
     pub fn proofread(&mut self, check: Check) {
         let Check { id, units, text } = check;
         let Ok((backend, model)) = Backend::with_model(&self.settings) else {
-            self.checker.skip();
+            self.checker.skip(id);
             return;
         };
         let ask = Ask {
