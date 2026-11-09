@@ -4,8 +4,8 @@
 
 use rune::{Shortcut, ShortcutError, TextEdit, Tx};
 use rune_kit::ShortcutRecorderState;
-use tokio::task::JoinHandle;
 
+use super::pending::{Pending, Ticket};
 use super::state::{Menu, Page, State};
 use crate::i18n::{Locale, Strings, fill};
 use crate::llm::{Backend, chatgpt, on_device};
@@ -46,20 +46,24 @@ impl FormError {
     }
 }
 
+/// The model list; replacing a load stops it, so a list for an old backend
+/// can't arrive late.
 pub enum Models {
     Idle,
-    Loading(JoinHandle<()>),
+    Loading(Pending),
     Ready(Vec<String>),
     Failed(String),
 }
 
+/// The ChatGPT sign-in in the browser; replacing a wait stops it.
 pub enum Login {
     Idle,
-    Waiting(JoinHandle<()>),
+    Waiting(Pending),
     Failed(String),
 }
 
-/// Where checking for a new version stands.
+/// Where checking for a new version stands. Each step leads only to the
+/// next: a check from `Idle`, `Latest` or `Failed`, an install from `Available`.
 pub enum Update {
     Idle,
     Checking,
@@ -111,7 +115,7 @@ impl State {
             return;
         }
         self.settings.provider = provider;
-        self.set_models(Models::Idle);
+        self.form.models = Models::Idle;
         self.save();
         self.load_models();
     }
@@ -140,7 +144,7 @@ impl State {
     pub fn api_edited(&mut self) {
         self.settings.api_base = self.form.api_base.text.trim().to_owned();
         self.settings.credentials.api_key = self.form.api_key.text.trim().to_owned();
-        self.set_models(Models::Idle);
+        self.form.models = Models::Idle;
         self.save();
     }
 
@@ -161,15 +165,6 @@ impl State {
         }
     }
 
-    /// Replace the model list, stopping a load the new list supersedes, so
-    /// a list for an old backend can't arrive late.
-    fn set_models(&mut self, models: Models) {
-        if let Models::Loading(job) = &self.form.models {
-            job.abort();
-        }
-        self.form.models = models;
-    }
-
     /// Load the provider's models, if it has models to pick and can list them.
     pub fn load_models(&mut self) {
         if self.settings.model().is_none() {
@@ -179,28 +174,33 @@ impl State {
             return;
         };
         let client = self.client.clone();
-        let job = self.client.spawn(async move {
+        self.form.models = Models::Loading(Pending::spawn(&self.client, |ticket| async move {
             let result = client.models(backend).await;
-            client.app().update(move |s, _| {
-                s.form.models = match result {
-                    Ok(models) if models.is_empty() => Models::Failed(s.t().no_models.into()),
-                    Ok(models) => Models::Ready(models),
-                    Err(e) => Models::Failed(fill(s.t().list_models_failed, format_args!("{e:#}"))),
-                };
-                if !matches!(s.form.models, Models::Ready(_)) && s.menu_is(Menu::Model) {
-                    s.menu = None;
-                }
-            });
-        });
-        self.set_models(Models::Loading(job));
+            client
+                .app()
+                .update(move |s, _| s.models_loaded(ticket, result));
+        }));
+    }
+
+    /// Show the model list load `ticket` returned, unless a newer load or
+    /// list replaced it.
+    fn models_loaded(&mut self, ticket: Ticket, result: anyhow::Result<Vec<String>>) {
+        if !matches!(&self.form.models, Models::Loading(load) if load.answers(ticket)) {
+            return;
+        }
+        self.form.models = match result {
+            Ok(models) if models.is_empty() => Models::Failed(self.t().no_models.into()),
+            Ok(models) => Models::Ready(models),
+            Err(e) => Models::Failed(fill(self.t().list_models_failed, format_args!("{e:#}"))),
+        };
+        if !matches!(self.form.models, Models::Ready(_)) && self.menu_is(Menu::Model) {
+            self.menu = None;
+        }
     }
 
     pub fn sign_in(&mut self) {
-        if let Login::Waiting(job) = &self.form.login {
-            job.abort();
-        }
         let client = self.client.clone();
-        let job = self.client.spawn(async move {
+        let waiting = Pending::spawn(&self.client, |ticket| async move {
             let result = chatgpt::login(client.http(), |url| {
                 if let Err(e) = std::process::Command::new("/usr/bin/open")
                     .arg(url)
@@ -210,17 +210,21 @@ impl State {
                 }
             })
             .await;
-            client
-                .app()
-                .update(move |s, _| s.signed_in(result.map_err(|e| format!("{e:#}"))));
+            let result = result.map_err(|e| format!("{e:#}"));
+            client.app().update(move |s, _| s.signed_in(ticket, result));
         });
-        self.form.login = Login::Waiting(job);
+        self.form.login = Login::Waiting(waiting);
         // The window floats above every app, so it would cover the browser's sign-in
         // page. It comes back with the result.
         self.hide();
     }
 
-    fn signed_in(&mut self, result: Result<ChatGptAuth, String>) {
+    /// Take the result of sign-in `ticket`, unless it was cancelled or
+    /// started again.
+    fn signed_in(&mut self, ticket: Ticket, result: Result<ChatGptAuth, String>) {
+        if !matches!(&self.form.login, Login::Waiting(waiting) if waiting.answers(ticket)) {
+            return;
+        }
         match result {
             Ok(auth) => {
                 self.form.login = Login::Idle;
@@ -239,15 +243,12 @@ impl State {
     }
 
     pub fn cancel_sign_in(&mut self) {
-        if let Login::Waiting(job) = &self.form.login {
-            job.abort();
-        }
         self.form.login = Login::Idle;
     }
 
     pub fn sign_out(&mut self) {
         self.settings.credentials.chatgpt = None;
-        self.set_models(Models::Idle);
+        self.form.models = Models::Idle;
         self.menu = None;
         self.save();
     }
@@ -374,12 +375,19 @@ impl State {
         }
     }
 
+    /// Look for a new version, unless a check or an install is under way.
     pub fn check_update(&mut self) {
+        if matches!(self.update, Update::Checking | Update::Installing(_)) {
+            return;
+        }
         self.update = Update::Checking;
         let client = self.client.clone();
         self.client.spawn(async move {
             let result = update::available(client.http()).await;
             client.app().update(move |s, _| {
+                if !matches!(s.update, Update::Checking) {
+                    return;
+                }
                 s.update = match result {
                     Ok(Some(version)) => Update::Available(version),
                     Ok(None) => Update::Latest,

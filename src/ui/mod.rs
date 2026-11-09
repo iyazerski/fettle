@@ -9,6 +9,7 @@ mod dictating;
 mod draft;
 mod icons;
 mod onboarding;
+mod pending;
 mod saver;
 mod settings_state;
 mod settings_view;
