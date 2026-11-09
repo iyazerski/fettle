@@ -32,12 +32,6 @@ pub static STRINGS: Strings = Strings {
     rewriting: "正在改写…",
     rewritten: "改写（{}）",
     styles: ["正式", "友好", "更简洁", "更清晰"],
-    style_hints: [
-        "礼貌严谨，适合工作邮件",
-        "亲切随和，适合发给同事",
-        "删掉冗余，只留重点",
-        "用词简单，句子简短",
-    ],
     show_changes: "显示修改",
     thinking: "思考中…",
     nothing_to_fix: "看起来不错，没有需要修正的地方。",

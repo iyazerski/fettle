@@ -32,12 +32,6 @@ pub static STRINGS: Strings = Strings {
     rewriting: "Reescrevendo…",
     rewritten: "Reescrito ({})",
     styles: ["Formal", "Amigável", "Mais curto", "Mais claro"],
-    style_hints: [
-        "Educado e preciso, para e-mails de trabalho",
-        "Caloroso e descontraído, para colegas",
-        "Corta o excesso, mantém o essencial",
-        "Palavras simples e frases curtas",
-    ],
     show_changes: "Mostrar alterações",
     thinking: "Pensando…",
     nothing_to_fix: "Tudo certo. Nada para corrigir.",

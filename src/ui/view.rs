@@ -322,6 +322,8 @@ fn rewrite(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let current = s.settings.rewrite_style;
     let mut styles = rune_kit::Menu::new("styles")
         .trigger(picker(k, t.style(current), t.rewrite_style, Menu::Rewrite))
+        // The standard look has the raised surface and shadow the language list has.
+        .standard()
         .open(s.menu_open(Menu::Rewrite))
         // The control sits at the row's end, so the menu lines up with its right edge.
         .placement(Placement::BottomEnd)
@@ -334,7 +336,6 @@ fn rewrite(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         styles = styles.item(
             MenuItem::new(t.style(style))
                 .icon(style_icon(style))
-                .description(t.style_hint(style))
                 .checked(style == current)
                 .on_select(move |s: &mut State| s.set_style(style)),
         );

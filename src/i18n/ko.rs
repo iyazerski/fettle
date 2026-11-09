@@ -32,12 +32,6 @@ pub static STRINGS: Strings = Strings {
     rewriting: "다시 쓰는 중…",
     rewritten: "다시 쓰기 ({})",
     styles: ["격식 있게", "친근하게", "짧게", "명확하게"],
-    style_hints: [
-        "정중하고 정확하게, 업무 메일에",
-        "따뜻하고 편하게, 동료에게",
-        "군더더기를 빼고 핵심만",
-        "쉬운 단어와 짧은 문장으로",
-    ],
     show_changes: "변경 사항 보기",
     thinking: "생각 중…",
     nothing_to_fix: "좋아 보입니다. 고칠 부분이 없습니다.",

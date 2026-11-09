@@ -32,12 +32,6 @@ pub static STRINGS: Strings = Strings {
     rewriting: "Redagowanie…",
     rewritten: "Przeredagowano ({})",
     styles: ["Formalnie", "Przyjaźnie", "Krócej", "Jaśniej"],
-    style_hints: [
-        "Uprzejmie i precyzyjnie, do maili służbowych",
-        "Ciepło i swobodnie, do współpracowników",
-        "Bez zbędnych słów, tylko to, co ważne",
-        "Proste słowa i krótkie zdania",
-    ],
     show_changes: "Pokaż zmiany",
     thinking: "Myślę…",
     nothing_to_fix: "Wygląda dobrze. Nie ma czego poprawiać.",

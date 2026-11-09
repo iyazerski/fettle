@@ -32,12 +32,6 @@ pub static STRINGS: Strings = Strings {
     rewriting: "Wird umgeschrieben…",
     rewritten: "Umgeschrieben ({})",
     styles: ["Förmlich", "Freundlich", "Kürzer", "Klarer"],
-    style_hints: [
-        "Höflich und präzise, für Arbeitsmails",
-        "Warm und locker, für Kollegen",
-        "Ohne Füllwörter, nur das Wichtige",
-        "Einfache Wörter, kurze Sätze",
-    ],
     show_changes: "Änderungen zeigen",
     thinking: "Denkt nach…",
     nothing_to_fix: "Sieht gut aus. Nichts zu korrigieren.",
