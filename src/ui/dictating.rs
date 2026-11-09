@@ -131,8 +131,14 @@ impl State {
                     self.write_up(recording.into_write_up());
                 }
             }
+            // What was heard before the failure goes in as heard, rather than being lost.
             Heard::Failed(why) => {
-                self.dictation = None;
+                let Some(Dictation::Listening(recording)) = self.dictation.take() else {
+                    return;
+                };
+                if !recording.heard.trim().is_empty() {
+                    self.add_dictated(&recording.heard);
+                }
                 self.dictation_failed(&Problem::Failed(why));
             }
         }
