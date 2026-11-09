@@ -15,6 +15,7 @@ use tokio::runtime::Handle;
 use tokio::sync::{Mutex, oneshot};
 
 use super::checker::{self, Checker, Fix, Target};
+use super::dictating::Dictation;
 use super::draft::{Answer, Draft, Status, complete};
 use super::onboarding::Step;
 use super::saver::Saver;
@@ -49,6 +50,9 @@ pub struct State {
     pub on_device: Availability,
     pub page: Page,
     pub draft: Draft,
+    pub dictation: Option<Dictation>,
+    /// The next dictation session's id; ids are never reused.
+    pub(super) next_dictation: u64,
     /// Keep the window open when another app takes focus.
     pub pinned: bool,
     /// The language macOS prefers, of those the window speaks.
@@ -183,6 +187,8 @@ impl State {
             on_device: on_device::availability(),
             page: Page::Main,
             draft: Draft::new(),
+            dictation: None,
+            next_dictation: 0,
             pinned: false,
             system_locale: Locale::from_preferred(&mac::preferred_languages()),
             menu: None,
@@ -406,15 +412,19 @@ impl State {
     pub fn hide(&mut self) {
         self.placement.over = None;
         self.stop();
+        // Dropping the session stops listening and drops what wasn't added yet.
+        self.dictation = None;
         self.menu = None;
         self.app.hide();
     }
 
-    /// The window lost focus: hide it, unless it's pinned or shows the
-    /// welcome steps, which a new user can't open again without the shortcut.
+    /// The window lost focus: hide it, unless it's pinned, shows the welcome
+    /// steps, which a new user can't open again without the shortcut, or macOS
+    /// is asking to allow dictation.
     pub fn blurred(&mut self) {
         let onboarding = matches!(self.page, Page::Onboarding(_));
-        if !self.pinned && !onboarding && !self.form.shortcut.is_recording() {
+        let asking = matches!(self.dictation, Some(Dictation::Asking));
+        if !self.pinned && !onboarding && !asking && !self.form.shortcut.is_recording() {
             self.hide();
         }
     }

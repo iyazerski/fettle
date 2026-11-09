@@ -31,15 +31,14 @@ A free, open-source AI writing assistant for macOS that can run entirely on your
 
 ## Why Fettle
 
-- **Works in every app.** Mail, Slack, Notes, your browser, your code editor. If you can select the text, Fettle can fix it.
-- **Any language.** Fix and Rewrite work in any language the model knows, and keep your text in the language you wrote it in.
-- **Runs on your Mac, for free.** With Apple Intelligence on macOS 26, Fettle uses Apple's on-device model. No account, no API key, and your text never leaves your Mac.
-- **Or use a bigger model.** Sign in with ChatGPT, or point Fettle at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
-- **Rewrite in one click.** Make text more formal, friendlier, shorter or clearer, or turn raw dictation into a clean message.
-- **Mistakes underlined as you type.** Like Grammarly, Fettle marks mistakes right where you write. Click one to fix it. Faster, and free with the on-device model.
-- **Native and tiny.** Written in Rust, a 10 MB download, about 12 MB of memory when idle, and no CPU use until you call it, unless you turn on underlines.
-- **Private by design.** No account, no telemetry, no servers of ours. Your text stays on your Mac, or goes only to the model you pick.
-- **Free and open source** under the MIT license.
+- **Like Grammarly, but light, fast and free.** Fettle underlines mistakes as you type in Mail, Slack, Notes, your browser and most other apps. Click one to fix it. No account, no subscription, no browser extension. It's a 10 MB app that uses about 12 MB of memory when idle.
+- **Like Google Translate or DeepL, but it sounds like a person wrote it.** Fettle translates into 40 languages the way a native speaker would say it, not word by word. Your tone, formatting and names stay as they are.
+- **Write like a native in any language.** Fix catches grammar and spelling, and also swaps awkward or literally translated phrases for what a native speaker would actually say. Your text stays in your language, and your meaning and tone stay yours.
+- **Get the tone right in one click.** Make an email more formal, a message friendlier, a long reply shorter, or a messy paragraph clearer.
+- **Talk instead of type.** Click the mic and just speak. Fettle drops the ums, repeats and false starts, adds punctuation, and hands you a clean message. Built-in dictation types exactly what you said. Fettle writes what you meant.
+- **Works where you write.** Select text in any app, press <kbd>⌃</kbd><kbd>⌥</kbd><kbd>E</kbd>, and put the result back with <kbd>⌘</kbd><kbd>↩</kbd>. No copying between tabs.
+- **Private, and free with Apple Intelligence.** On macOS 26, Fettle can use Apple's on-device model. Your text never leaves your Mac, and there's nothing to pay. Want a bigger model? Use your ChatGPT plan, or OpenAI, OpenRouter, Ollama or LM Studio.
+- **Open source.** MIT licensed, with no telemetry and no servers of ours.
 
 ## Install
 
@@ -131,6 +130,7 @@ Pre-commit hooks run with [prek](https://github.com/j178/prek): `prek install`.
 - Fettle has no account and no analytics, and it has no server of its own.
 - With **On this Mac**, your text never leaves your Mac.
 - Otherwise, the text you fix or translate goes only to the model provider you chose: OpenAI when you sign in with ChatGPT, or the API URL you entered.
+- Dictation uses Apple's speech recognition, on your Mac when it supports your language, else on Apple's servers.
 - Your ChatGPT sign-in and API key are kept in the macOS Keychain.
 - Fettle restores your clipboard after it copies and pastes.
 

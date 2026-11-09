@@ -16,6 +16,7 @@ mod zh;
 
 use serde::{Deserialize, Serialize};
 
+use crate::dictation::Problem;
 use crate::llm::on_device::{Availability, Refusal};
 use crate::prompts::Style;
 use crate::settings::{LANGUAGES, Missing};
@@ -124,6 +125,13 @@ pub struct Strings {
     pub text: &'static str,
     pub placeholder: &'static str,
     pub clear: &'static str,
+    pub dictate: &'static str,
+    pub stop_dictating: &'static str,
+    pub speech_off: &'static str,
+    pub microphone_off: &'static str,
+    pub speech_unavailable: &'static str,
+    /// `{}`: macOS's description of the error.
+    pub dictation_failed: &'static str,
     pub back: &'static str,
     pub settings: &'static str,
     pub pin: &'static str,
@@ -145,10 +153,13 @@ pub struct Strings {
     pub rewriting: &'static str,
     /// `{}`: the style.
     pub rewritten: &'static str,
-    /// Formal, Friendly, Shorter, Clearer, Dictation, as [`Style::ALL`](crate::prompts::Style::ALL).
-    pub styles: [&'static str; 5],
+    /// The title over a dictation's cleanup, while it runs and once it's done.
+    pub cleaning_up: &'static str,
+    pub dictated: &'static str,
+    /// Formal, Friendly, Shorter, Clearer, as [`Style::ALL`](crate::prompts::Style::ALL).
+    pub styles: [&'static str; 4],
     /// When to pick each of `styles`, in the same order, shown under its name.
-    pub style_hints: [&'static str; 5],
+    pub style_hints: [&'static str; 4],
     pub show_changes: &'static str,
     pub thinking: &'static str,
     pub nothing_to_fix: &'static str,
@@ -297,6 +308,16 @@ impl Strings {
             Refusal::TooLong => self.too_long,
             Refusal::Language => self.unsupported_language,
             Refusal::Declined => self.declined,
+        }
+    }
+
+    /// Return why dictation can't run, in this language.
+    pub fn dictation_problem(&self, problem: &Problem) -> String {
+        match problem {
+            Problem::SpeechOff => self.speech_off.into(),
+            Problem::MicrophoneOff => self.microphone_off.into(),
+            Problem::Unavailable => self.speech_unavailable.into(),
+            Problem::Failed(why) => fill(self.dictation_failed, why),
         }
     }
 

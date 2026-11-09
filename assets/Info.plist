@@ -14,6 +14,8 @@
   <key>NSHumanReadableCopyright</key><string>© Ihar Yazerski. MIT License.</string>
   <!-- No Dock icon: the window comes from the shortcut. -->
   <key>LSUIElement</key><true/>
+  <key>NSMicrophoneUsageDescription</key><string>Fettle's dictation button listens to the microphone.</string>
+  <key>NSSpeechRecognitionUsageDescription</key><string>Fettle's dictation button turns your speech into text.</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
 </dict>

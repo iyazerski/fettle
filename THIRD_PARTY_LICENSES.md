@@ -4565,6 +4565,7 @@ Used by:
 - objc2-app-kit 0.3.2
 - objc2-application-services 0.3.2
 - objc2-av-foundation 0.3.2
+- objc2-avf-audio 0.3.2
 - objc2-core-foundation 0.3.2
 - objc2-core-graphics 0.3.2
 - objc2-core-media 0.3.2
@@ -4573,6 +4574,7 @@ Used by:
 - objc2-io-surface 0.3.2
 - objc2-metal 0.3.2
 - objc2-quartz-core 0.3.2
+- objc2-speech 0.3.2
 - parley_engine 0.12.0
 - pin-project-lite 0.2.17
 - portable-atomic 1.15.0

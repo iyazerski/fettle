@@ -6,6 +6,7 @@
 //! answer, with a word diff ([`diff`]) for fixes.
 
 mod ax;
+mod dictation;
 mod diff;
 mod document;
 mod i18n;

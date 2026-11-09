@@ -1,6 +1,6 @@
 [package]
 name = "fettle"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 publish = false
 license = "MIT"
@@ -15,11 +15,15 @@ clap = { version = "4", features = ["derive"] }
 futures-util = "0.3"
 libc = "0.2"
 objc2 = "0.6"
+# Dictation: the microphone and Apple's speech recognizer.
+objc2-av-foundation = { version = "0.3", default-features = false, features = ["std", "block2", "AVCaptureDevice", "AVMediaFormat"] }
+objc2-avf-audio = { version = "0.3", default-features = false, features = ["std", "block2", "AVAudioBuffer", "AVAudioEngine", "AVAudioFormat", "AVAudioIONode", "AVAudioNode", "AVAudioTime", "AVAudioTypes"] }
+objc2-speech = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-avf-audio", "SFSpeechRecognitionMetadata", "SFSpeechRecognitionRequest", "SFSpeechRecognitionResult", "SFSpeechRecognitionTask", "SFSpeechRecognizer", "SFTranscription"] }
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "libc", "objc2-core-foundation", "NSAppearance", "NSApplication", "NSBox", "NSColor", "NSGraphics", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSEvent", "NSScreen", "NSRunningApplication", "NSView", "NSWindow", "NSWorkspace"] }
 objc2-application-services = { version = "0.3", default-features = false, features = ["std", "libc", "objc2", "HIServices", "AXError", "AXUIElement", "AXValue"] }
 objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFArray", "CFCGTypes", "CFNumber", "CFRunLoop", "CFString"] }
 objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSGeometry", "NSLocale", "NSString", "NSURL", "NSValue"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSError", "NSGeometry", "NSLocale", "NSString", "NSURL", "NSValue"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
 ring = "0.17"
 # Rune is pre-release and changes often: keep one tested revision (the one

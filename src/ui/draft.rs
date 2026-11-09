@@ -166,7 +166,7 @@ pub fn complete(action: Action, original: &str, text: &str, empty: &str) -> Stat
     let text = format!("{}{end}", hyphens(original, text.trim_end()));
     let changes = match action {
         Action::Fix => diff::words(original, &text),
-        Action::Translate | Action::Rewrite(_) => Vec::new(),
+        Action::Translate | Action::Rewrite(_) | Action::Dictation => Vec::new(),
     };
     Status::Done {
         text,

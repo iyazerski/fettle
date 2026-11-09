@@ -4,6 +4,7 @@
 
 mod buttons;
 mod checker;
+mod dictating;
 mod draft;
 mod icons;
 mod onboarding;

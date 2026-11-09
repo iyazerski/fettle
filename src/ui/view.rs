@@ -13,6 +13,7 @@ use rune_kit::{
 };
 
 use super::buttons::{self, Tone};
+use super::dictating::{Dictation, LEVELS_KEPT, Recording};
 use super::draft::{Answer, Status};
 use super::icons;
 use super::state::{Menu, Page, State};
@@ -118,9 +119,19 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     page
 }
 
-/// The editable text, with a button in its corner that clears it.
+/// The two-row text box's height: rows of 17.5 points plus padding, as Kit's
+/// text area draws it.
+const SOURCE_MIN: f32 = 51.0;
+
+/// The editable text, with buttons in its corner that dictate and clear it;
+/// while dictating, the waveform stands in for it.
 fn source(s: &State, k: &Kit) -> El {
     let t = s.t();
+    let asking = match &s.dictation {
+        Some(Dictation::Listening(recording)) => return recorder(s, recording, k),
+        Some(Dictation::Asking) => true,
+        None => false,
+    };
     let field = TextArea::new(&s.draft.source)
         .label(t.text)
         .placeholder(t.placeholder)
@@ -130,17 +141,80 @@ fn source(s: &State, k: &Kit) -> El {
         .build(k)
         // Kit tints fields under the pointer like buttons; a text box shouldn't.
         .hover(Color::TRANSPARENT);
-    if s.draft.source.text.is_empty() {
-        return field;
+    let mut tools = vec![
+        IconButton::new(&icons::MIC)
+            .variant(IconButtonVariant::GhostMuted)
+            .label(t.dictate)
+            .disabled(asking)
+            .on_press(|s: &mut State| s.dictate())
+            .build(k),
+    ];
+    if !s.draft.source.text.is_empty() {
+        tools.push(
+            IconButton::new(&icons::CLOSE)
+                .variant(IconButtonVariant::GhostMuted)
+                .label(t.clear)
+                .on_press(|s: &mut State| s.clear_source())
+                .build(k),
+        );
     }
-    let clear = IconButton::new(&icons::CLOSE)
-        .variant(IconButtonVariant::GhostMuted)
-        .label(t.clear)
-        .on_press(|s: &mut State| s.clear_source())
-        .build(k)
-        .pin(None, Some(6.0), Some(6.0), None);
-    // Room on the right so the text doesn't run under the button.
-    col().w_full().child(field.pr(34.0)).child(clear)
+    // Room on the right so the text doesn't run under the buttons.
+    let room = 8.0 + tools.len() as f32 * 26.0;
+    col()
+        .w_full()
+        .child(field.pr(room))
+        .child(
+            row()
+                .gap(2.0)
+                .children(tools)
+                .pin(None, Some(6.0), Some(6.0), None),
+        )
+}
+
+/// While dictating, what stands in for the text: a waveform of the
+/// microphone's loudness, the time, and a button that stops.
+fn recorder(s: &State, recording: &Recording, k: &Kit) -> El {
+    let bars = recording.levels.iter().map(|level| {
+        el().size(2.0, (2.0 + level * 17.0).round())
+            .radius(1.0)
+            .fill(k.c.text_accent)
+    });
+    let secs = recording.started.elapsed().as_secs();
+    row()
+        .key("recorder")
+        .w_full()
+        .min_h(SOURCE_MIN)
+        .pl(10.0)
+        .pr(6.0)
+        .gap(10.0)
+        .center_y()
+        .radius(k.radius.md)
+        .fill(k.c.bg_base)
+        .outline(1.0, -1.0, k.c.border_focus)
+        .child(
+            // Newest on the right, the oldest fading out on the left.
+            row()
+                .w(LEVELS_KEPT as f32 * 4.0 - 2.0)
+                .h(19.0)
+                .gap(2.0)
+                .center_y()
+                .justify_end()
+                .clip_fade_linear(24.0, 0.0, 0.0, 0.0)
+                .children(bars),
+        )
+        .child(spacer())
+        .child(
+            text(format!("{}:{:02}", secs / 60, secs % 60))
+                .font(k.ty.text_small)
+                .color(k.c.text_faint),
+        )
+        .child(
+            IconButton::new(&icons::MIC)
+                .variant(IconButtonVariant::Contrast)
+                .label(s.t().stop_dictating)
+                .on_press(|s: &mut State| s.dictate())
+                .build(k),
+        )
 }
 
 /// What starts a header: Fettle's mark, or a button back.
@@ -405,6 +479,8 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         Action::Translate => fill(t.translation, language),
         Action::Rewrite(_) if running => t.rewriting.to_owned(),
         Action::Rewrite(style) => fill(t.rewritten, t.style(style)),
+        Action::Dictation if running => t.cleaning_up.to_owned(),
+        Action::Dictation => t.dictated.to_owned(),
     };
     // Only a Fix answer has changes.
     let changed = matches!(&answer.status, Status::Done { changes, .. } if diff::changed(changes));
@@ -412,6 +488,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         Action::Fix => &icons::SPARKLE,
         Action::Translate => &icons::GLOBE,
         Action::Rewrite(_) => &icons::PEN,
+        Action::Dictation => &icons::MIC,
     };
     let mut top = row()
         .w_full()
