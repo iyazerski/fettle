@@ -3,7 +3,8 @@
 //!
 //! Text ranges count UTF-16 code units, as the API and `NSString` do.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
 use std::ops::Range;
@@ -83,10 +84,12 @@ const NOTIFICATIONS: [&str; 5] = [
 ];
 
 /// The apps Fettle reads from, remembering which it asked to expose their
-/// web content.
+/// web content, and the attribute it turned on in each, to turn it off once
+/// dropped: the content costs them memory and speed, and the browsers
+/// animate their windows differently.
 #[derive(Debug, Default)]
 pub struct Apps {
-    asked: HashSet<i32>,
+    asked: HashMap<i32, Option<&'static str>>,
 }
 
 /// The app in front and its focused element, if Fettle may read it.
@@ -118,8 +121,8 @@ impl Apps {
         }
         // SAFETY: a plain CF object for the app with `pid`.
         let app = unsafe { AXUIElement::new_application(pid) };
-        if self.asked.insert(pid) {
-            expose_web_content(&app, &id);
+        if let Entry::Vacant(entry) = self.asked.entry(pid) {
+            entry.insert(expose_web_content(&app, &id));
         }
         // Not the system-wide element's: that fails now and then with
         // "cannot complete" while the app's own answers.
@@ -159,10 +162,30 @@ fn is_skipped(id: &str) -> bool {
     SKIPPED_APPS.contains(&id) || SKIPPED_VENDORS.iter().any(|v| id.starts_with(v))
 }
 
+impl Drop for Apps {
+    fn drop(&mut self) {
+        // VoiceOver needs the web content too, and may have asked for it first.
+        if NSWorkspace::sharedWorkspace().isVoiceOverEnabled() {
+            return;
+        }
+        for (pid, attribute) in self.asked.drain() {
+            let Some(attribute) = attribute else {
+                continue;
+            };
+            // SAFETY: a plain CF object for the app with `pid`.
+            let app = unsafe { AXUIElement::new_application(pid) };
+            let name = CFString::from_static_str(attribute);
+            // SAFETY: the attribute takes a CFBoolean. An app that quit returns an error, which is fine.
+            unsafe { app.set_attribute_value(&name, CFBoolean::new(false)) };
+        }
+    }
+}
+
 /// Ask an Electron app or a Chromium browser, `id`, to build its web
 /// content's accessibility tree, which they only do for screen readers
-/// unless asked. Other apps ignore it.
-fn expose_web_content(app: &AXUIElement, id: &str) {
+/// unless asked. Returns the attribute it turned on, unless the app ignores
+/// it or another client, such as a screen reader, had turned it on already.
+fn expose_web_content(app: &AXUIElement, id: &str) -> Option<&'static str> {
     // Chromium browsers ignore Electron's attribute and take the one
     // VoiceOver sets, after a 2-second wait. It changes how other apps
     // animate their windows, so it's only set on the browsers.
@@ -171,9 +194,16 @@ fn expose_web_content(app: &AXUIElement, id: &str) {
     } else {
         "AXManualAccessibility"
     };
-    let name = CFString::from_static_str(name);
-    // SAFETY: the attribute takes a CFBoolean. Apps without it return an error, which is fine.
-    unsafe { app.set_attribute_value(&name, CFBoolean::new(true)) };
+    let on = attribute(app, name)
+        .and_then(|v| v.downcast::<CFBoolean>().ok())
+        .is_some_and(|v| v.as_bool());
+    if on {
+        return None;
+    }
+    let attribute = CFString::from_static_str(name);
+    // SAFETY: the attribute takes a CFBoolean. Apps without it return an error.
+    let set = unsafe { app.set_attribute_value(&attribute, CFBoolean::new(true)) };
+    (set == AXError::Success).then_some(name)
 }
 
 /// A text field in another app.
@@ -183,11 +213,13 @@ pub struct Field {
 }
 
 impl Field {
-    /// Whether this is a password field.
-    pub fn is_secure(&self) -> bool {
-        attribute(&self.element, "AXSubrole")
+    /// Whether this is a text area, where people write prose: message
+    /// composers, notes and editable web content are, while single-line
+    /// fields such as address bars, search boxes and passwords aren't.
+    pub fn is_text_area(&self) -> bool {
+        attribute(&self.element, "AXRole")
             .and_then(|v| v.downcast::<CFString>().ok())
-            .is_some_and(|role| *role == *CFString::from_static_str("AXSecureTextField"))
+            .is_some_and(|role| *role == *CFString::from_static_str("AXTextArea"))
     }
 
     /// Read the field's text into `buffer`. Returns false, leaving `buffer`

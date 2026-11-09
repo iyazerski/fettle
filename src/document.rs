@@ -67,6 +67,14 @@ impl Document {
         &self.mistakes
     }
 
+    /// Return the id of the check running, if any.
+    pub fn checking(&self) -> Option<u64> {
+        match self.check {
+            Check::Running { id, .. } => Some(id),
+            Check::Idle => None,
+        }
+    }
+
     /// Take `new` as the text. Returns where the paragraph the edit starts in
     /// begins, as layout before it is unchanged, or `None` if the text is the same.
     pub fn edit(&mut self, new: &[u16]) -> Option<usize> {

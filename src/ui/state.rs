@@ -331,7 +331,7 @@ impl State {
     pub fn proofread(&mut self, check: Check) {
         let Check { id, units, text } = check;
         let Ok((backend, model)) = Backend::with_model(&self.settings) else {
-            self.checker.skip();
+            self.checker.skip(id);
             return;
         };
         let ask = Ask {
@@ -698,12 +698,13 @@ impl State {
         self.report(fill(self.t().save_failed, format_args!("{error:#}")));
     }
 
-    /// Save what's unsaved now: Fettle is quitting, and the saving task
-    /// won't get to it.
-    pub fn save_now(&self) {
+    /// Fettle is quitting: save what's unsaved now, as the saving task won't
+    /// get to it, and stop underlining, so other apps get back what it changed.
+    pub fn quitting(&mut self) {
         if let Err(e) = self.saver.flush() {
             eprintln!("saving the settings: {e:#}");
         }
+        self.checker.quit();
     }
 
     /// Show `message` on the page that's open.

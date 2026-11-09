@@ -7,9 +7,10 @@ mod compat;
 pub mod on_device;
 mod sse;
 
+use std::fmt;
 use std::time::Duration;
 
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow};
 use serde::Serialize;
 use serde_json::Value;
 
@@ -98,7 +99,10 @@ impl Backend {
         }
     }
 
-    /// Stream the answer to `ask`, calling `on_delta` with each piece.
+    /// Stream the answer to `ask`, calling `on_delta` with each piece. A
+    /// model that rejects `ask`'s reasoning effort, as some can't turn
+    /// reasoning off and others don't reason at all, is asked again without
+    /// one, so it reasons as it does by default.
     ///
     /// # Errors
     ///
@@ -107,18 +111,36 @@ impl Backend {
         &self,
         http: &reqwest::Client,
         ask: &Ask,
-        on_delta: impl FnMut(&str),
+        mut on_delta: impl FnMut(&str),
     ) -> Result<()> {
         let answer = async {
-            match self {
-                Backend::OnDevice => on_device::stream(ask, on_delta).await,
-                Backend::ChatGpt(auth) => chatgpt::stream(http, auth, ask, on_delta).await,
-                Backend::Api { base, key } => compat::stream(http, base, key, ask, on_delta).await,
+            // The rejection comes before any piece, so asking again repeats none.
+            match self.send(http, ask, Some(ask.effort), &mut on_delta).await {
+                Err(e) if rejects_effort(&e) => self.send(http, ask, None, on_delta).await,
+                other => other,
             }
         };
         tokio::time::timeout(MAX_ANSWER, answer)
             .await
             .map_err(|_| anyhow!("the model took too long to answer"))?
+    }
+
+    /// Stream the answer to `ask` with reasoning `effort`, or the model's
+    /// default for `None`.
+    async fn send(
+        &self,
+        http: &reqwest::Client,
+        ask: &Ask,
+        effort: Option<Effort>,
+        on_delta: impl FnMut(&str),
+    ) -> Result<()> {
+        match self {
+            Backend::OnDevice => on_device::stream(ask, on_delta).await,
+            Backend::ChatGpt(auth) => chatgpt::stream(http, auth, ask, effort, on_delta).await,
+            Backend::Api { base, key } => {
+                compat::stream(http, base, key, ask, effort, on_delta).await
+            }
+        }
     }
 
     /// The models this backend offers, sorted; none to pick from on device.
@@ -145,6 +167,29 @@ pub fn http() -> Result<reqwest::Client> {
         .context("setting up HTTP")
 }
 
+/// A request the API refused, with its own message.
+#[derive(Debug)]
+struct Refused {
+    status: reqwest::StatusCode,
+    message: String,
+}
+
+impl fmt::Display for Refused {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} ({})", self.message, self.status)
+    }
+}
+
+impl std::error::Error for Refused {}
+
+/// Whether `error` is the API refusing the reasoning effort asked for.
+fn rejects_effort(error: &anyhow::Error) -> bool {
+    error.downcast_ref::<Refused>().is_some_and(|r| {
+        r.status == reqwest::StatusCode::BAD_REQUEST
+            && r.message.to_lowercase().contains("reasoning")
+    })
+}
+
 /// `response` if it succeeded, else an error with the API's own message.
 async fn check(response: reqwest::Response) -> Result<reqwest::Response> {
     let status = response.status();
@@ -152,7 +197,11 @@ async fn check(response: reqwest::Response) -> Result<reqwest::Response> {
         return Ok(response);
     }
     let body = response.text().await.unwrap_or_default();
-    bail!("{} ({status})", error_message(&body))
+    Err(Refused {
+        status,
+        message: error_message(&body),
+    }
+    .into())
 }
 
 /// The message in an API error body: OpenAI's `error.message`, a `detail`, or

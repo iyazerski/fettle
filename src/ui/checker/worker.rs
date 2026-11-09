@@ -41,6 +41,9 @@ const MAX_LINES: usize = 40;
 /// so a field that can't place its words can't keep the checker busy; the
 /// rest are asked about on the next one.
 const MAX_LOOKUPS: usize = 60;
+/// How many fields left keep their edits still to check and their running
+/// check, so a quick switch to another field or app loses neither.
+const RECENT: usize = 8;
 
 /// What the window asks of the checker.
 pub(super) enum Command {
@@ -53,8 +56,9 @@ pub(super) enum Command {
         units: Vec<u16>,
         fix: Option<Fix>,
     },
-    /// Leave the field's edits unchecked: there's no model to ask.
-    Skip,
+    /// Leave the edits of the field that asked for check `id` unchecked:
+    /// there's no model to ask.
+    Skip(u64),
     /// Forget the fixes known: they came from another model.
     Forget,
     /// Keep `fix` of paragraph `units`, so it isn't sent again.
@@ -73,6 +77,8 @@ pub(super) enum Command {
 pub(super) struct Handle {
     commands: Sender<Command>,
     waker: Waker,
+    /// Closes once the thread has ended and undone what it changed in other apps.
+    ended: Receiver<()>,
 }
 
 impl Handle {
@@ -80,6 +86,13 @@ impl Handle {
         // A closed channel means the thread is gone; there's nothing to tell.
         let _ = self.commands.send(command);
         self.waker.wake();
+    }
+
+    /// Stop the thread, and wait up to `timeout` for it to end: a slow app
+    /// it's asking can hold it up.
+    pub(super) fn stop_and_wait(self, timeout: Duration) {
+        self.send(Command::Stop);
+        let _ = self.ended.recv_timeout(timeout);
     }
 }
 
@@ -93,6 +106,7 @@ impl Drop for Handle {
 pub(super) fn spawn(app: AppHandle<State>, id: u64) -> Option<Handle> {
     let (commands, received) = mpsc::channel();
     let (ready, waker) = mpsc::sync_channel(1);
+    let (end, ended) = mpsc::channel::<()>();
     let spawned = std::thread::Builder::new()
         .name("fettle-checker".into())
         .spawn(move || {
@@ -103,13 +117,18 @@ pub(super) fn spawn(app: AppHandle<State>, id: u64) -> Option<Handle> {
             if started {
                 Worker::new(app, id, received).run();
             }
+            drop(end);
         });
     if let Err(e) = spawned {
         eprintln!("starting the checker: {e}");
         return None;
     }
     let waker = waker.recv().ok().flatten()?;
-    Some(Handle { commands, waker })
+    Some(Handle {
+        commands,
+        waker,
+        ended,
+    })
 }
 
 /// The checker's state on its thread.
@@ -132,6 +151,8 @@ struct Worker {
     changed: Rc<Cell<bool>>,
     /// The field being underlined, if any.
     session: Option<Session>,
+    /// Fields underlined before, most recent last, to pick up again.
+    recent: Vec<Session>,
     /// The underlines the window shows.
     drawn: Vec<Line>,
     /// The paragraph opened from an underline, to paste the answer over.
@@ -184,6 +205,7 @@ impl Worker {
             watch: None,
             changed: Rc::default(),
             session: None,
+            recent: Vec::new(),
             drawn: Vec::new(),
             opened: None,
             next_tick: Instant::now(),
@@ -221,18 +243,23 @@ impl Worker {
     fn take(&mut self, command: Command) {
         match command {
             Command::Asking(id, request) => {
-                if let Some(session) = &mut self.session {
+                if let Some(session) = self.checking(id) {
                     session.request = Some((id, request));
                 }
             }
             Command::Finished { id, units, fix } => self.finished(id, units, fix),
-            Command::Skip => {
-                if let Some(session) = &mut self.session {
+            Command::Skip(id) => {
+                if let Some(session) = self.checking(id) {
                     session.request = None;
                     session.doc.skip();
                 }
             }
-            Command::Forget => self.fixes.clear(),
+            // Fields' documents hold the old model's marks, and their checks ask it.
+            Command::Forget => {
+                self.fixes.clear();
+                self.session = None;
+                self.recent.clear();
+            }
             Command::Learn { units, fix } => self.remember(units, fix),
             Command::Open(line) => self.open(line),
             Command::Select(units) => {
@@ -248,8 +275,27 @@ impl Worker {
 
     /// Hide the underlines until the next `refresh` finds a field.
     fn pause(&mut self) {
-        self.session = None;
+        self.park();
         self.show(Vec::new());
+    }
+
+    /// Keep the field being underlined among the recent ones, its check
+    /// still running, dropping the oldest past [`RECENT`].
+    fn park(&mut self) {
+        if let Some(session) = self.session.take() {
+            if self.recent.len() == RECENT {
+                self.recent.remove(0);
+            }
+            self.recent.push(session);
+        }
+    }
+
+    /// Return the field, current or recent, whose check `id` runs.
+    fn checking(&mut self, id: u64) -> Option<&mut Session> {
+        self.session
+            .iter_mut()
+            .chain(&mut self.recent)
+            .find(|s| s.doc.checking() == Some(id))
     }
 
     /// Read the focused field, underline the mistakes known, and ask for the
@@ -272,7 +318,7 @@ impl Worker {
             self.watch = Watch::new(pid, move || changed.set(true)).map(|w| (pid, w));
         }
         let same = self.session.as_ref().is_some_and(|s| s.field == field);
-        if (!same && field.is_secure()) || !field.read(MAX_TEXT, &mut self.buffer) {
+        if (!same && !field.is_text_area()) || !field.read(MAX_TEXT, &mut self.buffer) {
             self.pause();
             return;
         }
@@ -288,17 +334,39 @@ impl Worker {
                 }
             }
             _ => {
-                let fixes = &self.fixes;
-                let doc = Document::new(self.buffer.clone(), |paragraph| {
-                    fixes.get(paragraph).map(|f| diff::marks(&f.changes))
-                });
-                self.session = Some(Session {
-                    field,
-                    doc,
-                    edited: None,
-                    layout: Layout::default(),
-                    request: None,
-                });
+                // Taken out before parking the current field, which may drop the oldest.
+                let back = self
+                    .recent
+                    .iter()
+                    .position(|s| s.field == field)
+                    .map(|i| self.recent.remove(i));
+                self.park();
+                let session = match back {
+                    Some(mut session) => {
+                        // It may have moved or changed while away.
+                        session.layout = Layout::default();
+                        if session.doc.edit(&self.buffer).is_some() {
+                            let now = Instant::now();
+                            session.edited = Some(now);
+                            self.idle_at = Some(now + IDLE);
+                        }
+                        session
+                    }
+                    None => {
+                        let fixes = &self.fixes;
+                        let doc = Document::new(self.buffer.clone(), |paragraph| {
+                            fixes.get(paragraph).map(|f| diff::marks(&f.changes))
+                        });
+                        Session {
+                            field,
+                            doc,
+                            edited: None,
+                            layout: Layout::default(),
+                            request: None,
+                        }
+                    }
+                };
+                self.session = Some(session);
             }
         }
         self.request();
@@ -306,25 +374,28 @@ impl Worker {
     }
 
     /// Take the model's `fix` of paragraph `units`, asked as check `id`, and
-    /// ask about the next paragraph.
+    /// ask about the next paragraph if its field is the one underlined. A
+    /// check no field waits for, dropped or asked of a model since changed,
+    /// counts for nothing.
     fn finished(&mut self, id: u64, units: Vec<u16>, fix: Option<Fix>) {
-        let found = fix.as_ref().map(|f| diff::marks(&f.changes));
+        let current = self
+            .session
+            .as_ref()
+            .is_some_and(|s| s.doc.checking() == Some(id));
+        let Some(session) = self.checking(id) else {
+            return;
+        };
+        session.request = None;
+        session
+            .doc
+            .finish(id, fix.as_ref().map(|f| diff::marks(&f.changes)));
         if let Some(fix) = fix {
             self.remember(units, fix);
         }
-        let Some(session) = &mut self.session else {
-            return;
-        };
-        if session
-            .request
-            .as_ref()
-            .is_some_and(|(asked, _)| *asked == id)
-        {
-            session.request = None;
+        if current {
+            self.request();
+            self.draw();
         }
-        session.doc.finish(id, found);
-        self.request();
-        self.draw();
     }
 
     fn remember(&mut self, paragraph: Vec<u16>, fix: Fix) {

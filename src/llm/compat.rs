@@ -5,24 +5,28 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::sse::{self, Flow};
-use super::{Ask, check, error_message};
+use super::{Ask, Effort, check, error_message};
 
+/// Stream the answer to `ask` with reasoning `effort`, or the model's default for `None`.
 pub async fn stream(
     http: &reqwest::Client,
     base: &str,
     key: &str,
     ask: &Ask,
+    effort: Option<Effort>,
     mut on_delta: impl FnMut(&str),
 ) -> Result<()> {
-    let body = json!({
+    let mut body = json!({
         "model": ask.model()?,
         "stream": true,
         "messages": [
             { "role": "system", "content": ask.system },
             { "role": "user", "content": ask.text },
         ],
-        "reasoning_effort": ask.effort,
     });
+    if let Some(effort) = effort {
+        body["reasoning_effort"] = json!(effort);
+    }
     let mut request = http.post(format!("{base}/chat/completions")).json(&body);
     if !key.is_empty() {
         request = request.bearer_auth(key);

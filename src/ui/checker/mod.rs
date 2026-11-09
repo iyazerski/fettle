@@ -9,6 +9,8 @@
 
 mod worker;
 
+use std::time::Duration;
+
 use objc2_core_foundation::CGRect;
 use rune::AppHandle;
 
@@ -17,6 +19,9 @@ use super::pending::Pending;
 use super::state::State;
 use crate::diff::Piece;
 use crate::underlines::{Clicks, Line, Underlines};
+
+/// How long quitting waits for the checker to undo what it changed in other apps.
+const QUIT_WAIT: Duration = Duration::from_millis(500);
 
 /// The window's side of the checker.
 #[derive(Default)]
@@ -82,6 +87,15 @@ impl Checker {
         self.underlines.hide();
     }
 
+    /// Stop before Fettle quits, waiting a moment for the checker to undo
+    /// what it changed in other apps, which the process ending would skip.
+    pub fn quit(&mut self) {
+        if let Some(running) = self.running.take() {
+            running.worker.stop_and_wait(QUIT_WAIT);
+        }
+        self.underlines.hide();
+    }
+
     /// Underline `lines`, which checker `id` found, unless it was stopped.
     pub fn show(&mut self, id: u64, lines: Vec<Line>) {
         if self.running.is_some() && id == self.started {
@@ -109,9 +123,10 @@ impl Checker {
         self.send(Command::Finished { id, units, fix });
     }
 
-    /// Leave the field's edits unchecked: there's no model to ask.
-    pub fn skip(&self) {
-        self.send(Command::Skip);
+    /// Leave the edits of the field that asked for check `id` unchecked:
+    /// there's no model to ask.
+    pub fn skip(&self, id: u64) {
+        self.send(Command::Skip(id));
     }
 
     /// Forget the fixes known: they came from another model.

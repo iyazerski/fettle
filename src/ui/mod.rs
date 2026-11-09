@@ -79,7 +79,7 @@ pub fn run(start: Start) -> Result<()> {
             }
         })
         // Also on logout and shutdown, which skip Fettle's own Quit.
-        .on_quit(|s, _| s.save_now())
+        .on_quit(|s, _| s.quitting())
         .on_reopen(|s, _, _| {
             s.open_settings();
             true
