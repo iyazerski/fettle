@@ -153,6 +153,8 @@ struct Worker {
     session: Option<Session>,
     /// Fields underlined before, most recent last, to pick up again.
     recent: Vec<Session>,
+    /// The last field found not to underline in, so it isn't looked at again each tick.
+    left_alone: Option<Field>,
     /// The underlines the window shows.
     drawn: Vec<Line>,
     /// The paragraph opened from an underline, to paste the answer over.
@@ -206,6 +208,7 @@ impl Worker {
             changed: Rc::default(),
             session: None,
             recent: Vec::new(),
+            left_alone: None,
             drawn: Vec::new(),
             opened: None,
             next_tick: Instant::now(),
@@ -318,7 +321,7 @@ impl Worker {
             self.watch = Watch::new(pid, move || changed.set(true)).map(|w| (pid, w));
         }
         let same = self.session.as_ref().is_some_and(|s| s.field == field);
-        if (!same && !field.is_text_area()) || !field.read(MAX_TEXT, &mut self.buffer) {
+        if (!same && !self.underlines_in(&field)) || !field.read(MAX_TEXT, &mut self.buffer) {
             self.pause();
             return;
         }
@@ -371,6 +374,19 @@ impl Worker {
         }
         self.request();
         self.draw();
+    }
+
+    /// Whether to underline in `field`, which isn't the one underlined: a
+    /// text area, but not on a messenger's web page.
+    fn underlines_in(&mut self, field: &Field) -> bool {
+        if self.left_alone.as_ref() == Some(field) {
+            return false;
+        }
+        let prose = field.is_text_area() && !field.on_messenger_site();
+        if !prose {
+            self.left_alone = Some(field.clone());
+        }
+        prose
     }
 
     /// Take the model's `fix` of paragraph `units`, asked as check `id`, and

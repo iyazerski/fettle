@@ -16,8 +16,8 @@ use objc2_app_kit::NSWorkspace;
 use objc2_application_services::{AXError, AXObserver, AXUIElement, AXValue, AXValueType};
 use objc2_core_foundation::{
     CFArray, CFBoolean, CFIndex, CFNumber, CFRange, CFRetained, CFRunLoop, CFRunLoopSource,
-    CFRunLoopSourceContext, CFString, CFType, CGPoint, CGRect, CGSize, kCFRunLoopCommonModes,
-    kCFRunLoopDefaultMode,
+    CFRunLoopSourceContext, CFString, CFType, CFURL, CGPoint, CGRect, CGSize,
+    kCFRunLoopCommonModes, kCFRunLoopDefaultMode,
 };
 
 /// How long an Accessibility call waits for an app, in seconds, so a hung
@@ -59,6 +59,16 @@ const SKIPPED_APPS: [&str; 23] = [
     "com.github.wez.wezterm",
     "co.zeit.hyper",
 ];
+/// Messengers Fettle doesn't underline in, by bundle ID, and their web
+/// versions, by host.
+const MESSENGERS: [&str; 3] = [
+    "ru.keepcoder.Telegram",
+    "com.tdesktop.Telegram",
+    "net.whatsapp.WhatsApp",
+];
+const MESSENGER_SITES: [&str; 2] = ["web.telegram.org", "web.whatsapp.com"];
+/// At most this many ancestors of a field are looked through for the web page it's on.
+const MAX_DEPTH: usize = 64;
 /// Bundle ID prefixes of vendors whose apps are all skipped: every JetBrains
 /// IDE has its own ID.
 const SKIPPED_VENDORS: [&str; 1] = ["com.jetbrains."];
@@ -159,7 +169,9 @@ fn append_units(text: &CFString, buffer: &mut Vec<u16>) {
 
 /// Whether Fettle leaves the app with bundle ID `id` alone.
 fn is_skipped(id: &str) -> bool {
-    SKIPPED_APPS.contains(&id) || SKIPPED_VENDORS.iter().any(|v| id.starts_with(v))
+    SKIPPED_APPS.contains(&id)
+        || MESSENGERS.contains(&id)
+        || SKIPPED_VENDORS.iter().any(|v| id.starts_with(v))
 }
 
 impl Drop for Apps {
@@ -217,9 +229,28 @@ impl Field {
     /// composers, notes and editable web content are, while single-line
     /// fields such as address bars, search boxes and passwords aren't.
     pub fn is_text_area(&self) -> bool {
-        attribute(&self.element, "AXRole")
-            .and_then(|v| v.downcast::<CFString>().ok())
-            .is_some_and(|role| *role == *CFString::from_static_str("AXTextArea"))
+        has_role(&self.element, "AXTextArea")
+    }
+
+    /// Whether the field is on a messenger's web page, which Fettle leaves
+    /// alone as it does the messenger's app.
+    pub fn on_messenger_site(&self) -> bool {
+        let mut element = self.element.clone();
+        for _ in 0..MAX_DEPTH {
+            let Some(parent) =
+                attribute(&element, "AXParent").and_then(|p| p.downcast::<AXUIElement>().ok())
+            else {
+                return false;
+            };
+            element = parent;
+            if has_role(&element, "AXWebArea") {
+                return attribute(&element, "AXURL")
+                    .and_then(|u| u.downcast::<CFURL>().ok())
+                    .and_then(|u| u.host_name())
+                    .is_some_and(|host| MESSENGER_SITES.contains(&host.to_string().as_str()));
+            }
+        }
+        false
     }
 
     /// Read the field's text into `buffer`. Returns false, leaving `buffer`
@@ -286,7 +317,6 @@ impl Field {
     pub fn runs(&self, text: &[u16]) -> Runs {
         let mut runs = Vec::new();
         let mut cursor = 0;
-        let static_text = CFString::from_static_str("AXStaticText");
         let mut units = Vec::new();
         let mut stack = children(&self.element);
         let mut seen = 0;
@@ -295,8 +325,7 @@ impl Field {
             if seen > MAX_ELEMENTS {
                 break;
             }
-            let role = attribute(&element, "AXRole").and_then(|v| v.downcast::<CFString>().ok());
-            if !role.is_some_and(|r| *r == *static_text) {
+            if !has_role(&element, "AXStaticText") {
                 stack.extend(children(&element));
                 continue;
             }
@@ -526,6 +555,13 @@ fn attribute(element: &AXUIElement, name: &'static str) -> Option<CFRetained<CFT
     // SAFETY: `out` receives a +1 reference on success.
     let error = unsafe { element.copy_attribute_value(&name, NonNull::from(&mut out)) };
     retained(error, out)
+}
+
+/// Whether `element`'s role is `role`.
+fn has_role(element: &AXUIElement, role: &'static str) -> bool {
+    attribute(element, "AXRole")
+        .and_then(|v| v.downcast::<CFString>().ok())
+        .is_some_and(|r| *r == *CFString::from_static_str(role))
 }
 
 /// Take ownership of the +1 reference a successful copy left in `out`.

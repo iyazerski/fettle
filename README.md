@@ -66,7 +66,7 @@ To fettle is an old English word for to tidy up or put right, and "in fine fettl
 <details>
 <summary><b>Is Fettle a Grammarly alternative?</b></summary>
 
-Yes, for the core job: fixing grammar, spelling and phrasing in any app, with a clear view of what changed. Select the text and press the shortcut when you want a check. Or turn on **Underline mistakes** in Settings: when you pause typing, Fettle sends each paragraph you edited to the model and underlines what it would fix, and a click on an underline shows the fix. Each edited paragraph is a request, so this costs much more with a paid model. Only multi-line text boxes, such as message composers and documents, are checked, not address bars, search boxes or other one-line fields. Underlines show in apps that tell macOS where their text is on screen, which most native Mac apps do.
+Yes, for the core job: fixing grammar, spelling and phrasing in any app, with a clear view of what changed. Select the text and press the shortcut when you want a check. Or turn on **Underline mistakes** in Settings: when you pause typing, Fettle sends each paragraph you edited to the model and underlines what it would fix, and a click on an underline shows the fix. Each edited paragraph is a request, so this costs much more with a paid model. Only multi-line text boxes, such as message composers and documents, are checked, not address bars, search boxes or other one-line fields. Underlines show in apps that tell macOS where their text is on screen, which most native Mac apps do. Telegram and WhatsApp, in their apps and on the web, aren't checked.
 
 </details>
 <details>
