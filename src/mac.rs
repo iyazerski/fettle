@@ -3,6 +3,7 @@
 //! Accessibility permission.
 
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
@@ -175,10 +176,21 @@ pub fn open_url(url: &str) {
     }
 }
 
+/// Held while Fettle borrows the pasteboard, from saving its contents to
+/// putting them back, so a copy and a paste can't save each other's text as
+/// the user's.
+static BORROWED: Mutex<()> = Mutex::new(());
+
+fn borrow() -> MutexGuard<'static, ()> {
+    BORROWED.lock().expect("pasteboard lock poisoned")
+}
+
 /// The text selected in the frontmost app, copied with ⌘C. The pasteboard
 /// gets its old contents back. `None` when nothing was copied: no selection,
-/// no permission, or an app that ignores ⌘C.
+/// no permission, or an app that ignores ⌘C. Blocks for a moment, and while
+/// a paste borrows the pasteboard: call it off the main thread.
 pub fn copy_selection() -> Option<String> {
+    let _borrowed = borrow();
     let saved = Saved::take();
     let before = saved.change_count;
     post_command_key(KEY_C);
@@ -203,8 +215,10 @@ pub fn copy_selection() -> Option<String> {
 }
 
 /// Paste `text` into the frontmost app with ⌘V, then give the pasteboard its
-/// old contents back. Blocks for a moment: call it off the main thread.
+/// old contents back. Blocks for a moment, and while a copy borrows the
+/// pasteboard: call it off the main thread.
 pub fn paste(text: &str) {
+    let _borrowed = borrow();
     let saved = Saved::take();
     let written = autoreleasepool(|_| {
         let pasteboard = NSPasteboard::generalPasteboard();
