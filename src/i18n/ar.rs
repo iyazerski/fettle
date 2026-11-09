@@ -40,6 +40,7 @@ pub static STRINGS: Strings = Strings {
     paste: "لصق",
     copied: "تم النسخ",
     replace: "استبدال",
+    decline_change: "انقر للتراجع عن هذا التغيير",
     replace_help: "لصق فوق النص المحدد",
     no_text: "لا يوجد نص للعمل عليه.",
     text_moved: "تغيّر النص منذ أن نقرت عليه. انسخ النتيجة، أو حدد النص واضغط الاختصار.",

@@ -40,6 +40,7 @@ pub static STRINGS: Strings = Strings {
     paste: "Paste",
     copied: "Copied",
     replace: "Replace",
+    decline_change: "Click to undo this change",
     replace_help: "Paste over the selected text",
     no_text: "There's no text to work on.",
     text_moved: "The text changed since you clicked it. Copy the answer, or select the text and press the shortcut.",

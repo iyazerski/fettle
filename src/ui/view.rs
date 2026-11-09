@@ -6,8 +6,8 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use rune::{
-    Color, Cx, El, Icon, Key, KeyEvent, ScrollSpec, Span, SystemMaterial, Tx, col, el, icon, rich,
-    row, spacer, text,
+    Color, Cx, El, Icon, Key, KeyEvent, Link, LinkPaint, ScrollSpec, Span, SystemMaterial, Tx, col,
+    el, icon, rich, row, spacer, text,
 };
 use rune_kit::{
     Button, ButtonVariant, IconButton, IconButtonVariant, Kit, MenuItem, Placement, Popover,
@@ -575,7 +575,7 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
             note(k, t.nothing_to_fix, NoteKind::Info)
         }
         Status::Done { changes, .. } if changed && s.draft.show_changes => {
-            scroll_box(diff_text(changes, k))
+            scroll_box(diff_text(s, changes, k))
         }
         Status::Done { text: done, .. } => plain(done),
     };
@@ -619,12 +619,16 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
 }
 
 /// The fixed text with removed words struck in red and added ones in green.
-fn diff_text(changes: &[Piece], k: &Kit) -> El {
+/// A click on a change declines it.
+fn diff_text(s: &State, changes: &[Piece], k: &Kit) -> El {
+    let t = s.t();
     let mut content = String::new();
     let mut spans = Vec::new();
     let mut strikes = Vec::new();
+    // Each change's bytes in `content`, by its number.
+    let mut ranges: Vec<std::ops::Range<usize>> = Vec::new();
     let mut previous = Kind::Same;
-    for piece in changes {
+    for (change, piece) in diff::numbered(changes) {
         // A thin space keeps a word from running into the one that replaces it.
         if previous == Kind::Removed && piece.kind == Kind::Added {
             content.push('\u{2009}');
@@ -632,6 +636,12 @@ fn diff_text(changes: &[Piece], k: &Kit) -> El {
         previous = piece.kind;
         let start = content.len();
         content.push_str(&piece.text);
+        if let Some(n) = change {
+            match ranges.get_mut(n) {
+                Some(range) => range.end = content.len(),
+                None => ranges.push(start..content.len()),
+            }
+        }
         let span = Span::new(start, content.len());
         match piece.kind {
             Kind::Same => {}
@@ -653,11 +663,27 @@ fn diff_text(changes: &[Piece], k: &Kit) -> El {
             }),
         }
     }
-    rich(content, spans)
-        .strikes(strikes)
-        .font(k.ty.body)
-        .color(k.c.text_base)
-        .selectable(true)
+    let hover = LinkPaint::new().ring(k.c.border_strong, 1.0);
+    let text = ranges
+        .into_iter()
+        .enumerate()
+        .fold(rich(content, spans), |text, (n, range)| {
+            text.link(
+                Link::new(range, n.to_string())
+                    .role("button")
+                    .help(t.decline_change)
+                    .hover(hover),
+            )
+        });
+    text.on_link(|s: &mut State, id, _| {
+        if let Ok(n) = id.parse() {
+            s.decline(n);
+        }
+    })
+    .strikes(strikes)
+    .font(k.ty.body)
+    .color(k.c.text_base)
+    .selectable(true)
 }
 
 /// `content`, scrolling past [`ANSWER_MAX`].

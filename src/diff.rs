@@ -117,6 +117,49 @@ fn push(out: &mut Vec<Piece>, kind: Kind, text: &str) {
     }
 }
 
+/// Pair each piece with the number of the change it's part of, counting
+/// from 0, or `None` if it's the same on both sides. A change is a run of
+/// removed and added pieces: the words removed and those replacing them.
+pub fn numbered(pieces: &[Piece]) -> impl Iterator<Item = (Option<usize>, &Piece)> {
+    let mut next = 0;
+    let mut previous = Kind::Same;
+    pieces.iter().map(move |piece| {
+        let change = match piece.kind {
+            Kind::Same => None,
+            _ if previous == Kind::Same => {
+                next += 1;
+                Some(next - 1)
+            }
+            _ => Some(next - 1),
+        };
+        previous = piece.kind;
+        (change, piece)
+    })
+}
+
+/// Return the diff with change `n` (see [`numbered`]) undone: its removed
+/// words kept and its added ones dropped.
+pub fn decline(pieces: &[Piece], n: usize) -> Vec<Piece> {
+    let mut out = Vec::new();
+    for (change, piece) in numbered(pieces) {
+        match piece.kind {
+            Kind::Removed if change == Some(n) => push(&mut out, Kind::Same, &piece.text),
+            Kind::Added if change == Some(n) => {}
+            kind => push(&mut out, kind, &piece.text),
+        }
+    }
+    out
+}
+
+/// Return the new text: what the diff changes the old one into.
+pub fn result(pieces: &[Piece]) -> String {
+    pieces
+        .iter()
+        .filter(|p| p.kind != Kind::Removed)
+        .map(|p| p.text.as_str())
+        .collect()
+}
+
 /// Whether the diff changes anything.
 pub fn changed(pieces: &[Piece]) -> bool {
     pieces.iter().any(|p| p.kind != Kind::Same)
@@ -244,5 +287,32 @@ mod tests {
                 .collect();
             assert_eq!(got, marked, "{old:?} -> {new:?}");
         }
+    }
+
+    #[test]
+    fn declining_a_change_keeps_the_old_words_there() {
+        let old = "We discussed about it on the meeting.";
+        let pieces = words(old, "We discussed it at the meeting.");
+        let cases = [
+            (
+                0,
+                "We discussed about it [-on-]{+at+} the meeting.",
+                "We discussed about it at the meeting.",
+            ),
+            (
+                1,
+                "We discussed [-about -]it on the meeting.",
+                "We discussed it on the meeting.",
+            ),
+        ];
+        for (n, want, text) in cases {
+            let declined = decline(&pieces, n);
+            assert_eq!(show(&declined), want, "change {n}");
+            assert_eq!(result(&declined), text);
+            assert_eq!(side(&declined, Kind::Added), old);
+        }
+        let none = decline(&decline(&pieces, 0), 0);
+        assert_eq!(result(&none), old);
+        assert!(!changed(&none));
     }
 }

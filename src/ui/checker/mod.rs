@@ -17,7 +17,7 @@ use rune::AppHandle;
 use self::worker::{Command, Handle};
 use super::pending::Pending;
 use super::state::State;
-use crate::diff::Piece;
+use crate::diff::{self, Piece};
 use crate::underlines::{Clicks, Line, Underlines};
 
 /// How long quitting waits for the checker to undo what it changed in other apps.
@@ -139,6 +139,18 @@ impl Checker {
         self.send(Command::Learn {
             units: target.units.clone(),
             fix,
+        });
+    }
+
+    /// Take `paragraph` as having no mistakes, so it isn't sent or underlined:
+    /// a fix pasted back, where the user may have declined some changes.
+    pub fn learn_fine(&self, paragraph: &str) {
+        self.send(Command::Learn {
+            units: paragraph.encode_utf16().collect(),
+            fix: Fix {
+                text: paragraph.to_owned(),
+                changes: diff::words(paragraph, paragraph),
+            },
         });
     }
 

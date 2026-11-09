@@ -40,6 +40,7 @@ pub static STRINGS: Strings = Strings {
     paste: "ペースト",
     copied: "コピーしました",
     replace: "置き換え",
+    decline_change: "クリックしてこの変更を取り消す",
     replace_help: "選択したテキストに上書きして貼り付け",
     no_text: "処理するテキストがありません。",
     text_moved: "クリックしたあとにテキストが変わりました。結果をコピーするか、テキストを選択してショートカットを押してください。",

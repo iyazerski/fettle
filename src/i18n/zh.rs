@@ -40,6 +40,7 @@ pub static STRINGS: Strings = Strings {
     paste: "粘贴",
     copied: "已复制",
     replace: "替换",
+    decline_change: "点击撤销此修改",
     replace_help: "粘贴并覆盖所选文本",
     no_text: "没有可处理的文本。",
     text_moved: "点按之后文本已更改。请复制结果，或选中文本后按快捷键。",

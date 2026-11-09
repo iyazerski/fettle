@@ -40,6 +40,7 @@ pub static STRINGS: Strings = Strings {
     paste: "Wklej",
     copied: "Skopiowano",
     replace: "Zastąp",
+    decline_change: "Kliknij, aby cofnąć tę zmianę",
     replace_help: "Wklej w miejsce zaznaczonego tekstu",
     no_text: "Brak tekstu do przetworzenia.",
     text_moved: "Tekst zmienił się od kliknięcia. Skopiuj odpowiedź albo zaznacz tekst i naciśnij skrót.",

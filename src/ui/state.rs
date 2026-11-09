@@ -663,6 +663,9 @@ impl State {
             return;
         }
         if selected {
+            if let Some(fixed) = self.draft.fixed() {
+                self.checker.learn_fine(fixed);
+            }
             self.paste();
         } else {
             self.draft.notice = Some(self.t().text_moved.into());
@@ -679,6 +682,11 @@ impl State {
             std::thread::sleep(PASTE_DELAY);
             mac::paste(&text);
         });
+    }
+
+    /// Undo change `n` of the fix shown.
+    pub fn decline(&mut self, n: usize) {
+        self.draft.decline(n);
     }
 
     pub fn copy(&mut self) {

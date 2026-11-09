@@ -166,6 +166,8 @@ pub struct Strings {
     pub paste: &'static str,
     pub copied: &'static str,
     pub replace: &'static str,
+    /// The tooltip on a change in a fix, which a click declines.
+    pub decline_change: &'static str,
     pub replace_help: &'static str,
     pub no_text: &'static str,
     /// Replace found the clicked text gone from where it was.

@@ -40,6 +40,7 @@ pub static STRINGS: Strings = Strings {
     paste: "붙여넣기",
     copied: "복사됨",
     replace: "바꾸기",
+    decline_change: "클릭하여 이 변경 취소",
     replace_help: "선택한 텍스트 위에 붙여넣기",
     no_text: "작업할 텍스트가 없습니다.",
     text_moved: "클릭한 후 텍스트가 바뀌었습니다. 결과를 복사하거나, 텍스트를 선택하고 단축키를 누르세요.",

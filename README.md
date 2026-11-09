@@ -31,7 +31,7 @@ A free, open-source AI writing assistant for macOS that can run entirely on your
 
 ## Why Fettle
 
-- **Like Grammarly, but light, fast and free.** Fettle underlines mistakes as you type in Mail, Slack, Notes, your browser and most other apps. Click one to fix it. No account, no subscription, no browser extension. It's a 10 MB app that uses about 12 MB of memory when idle.
+- **Like Grammarly, but light, fast and free.** Fettle underlines mistakes as you type in Mail, Slack, Notes, your browser and most other apps. Click one to fix it, and click any change you don't want to undo it. No account, no subscription, no browser extension. It's a 10 MB app that uses about 12 MB of memory when idle.
 - **Like Google Translate or DeepL, but it sounds like a person wrote it.** Fettle translates into 40 languages the way a native speaker would say it, not word by word. Your tone, formatting and names stay as they are.
 - **Write like a native in any language.** Fix catches grammar and spelling, and also swaps awkward or literally translated phrases for what a native speaker would actually say. Your text stays in your language, and your meaning and tone stay yours.
 - **Get the tone right in one click.** Make an email more formal, a message friendlier, a long reply shorter, or a messy paragraph clearer.

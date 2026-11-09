@@ -40,6 +40,7 @@ pub static STRINGS: Strings = Strings {
     paste: "Coller",
     copied: "Copié",
     replace: "Remplacer",
+    decline_change: "Cliquez pour annuler cette modification",
     replace_help: "Coller à la place du texte sélectionné",
     no_text: "Il n'y a pas de texte à traiter.",
     text_moved: "Le texte a changé depuis votre clic. Copiez la réponse, ou sélectionnez le texte et appuyez sur le raccourci.",

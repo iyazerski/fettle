@@ -144,6 +144,34 @@ impl Draft {
         }
     }
 
+    /// Undo change `n` of the finished Fix answer, keeping the original's words there.
+    pub fn decline(&mut self, n: usize) {
+        if let Some(Answer {
+            status:
+                Status::Done {
+                    text,
+                    changes,
+                    copied,
+                },
+            ..
+        }) = self.answer.as_mut()
+            && diff::changed(changes)
+        {
+            *changes = diff::decline(changes, n);
+            *text = diff::result(changes);
+            *copied = false;
+        }
+    }
+
+    /// Return the finished answer's text if it's a fix.
+    pub fn fixed(&self) -> Option<&str> {
+        let answer = self.answer.as_ref()?;
+        match &answer.status {
+            Status::Done { text, .. } if answer.action == Action::Fix => Some(text),
+            _ => None,
+        }
+    }
+
     /// Whether the answer is a translation, which a new language redoes.
     pub fn translated(&self) -> bool {
         self.answer
