@@ -50,14 +50,17 @@ pub enum Style {
     Friendly,
     Shorter,
     Clearer,
+    /// Raw speech-to-text output, cleaned up into a written message.
+    Dictation,
 }
 
 impl Style {
-    pub const ALL: [Style; 4] = [
+    pub const ALL: [Style; 5] = [
         Style::Formal,
         Style::Friendly,
         Style::Shorter,
         Style::Clearer,
+        Style::Dictation,
     ];
 
     /// Return what the rewrite should be, completing "Rewrite the text so it is …".
@@ -72,6 +75,9 @@ impl Style {
             Style::Shorter => "shorter: cut repetition and filler, and keep only what matters",
             Style::Clearer => {
                 "clearer and easier to read: simple words, short sentences, and a logical order"
+            }
+            Style::Dictation => {
+                "a clean written message. The text is raw speech-to-text output, so add punctuation, capitalization, and paragraph breaks, and fix grammar. Replace misheard words with the words the speaker clearly meant, judging from context. Drop filler words and sounds such as uh, um, er, and you know, false starts, and accidental repeats. When the speaker corrects themselves, keep only the correction. Otherwise keep the speaker's own words and tone"
             }
         }
     }

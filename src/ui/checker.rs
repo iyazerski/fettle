@@ -15,7 +15,7 @@ use tokio::task::JoinHandle;
 use tokio::time::MissedTickBehavior;
 
 use super::state::State;
-use crate::ax::{Apps, Field, Focus, Watch};
+use crate::ax::{Apps, Field, Focus, Runs, Watch};
 use crate::diff::{self, Piece};
 use crate::document::{Document, paragraph};
 use crate::underlines::{Clicks, Line, Underlines};
@@ -98,6 +98,8 @@ struct Layout {
     visible: Option<Range<usize>>,
     /// Each word asked about, and its bounds unless it doesn't show.
     words: Vec<(Range<usize>, Option<CGRect>)>,
+    /// The field's runs, found the first time the field can't place a word.
+    runs: Option<Runs>,
 }
 
 /// A paragraph in another app's text field, to fix and paste back over.
@@ -184,6 +186,7 @@ impl Checker {
                     session.edited = Some(Instant::now());
                     // Text from the edited paragraph on may have moved.
                     session.layout.words.retain(|(word, _)| word.end <= start);
+                    session.layout.runs = None;
                 }
             }
             _ => {
@@ -291,7 +294,7 @@ impl Checker {
             *layout = Layout {
                 frame,
                 visible,
-                words: Vec::new(),
+                ..Layout::default()
             };
         }
         let typing = session.edited.is_some_and(|at| at.elapsed() < IDLE);
@@ -323,7 +326,13 @@ impl Checker {
                 let rect = match known {
                     Some((_, rect)) => *rect,
                     // Text scrolled out of the field still has bounds; leave it out.
-                    None => field.bounds(word.clone()).filter(|r| inside(*r, frame)),
+                    None => field
+                        .bounds(word.clone())
+                        .or_else(|| {
+                            let runs = layout.runs.get_or_insert_with(|| field.runs(text));
+                            runs.bounds(word.clone())
+                        })
+                        .filter(|r| inside(*r, frame)),
                 };
                 asked.push((word, rect));
                 if let Some(rect) = rect {

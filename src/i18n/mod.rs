@@ -145,8 +145,8 @@ pub struct Strings {
     pub rewriting: &'static str,
     /// `{}`: the style.
     pub rewritten: &'static str,
-    /// Formal, Friendly, Shorter, Clearer, as [`Style::ALL`](crate::prompts::Style::ALL).
-    pub styles: [&'static str; 4],
+    /// Formal, Friendly, Shorter, Clearer, Dictation, as [`Style::ALL`](crate::prompts::Style::ALL).
+    pub styles: [&'static str; 5],
     pub show_changes: &'static str,
     pub thinking: &'static str,
     pub nothing_to_fix: &'static str,

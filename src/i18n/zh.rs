@@ -24,7 +24,7 @@ pub static STRINGS: Strings = Strings {
     rewrite: "改写",
     rewriting: "正在改写…",
     rewritten: "改写（{}）",
-    styles: ["正式", "友好", "更简洁", "更清晰"],
+    styles: ["正式", "友好", "更简洁", "更清晰", "语音输入"],
     show_changes: "显示修改",
     thinking: "思考中…",
     nothing_to_fix: "看起来不错，没有需要修正的地方。",

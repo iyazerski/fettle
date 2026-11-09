@@ -24,7 +24,7 @@ pub static STRINGS: Strings = Strings {
     rewrite: "Umschreiben",
     rewriting: "Wird umgeschrieben…",
     rewritten: "Umgeschrieben ({})",
-    styles: ["Förmlich", "Freundlich", "Kürzer", "Klarer"],
+    styles: ["Förmlich", "Freundlich", "Kürzer", "Klarer", "Diktat"],
     show_changes: "Änderungen zeigen",
     thinking: "Denkt nach…",
     nothing_to_fix: "Sieht gut aus. Nichts zu korrigieren.",

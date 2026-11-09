@@ -24,7 +24,7 @@ pub static STRINGS: Strings = Strings {
     rewrite: "Reescrever",
     rewriting: "Reescrevendo…",
     rewritten: "Reescrito ({})",
-    styles: ["Formal", "Amigável", "Mais curto", "Mais claro"],
+    styles: ["Formal", "Amigável", "Mais curto", "Mais claro", "Ditado"],
     show_changes: "Mostrar alterações",
     thinking: "Pensando…",
     nothing_to_fix: "Tudo certo. Nada para corrigir.",

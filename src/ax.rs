@@ -13,13 +13,16 @@ use std::sync::Once;
 use objc2_app_kit::NSWorkspace;
 use objc2_application_services::{AXError, AXObserver, AXUIElement, AXValue, AXValueType};
 use objc2_core_foundation::{
-    CFBoolean, CFIndex, CFNumber, CFRange, CFRetained, CFRunLoop, CFString, CFType, CGPoint,
-    CGRect, CGSize, kCFRunLoopCommonModes,
+    CFArray, CFBoolean, CFIndex, CFNumber, CFRange, CFRetained, CFRunLoop, CFString, CFType,
+    CGPoint, CGRect, CGSize, kCFRunLoopCommonModes,
 };
 
 /// How long an Accessibility call waits for an app, in seconds: checks run
 /// on the UI thread, which a hung app mustn't stall.
 const TIMEOUT: f32 = 0.25;
+/// At most this many elements under a field are looked at to find its
+/// [`Runs`], so a huge web page can't stall the UI thread.
+const MAX_ELEMENTS: usize = 500;
 /// Apps Fettle leaves alone, by bundle ID: their text is code, commands or
 /// queries, not prose, so checking it only adds noise. Editors built on VS
 /// Code also switch to screen reader mode when asked to expose their content,
@@ -213,18 +216,49 @@ impl Field {
 
     /// Return where `range` of the text shows, as `frame` counts.
     pub fn bounds(&self, range: Range<usize>) -> Option<CGRect> {
-        let param = range_value(range)?;
-        let name = CFString::from_static_str("AXBoundsForRange");
-        let mut out: *const CFType = ptr::null();
-        // SAFETY: the attribute takes a CFRange value; `out` receives a +1 reference.
-        let error = unsafe {
-            self.element
-                .copy_parameterized_attribute_value(&name, &param, NonNull::from(&mut out))
-        };
-        let value = retained(error, out)?;
-        // SAFETY: a CGRect value holds a CGRect.
-        let rect: CGRect = unsafe { unpack(&value, AXValueType::CGRect)? };
-        (rect.size.width > 0.0 && rect.size.height > 0.0).then_some(rect)
+        bounds(&self.element, range)
+    }
+
+    /// Find the static texts under the field and where each starts in
+    /// `text`, the field's text.
+    pub fn runs(&self, text: &[u16]) -> Runs {
+        let mut runs = Vec::new();
+        let mut cursor = 0;
+        let mut stack = children(&self.element);
+        let mut seen = 0;
+        while let Some(element) = stack.pop() {
+            seen += 1;
+            if seen > MAX_ELEMENTS {
+                break;
+            }
+            let role = attribute(&element, "AXRole").and_then(|v| v.downcast::<CFString>().ok());
+            if !role.is_some_and(|r| r.to_string() == "AXStaticText") {
+                stack.extend(children(&element));
+                continue;
+            }
+            let Some(value) =
+                attribute(&element, "AXValue").and_then(|v| v.downcast::<CFString>().ok())
+            else {
+                continue;
+            };
+            let units: Vec<u16> = value.to_string().encode_utf16().collect();
+            if units.is_empty() {
+                continue;
+            }
+            // Pieces the field's text doesn't hold, such as an emoji's name, are skipped.
+            let found = text
+                .get(cursor..)
+                .and_then(|rest| rest.windows(units.len()).position(|w| w == units));
+            if let Some(at) = found {
+                let start = cursor + at;
+                cursor = start + units.len();
+                runs.push(Run {
+                    text: start..cursor,
+                    element,
+                });
+            }
+        }
+        Runs(runs)
     }
 
     /// Select `range` of the text, so a paste replaces it. Returns whether the field took it.
@@ -235,6 +269,32 @@ impl Field {
         let name = CFString::from_static_str("AXSelectedTextRange");
         // SAFETY: the attribute takes a CFRange value.
         unsafe { self.element.set_attribute_value(&name, &value) == AXError::Success }
+    }
+}
+
+/// A field's text split into the static texts under it, for fields such as
+/// Chrome's editable web content, which can't tell where their own text
+/// shows but whose pieces can.
+#[derive(Debug, Default)]
+pub struct Runs(Vec<Run>);
+
+#[derive(Debug)]
+struct Run {
+    /// The run's part of the field's text.
+    text: Range<usize>,
+    element: CFRetained<AXUIElement>,
+}
+
+impl Runs {
+    /// Return where `range` of the field's text shows, cut at the end of the run it starts in.
+    pub fn bounds(&self, range: Range<usize>) -> Option<CGRect> {
+        let i = self.0.partition_point(|r| r.text.end <= range.start);
+        let run = self.0.get(i).filter(|r| r.text.start <= range.start)?;
+        let end = range.end.min(run.text.end);
+        bounds(
+            &run.element,
+            range.start - run.text.start..end - run.text.start,
+        )
     }
 }
 
@@ -304,6 +364,39 @@ unsafe extern "C-unwind" fn changed(
     // SAFETY: the refcon is the `Watch`'s callback, alive while the observer is on the run loop.
     let on_change = unsafe { &*on_change.cast::<Box<dyn Fn()>>() };
     on_change();
+}
+
+/// Return where `range` of `element`'s text shows, in screen points from the
+/// primary screen's top-left.
+fn bounds(element: &AXUIElement, range: Range<usize>) -> Option<CGRect> {
+    let param = range_value(range)?;
+    let name = CFString::from_static_str("AXBoundsForRange");
+    let mut out: *const CFType = ptr::null();
+    // SAFETY: the attribute takes a CFRange value; `out` receives a +1 reference.
+    let error = unsafe {
+        element.copy_parameterized_attribute_value(&name, &param, NonNull::from(&mut out))
+    };
+    let value = retained(error, out)?;
+    // SAFETY: a CGRect value holds a CGRect.
+    let rect: CGRect = unsafe { unpack(&value, AXValueType::CGRect)? };
+    // Chrome answers for editable web content with an empty rect.
+    (rect.size.width > 0.0 && rect.size.height > 0.0).then_some(rect)
+}
+
+/// Return `element`'s children, last first, so popping them goes in order.
+fn children(element: &AXUIElement) -> Vec<CFRetained<AXUIElement>> {
+    let Some(array) = attribute(element, "AXChildren").and_then(|v| v.downcast::<CFArray>().ok())
+    else {
+        return Vec::new();
+    };
+    // SAFETY: a CFArray holds CF objects.
+    let array = unsafe { array.cast_unchecked::<CFType>() };
+    let mut out: Vec<_> = array
+        .iter()
+        .filter_map(|c| c.downcast::<AXUIElement>().ok())
+        .collect();
+    out.reverse();
+    out
 }
 
 /// Return `element`'s attribute `name`, if it has one.

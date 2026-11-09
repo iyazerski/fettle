@@ -17,7 +17,7 @@ libc = "0.2"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "libc", "objc2-core-foundation", "NSAppearance", "NSApplication", "NSBox", "NSColor", "NSGraphics", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSEvent", "NSScreen", "NSRunningApplication", "NSView", "NSWindow", "NSWorkspace"] }
 objc2-application-services = { version = "0.3", default-features = false, features = ["std", "libc", "objc2", "HIServices", "AXError", "AXUIElement", "AXValue"] }
-objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFCGTypes", "CFNumber", "CFRunLoop", "CFString"] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFArray", "CFCGTypes", "CFNumber", "CFRunLoop", "CFString"] }
 objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation"] }
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSGeometry", "NSLocale", "NSString", "NSURL", "NSValue"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }

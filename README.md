@@ -35,7 +35,7 @@ A free, open-source AI writing assistant for macOS that can run entirely on your
 - **Any language.** Fix and Rewrite work in any language the model knows, and keep your text in the language you wrote it in.
 - **Runs on your Mac, for free.** With Apple Intelligence on macOS 26, Fettle uses Apple's on-device model. No account, no API key, and your text never leaves your Mac.
 - **Or use a bigger model.** Sign in with ChatGPT, or point Fettle at any OpenAI-compatible API, such as OpenAI, OpenRouter, or a local model in Ollama or LM Studio.
-- **Rewrite in one click.** Make text more formal, friendlier, shorter or clearer.
+- **Rewrite in one click.** Make text more formal, friendlier, shorter or clearer, or turn raw dictation into a clean message.
 - **Mistakes underlined as you type.** Like Grammarly, Fettle marks mistakes right where you write. Click one to fix it. Faster, and free with the on-device model.
 - **Native and tiny.** Written in Rust, a 10 MB download, about 12 MB of memory when idle, and no CPU use until you call it, unless you turn on underlines.
 - **Private by design.** No account, no telemetry, no servers of ours. Your text stays on your Mac, or goes only to the model you pick.

@@ -24,7 +24,7 @@ pub static STRINGS: Strings = Strings {
     rewrite: "إعادة صياغة",
     rewriting: "جارٍ إعادة الصياغة…",
     rewritten: "إعادة صياغة ({})",
-    styles: ["رسمي", "ودّي", "أقصر", "أوضح"],
+    styles: ["رسمي", "ودّي", "أقصر", "أوضح", "إملاء صوتي"],
     show_changes: "إظهار التغييرات",
     thinking: "جارٍ التفكير…",
     nothing_to_fix: "يبدو جيدًا. لا شيء يحتاج إلى تصحيح.",

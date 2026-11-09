@@ -24,7 +24,7 @@ pub static STRINGS: Strings = Strings {
     rewrite: "다시 쓰기",
     rewriting: "다시 쓰는 중…",
     rewritten: "다시 쓰기 ({})",
-    styles: ["격식 있게", "친근하게", "짧게", "명확하게"],
+    styles: ["격식 있게", "친근하게", "짧게", "명확하게", "음성 입력"],
     show_changes: "변경 사항 보기",
     thinking: "생각 중…",
     nothing_to_fix: "좋아 보입니다. 고칠 부분이 없습니다.",
