@@ -30,8 +30,6 @@ pub static STRINGS: Strings = Strings {
     rewrite: "改写",
     rewriting: "正在改写…",
     rewritten: "改写（{}）",
-    cleaning_up: "正在整理语音输入…",
-    dictated: "语音输入",
     styles: ["正式", "友好", "更简洁", "更清晰"],
     style_hints: [
         "礼貌严谨，适合工作邮件",

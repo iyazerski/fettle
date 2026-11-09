@@ -30,8 +30,6 @@ pub static STRINGS: Strings = Strings {
     rewrite: "إعادة صياغة",
     rewriting: "جارٍ إعادة الصياغة…",
     rewritten: "إعادة صياغة ({})",
-    cleaning_up: "جارٍ تنظيف الإملاء…",
-    dictated: "إملاء صوتي",
     styles: ["رسمي", "ودّي", "أقصر", "أوضح"],
     style_hints: [
         "مهذّب ودقيق، لرسائل العمل",

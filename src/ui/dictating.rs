@@ -1,12 +1,15 @@
 //! Dictating into the main page's text: listen while the waveform shows the
-//! microphone's loudness, then add what was heard to the text and clean it up.
+//! microphone's loudness, then add what was heard to the text, ready for any
+//! action. The model quietly turns the raw speech into written text first.
 
 use std::collections::VecDeque;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
-use super::state::State;
+use super::draft::hyphens;
+use super::state::{State, fresh_backend};
 use crate::dictation::{self, Heard, Listening, Problem};
-use crate::prompts::Action;
+use crate::llm::{Ask, Backend};
+use crate::prompts;
 
 /// How many recent loudness readings the waveform shows.
 pub const LEVELS_KEPT: usize = 60;
@@ -16,25 +19,36 @@ pub enum Dictation {
     /// Waiting for macOS to allow speech recognition and the microphone.
     Asking,
     Listening(Recording),
+    /// Done listening; the model is turning what was heard into written text.
+    Writing(Recording),
 }
 
-/// A dictation session that's listening.
+/// A dictation session, and what the window shows of it.
 pub struct Recording {
     /// Which session this is, so a late report of an ended one is dropped.
     id: u64,
     session: Listening,
-    pub started: Instant,
-    /// What's heard so far, added to the text once listening ends.
+    started: Instant,
+    /// When listening ended, which stops the clock.
+    ended: Option<Instant>,
+    /// What's heard so far.
     heard: String,
     /// Recent loudness, 0 to 1, oldest first.
     pub levels: VecDeque<f32>,
 }
 
+impl Recording {
+    /// Return how long the session listened, or has so far.
+    pub fn duration(&self) -> Duration {
+        self.ended.unwrap_or_else(Instant::now) - self.started
+    }
+}
+
 impl State {
-    /// Start dictating into the text, or stop and clean up what was heard.
+    /// Start dictating into the text, or stop.
     pub fn dictate(&mut self) {
         match &self.dictation {
-            Some(Dictation::Asking) => {}
+            Some(Dictation::Asking | Dictation::Writing(_)) => {}
             Some(Dictation::Listening(recording)) => recording.session.stop(),
             None => {
                 self.draft.notice = None;
@@ -67,6 +81,7 @@ impl State {
                     id,
                     session,
                     started: Instant::now(),
+                    ended: None,
                     heard: String::new(),
                     levels: VecDeque::with_capacity(LEVELS_KEPT),
                 }));
@@ -75,8 +90,7 @@ impl State {
         }
     }
 
-    /// Take what session `id` reports. Once it ends, what it heard goes after
-    /// the text, and the model cleans the text up.
+    /// Take what session `id` reports. Once it ends, what it heard is written up.
     fn heard(&mut self, id: u64, heard: Heard) {
         let Some(Dictation::Listening(recording)) = &mut self.dictation else {
             return;
@@ -93,20 +107,82 @@ impl State {
                 recording.levels.push_back(level);
             }
             Heard::Done => {
-                let words = std::mem::take(&mut recording.heard);
-                self.dictation = None;
-                if words.trim().is_empty() {
+                let Some(Dictation::Listening(mut recording)) = self.dictation.take() else {
                     return;
+                };
+                if !recording.heard.trim().is_empty() {
+                    recording.ended = Some(Instant::now());
+                    self.write_up(recording);
                 }
-                let text = dictation::join(&self.draft.source.text, &words);
-                self.draft.source.replace_text(text);
-                self.start(Action::Dictation);
             }
             Heard::Failed(why) => {
                 self.dictation = None;
                 self.dictation_failed(&Problem::Failed(why));
             }
         }
+    }
+
+    /// Have the model turn what `recording` heard into written text, then add
+    /// it. Without a model, the words go in as heard.
+    fn write_up(&mut self, recording: Recording) {
+        let (backend, model) = match Backend::with_model(&self.settings) {
+            Ok(chosen) => chosen,
+            Err(_) => return self.add_dictated(&recording.heard),
+        };
+        let (id, ask) = (
+            recording.id,
+            Ask {
+                system: prompts::dictation(),
+                text: recording.heard.clone(),
+                model,
+                effort: self.settings.effort(),
+            },
+        );
+        self.dictation = Some(Dictation::Writing(recording));
+        let (app, http, refreshing) =
+            (self.app.clone(), self.http.clone(), self.refreshing.clone());
+        self.rt.spawn(async move {
+            let result = async {
+                let backend = fresh_backend(&app, &http, &refreshing, backend).await?;
+                let mut text = String::new();
+                backend
+                    .stream(&http, &ask, |delta| text.push_str(delta))
+                    .await?;
+                anyhow::Ok(text)
+            }
+            .await;
+            app.update(move |s, _| s.written_up(id, result));
+        });
+    }
+
+    /// Add the model's write-up of session `id`, or what it heard as is if the
+    /// model failed: dictation is input, so a failed write-up isn't an error.
+    fn written_up(&mut self, id: u64, result: anyhow::Result<String>) {
+        // Hiding the window while the model worked gave up on the words.
+        let Some(Dictation::Writing(recording)) = self
+            .dictation
+            .take_if(|d| matches!(d, Dictation::Writing(recording) if recording.id == id))
+        else {
+            return;
+        };
+        let heard = recording.heard;
+        match result {
+            // Models add dashes speech never has.
+            Ok(text) if !text.trim().is_empty() => {
+                self.add_dictated(&hyphens(&heard, text.trim()));
+            }
+            Ok(_) => self.add_dictated(&heard),
+            Err(e) => {
+                eprintln!("writing up dictation: {e:#}");
+                self.add_dictated(&heard);
+            }
+        }
+    }
+
+    /// Put `words` after the text.
+    fn add_dictated(&mut self, words: &str) {
+        let text = dictation::join(&self.draft.source.text, words);
+        self.draft.source.replace_text(text);
     }
 
     /// Say under the text why dictation can't run.

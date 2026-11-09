@@ -30,8 +30,6 @@ pub static STRINGS: Strings = Strings {
     rewrite: "다시 쓰기",
     rewriting: "다시 쓰는 중…",
     rewritten: "다시 쓰기 ({})",
-    cleaning_up: "음성 입력 다듬는 중…",
-    dictated: "음성 입력",
     styles: ["격식 있게", "친근하게", "짧게", "명확하게"],
     style_hints: [
         "정중하고 정확하게, 업무 메일에",

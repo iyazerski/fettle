@@ -166,7 +166,7 @@ pub fn complete(action: Action, original: &str, text: &str, empty: &str) -> Stat
     let text = format!("{}{end}", hyphens(original, text.trim_end()));
     let changes = match action {
         Action::Fix => diff::words(original, &text),
-        Action::Translate | Action::Rewrite(_) | Action::Dictation => Vec::new(),
+        Action::Translate | Action::Rewrite(_) => Vec::new(),
     };
     Status::Done {
         text,
@@ -177,7 +177,7 @@ pub fn complete(action: Action, original: &str, text: &str, empty: &str) -> Stat
 
 /// Replace the [`DASHES`] in `text` that `original` lacks with spaced
 /// hyphens, or bare ones between digits, as in ranges.
-fn hyphens(original: &str, text: &str) -> String {
+pub fn hyphens(original: &str, text: &str) -> String {
     let dashes: Vec<char> = DASHES
         .into_iter()
         .filter(|d| !original.contains(*d))

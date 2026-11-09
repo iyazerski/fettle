@@ -153,9 +153,6 @@ pub struct Strings {
     pub rewriting: &'static str,
     /// `{}`: the style.
     pub rewritten: &'static str,
-    /// The title over a dictation's cleanup, while it runs and once it's done.
-    pub cleaning_up: &'static str,
-    pub dictated: &'static str,
     /// Formal, Friendly, Shorter, Clearer, as [`Style::ALL`](crate::prompts::Style::ALL).
     pub styles: [&'static str; 4],
     /// When to pick each of `styles`, in the same order, shown under its name.

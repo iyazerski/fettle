@@ -30,8 +30,6 @@ pub static STRINGS: Strings = Strings {
     rewrite: "Reescrever",
     rewriting: "Reescrevendo…",
     rewritten: "Reescrito ({})",
-    cleaning_up: "Limpando o ditado…",
-    dictated: "Ditado",
     styles: ["Formal", "Amigável", "Mais curto", "Mais claro"],
     style_hints: [
         "Educado e preciso, para e-mails de trabalho",

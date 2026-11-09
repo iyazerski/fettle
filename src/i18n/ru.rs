@@ -30,8 +30,6 @@ pub static STRINGS: Strings = Strings {
     rewrite: "Переписать",
     rewriting: "Переписываю…",
     rewritten: "Переписано ({})",
-    cleaning_up: "Привожу диктовку в порядок…",
-    dictated: "Диктовка",
     styles: ["Официально", "Дружелюбно", "Короче", "Понятнее"],
     style_hints: [
         "Вежливо и точно, для рабочих писем",

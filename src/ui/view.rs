@@ -128,7 +128,8 @@ const SOURCE_MIN: f32 = 51.0;
 fn source(s: &State, k: &Kit) -> El {
     let t = s.t();
     let asking = match &s.dictation {
-        Some(Dictation::Listening(recording)) => return recorder(s, recording, k),
+        Some(Dictation::Listening(recording)) => return recorder(s, recording, false, k),
+        Some(Dictation::Writing(recording)) => return recorder(s, recording, true, k),
         Some(Dictation::Asking) => true,
         None => false,
     };
@@ -172,14 +173,29 @@ fn source(s: &State, k: &Kit) -> El {
 }
 
 /// While dictating, what stands in for the text: a waveform of the
-/// microphone's loudness, the time, and a button that stops.
-fn recorder(s: &State, recording: &Recording, k: &Kit) -> El {
+/// microphone's loudness, the time, and a button that stops. Once `writing`,
+/// the waveform holds still and a spinner stands in for the button until the
+/// words land in the text.
+fn recorder(s: &State, recording: &Recording, writing: bool, k: &Kit) -> El {
     let bars = recording.levels.iter().map(|level| {
         el().size(2.0, (2.0 + level * 17.0).round())
             .radius(1.0)
             .fill(k.c.text_accent)
     });
-    let secs = recording.started.elapsed().as_secs();
+    let secs = recording.duration().as_secs();
+    let end = if writing {
+        // As wide as the button, so nothing moves.
+        row()
+            .size(24.0, 24.0)
+            .center()
+            .child(Spinner::new().size(14.0).build(k))
+    } else {
+        IconButton::new(&icons::MIC)
+            .variant(IconButtonVariant::Contrast)
+            .label(s.t().stop_dictating)
+            .on_press(|s: &mut State| s.dictate())
+            .build(k)
+    };
     row()
         .key("recorder")
         .w_full()
@@ -208,13 +224,7 @@ fn recorder(s: &State, recording: &Recording, k: &Kit) -> El {
                 .font(k.ty.text_small)
                 .color(k.c.text_faint),
         )
-        .child(
-            IconButton::new(&icons::MIC)
-                .variant(IconButtonVariant::Contrast)
-                .label(s.t().stop_dictating)
-                .on_press(|s: &mut State| s.dictate())
-                .build(k),
-        )
+        .child(end)
 }
 
 /// What starts a header: Fettle's mark, or a button back.
@@ -479,8 +489,6 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         Action::Translate => fill(t.translation, language),
         Action::Rewrite(_) if running => t.rewriting.to_owned(),
         Action::Rewrite(style) => fill(t.rewritten, t.style(style)),
-        Action::Dictation if running => t.cleaning_up.to_owned(),
-        Action::Dictation => t.dictated.to_owned(),
     };
     // Only a Fix answer has changes.
     let changed = matches!(&answer.status, Status::Done { changes, .. } if diff::changed(changes));
@@ -488,7 +496,6 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         Action::Fix => &icons::SPARKLE,
         Action::Translate => &icons::GLOBE,
         Action::Rewrite(_) => &icons::PEN,
-        Action::Dictation => &icons::MIC,
     };
     let mut top = row()
         .w_full()

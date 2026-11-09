@@ -30,8 +30,6 @@ pub static STRINGS: Strings = Strings {
     rewrite: "書き直す",
     rewriting: "書き直し中…",
     rewritten: "書き直し（{}）",
-    cleaning_up: "音声入力を整えています…",
-    dictated: "音声入力",
     styles: ["フォーマル", "親しみやすく", "短く", "わかりやすく"],
     style_hints: [
         "丁寧で正確に。仕事のメールに",

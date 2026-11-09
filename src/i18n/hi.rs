@@ -30,8 +30,6 @@ pub static STRINGS: Strings = Strings {
     rewrite: "दोबारा लिखें",
     rewriting: "दोबारा लिखा जा रहा है…",
     rewritten: "दोबारा लिखा गया ({})",
-    cleaning_up: "बोलकर लिखा टेक्स्ट साफ़ हो रहा है…",
-    dictated: "डिक्टेशन",
     styles: ["औपचारिक", "दोस्ताना", "छोटा", "ज़्यादा साफ़"],
     style_hints: [
         "विनम्र और सटीक, काम के ईमेल के लिए",
