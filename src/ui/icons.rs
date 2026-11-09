@@ -55,6 +55,23 @@ pub static PEN: Icon = icon(
     "pen",
     r#"<path d="M4.75 19.25h4l10-10a2.12 2.12 0 0 0-3-3l-10 10zM13.75 8.25l2 2" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>"#,
 );
+pub static BRIEFCASE: Icon = icon(
+    "briefcase",
+    r#"<rect x="3.75" y="7.25" width="16.5" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M8.75 7.25V5.5a1.75 1.75 0 0 1 1.75-1.75h3a1.75 1.75 0 0 1 1.75 1.75v1.75M3.75 12.5h16.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>"#,
+);
+pub static SMILE: Icon = icon(
+    "smile",
+    r#"<circle cx="12" cy="12" r="8.75" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M8.5 14.25a4.5 4.5 0 0 0 7 0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="9.25" cy="9.75" r="1.1" fill="currentColor"/><circle cx="14.75" cy="9.75" r="1.1" fill="currentColor"/>"#,
+);
+/// Lines that shorten, for shorter text.
+pub static SHORTER: Icon = icon(
+    "shorter",
+    r#"<path d="M4.75 7h14.5M4.75 12h9.5M4.75 17h4.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>"#,
+);
+pub static EYE: Icon = icon(
+    "eye",
+    r#"<path d="M2.75 12S6.25 5.75 12 5.75 21.25 12 21.25 12 17.75 18.25 12 18.25 2.75 12 2.75 12z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.75" fill="none" stroke="currentColor" stroke-width="1.75"/>"#,
+);
 pub static PIN: Icon = icon(
     "pin",
     r#"<path d="M8.5 3.75h7M9.75 3.75v5.5L6.5 13.5h11l-3.25-4.25v-5.5M12 13.5v6.75" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>"#,

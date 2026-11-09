@@ -24,7 +24,7 @@ use crate::i18n::{Locale, Strings, fill};
 use crate::llm::on_device::{self, Availability, Refusal};
 use crate::llm::{Ask, Backend};
 use crate::mac;
-use crate::prompts::{self, Action};
+use crate::prompts::{self, Action, Style};
 use crate::settings::{Credentials, Settings};
 use crate::underlines::Line;
 
@@ -640,6 +640,13 @@ impl State {
         if self.draft.translated() {
             self.start(Action::Translate);
         }
+    }
+
+    /// Make `style` Rewrite's style and rewrite the text in it.
+    pub fn set_style(&mut self, style: Style) {
+        self.settings.rewrite_style = style;
+        self.save();
+        self.start(Action::Rewrite(style));
     }
 
     pub fn toggle_favourite(&mut self, language: &str) {

@@ -28,6 +28,7 @@ pub static STRINGS: Strings = Strings {
     translating: "번역 중 ({})…",
     translation: "{} 번역",
     rewrite: "다시 쓰기",
+    rewrite_style: "다시 쓰기 스타일",
     rewriting: "다시 쓰는 중…",
     rewritten: "다시 쓰기 ({})",
     styles: ["격식 있게", "친근하게", "짧게", "명확하게"],

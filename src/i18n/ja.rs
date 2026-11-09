@@ -28,6 +28,7 @@ pub static STRINGS: Strings = Strings {
     translating: "{}に翻訳中…",
     translation: "{}訳",
     rewrite: "書き直す",
+    rewrite_style: "書き直しのスタイル",
     rewriting: "書き直し中…",
     rewritten: "書き直し（{}）",
     styles: ["フォーマル", "親しみやすく", "短く", "わかりやすく"],

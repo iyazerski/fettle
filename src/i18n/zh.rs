@@ -28,6 +28,7 @@ pub static STRINGS: Strings = Strings {
     translating: "正在翻译成{}…",
     translation: "{}译文",
     rewrite: "改写",
+    rewrite_style: "改写风格",
     rewriting: "正在改写…",
     rewritten: "改写（{}）",
     styles: ["正式", "友好", "更简洁", "更清晰"],

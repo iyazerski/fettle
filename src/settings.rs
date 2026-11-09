@@ -1,5 +1,5 @@
 //! What Fettle remembers between runs: where the model runs, the model and
-//! reasoning, the translation language, the shortcut and the window's look and
+//! reasoning, the translation language, the rewrite style, the shortcut and the window's look and
 //! language, in one JSON file. The credentials live in the keychain
 //! ([`keychain`](crate::keychain)), never in the file.
 
@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use crate::i18n::Locale;
 use crate::json_file;
 use crate::llm::Effort;
+use crate::prompts::Style;
 
 pub const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
 pub const DEFAULT_API_BASE: &str = "https://api.openai.com/v1";
@@ -83,6 +84,8 @@ pub struct Settings {
     pub language: String,
     /// Languages listed first in the picker.
     pub favourite_languages: Vec<String>,
+    /// The style Rewrite writes in.
+    pub rewrite_style: Style,
     /// The global shortcut, like `ctrl+alt+e`.
     pub shortcut: String,
     pub appearance: Appearance,
@@ -107,6 +110,7 @@ impl Default for Settings {
             reasoning_enabled: false,
             language: "English".to_owned(),
             favourite_languages: Vec::new(),
+            rewrite_style: Style::Formal,
             shortcut: DEFAULT_SHORTCUT.to_owned(),
             appearance: Appearance::System,
             underline_mistakes: false,
@@ -263,6 +267,7 @@ mod tests {
             provider: Provider::Api,
             api_model: "gpt-x".into(),
             reasoning_enabled: true,
+            rewrite_style: Style::Shorter,
             ..Settings::default()
         };
         settings.save(&path).unwrap();

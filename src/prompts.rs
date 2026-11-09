@@ -1,6 +1,8 @@
 //! The system prompts for the actions. The selected text goes in the user
 //! message, untouched.
 
+use serde::{Deserialize, Serialize};
+
 const FIX: &str = "\
 You are a proofreader. Fix grammar, spelling, punctuation, and word usage. Also make the text sound natural to a native speaker of its language.
 
@@ -61,7 +63,8 @@ pub enum Action {
 }
 
 /// How Rewrite changes the text.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Style {
     Formal,
     Friendly,

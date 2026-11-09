@@ -142,6 +142,7 @@ pub struct Strings {
     pub stop: &'static str,
     pub translate: &'static str,
     pub translation_language: &'static str,
+    pub rewrite_style: &'static str,
     pub add_favourite: &'static str,
     pub remove_favourite: &'static str,
     pub fixing: &'static str,

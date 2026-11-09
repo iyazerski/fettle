@@ -28,6 +28,7 @@ pub static STRINGS: Strings = Strings {
     translating: "جارٍ الترجمة إلى {}…",
     translation: "الترجمة إلى {}",
     rewrite: "إعادة صياغة",
+    rewrite_style: "أسلوب الصياغة",
     rewriting: "جارٍ إعادة الصياغة…",
     rewritten: "إعادة صياغة ({})",
     styles: ["رسمي", "ودّي", "أقصر", "أوضح"],

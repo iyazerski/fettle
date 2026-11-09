@@ -28,6 +28,7 @@ pub static STRINGS: Strings = Strings {
     translating: "Traduciendo ({})…",
     translation: "Traducción ({})",
     rewrite: "Reescribir",
+    rewrite_style: "Estilo de reescritura",
     rewriting: "Reescribiendo…",
     rewritten: "Reescrito ({})",
     styles: ["Formal", "Cercano", "Más corto", "Más claro"],

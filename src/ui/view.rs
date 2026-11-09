@@ -6,12 +6,12 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use rune::{
-    Color, Cx, El, Key, KeyEvent, ScrollSpec, Span, SystemMaterial, Tx, col, el, icon, rich, row,
-    spacer, text,
+    Color, Cx, El, Icon, Key, KeyEvent, ScrollSpec, Span, SystemMaterial, Tx, col, el, icon, rich,
+    row, spacer, text,
 };
 use rune_kit::{
-    Button, ButtonVariant, IconButton, IconButtonVariant, Kit, Placement, Popover, Spinner, Switch,
-    TextArea,
+    Button, ButtonVariant, IconButton, IconButtonVariant, Kit, MenuItem, Placement, Popover,
+    Spinner, Switch, TextArea,
 };
 
 use super::buttons::{self, Tone};
@@ -33,8 +33,8 @@ const ANSWER_MAX: f32 = 320.0;
 /// The tallest the language list gets before it scrolls.
 const LANGUAGES_MAX: f32 = 250.0;
 /// Clear space under the window while a dropdown is open: the window is as
-/// tall as its content, and a dropdown may hang below it. Rewrite's styles
-/// are the tallest, as some languages' hints take two lines.
+/// tall as its content, and a dropdown may hang below it. The language list
+/// is the tallest.
 const MENU_ROOM: f32 = 300.0;
 
 /// Return the theme's kit with Fettle's violet, the app icon's colour, as the
@@ -316,43 +316,78 @@ fn actions(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .child(rewrite(s, k, layer))
 }
 
-/// Rewrite, with the styles to rewrite in as its menu.
+/// Rewrite and the style it writes in, joined in one control as Translate is.
 fn rewrite(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
-    let open = s.menu_open(Menu::Rewrite);
-    let mut menu = Popover::new("styles")
-        .trigger(buttons::menu_button(k, t.rewrite, &icons::PEN, |b| {
-            b.shortcut("⌘3")
-                .on_press(|s: &mut State| s.toggle_menu(Menu::Rewrite))
-        }))
-        .open(open)
-        .placement(Placement::BottomStart)
-        .label(t.rewrite)
-        .padding(4.0)
+    let current = s.settings.rewrite_style;
+    let mut styles = rune_kit::Menu::new("styles")
+        .trigger(picker(k, t.style(current), t.rewrite_style, Menu::Rewrite))
+        .open(s.menu_open(Menu::Rewrite))
+        // The control sits at the row's end, so the menu lines up with its right edge.
+        .placement(Placement::BottomEnd)
         .on_close(|s: &mut State| s.close_menu());
-    // A closed popover drops its content, so skip building the list.
-    if open {
-        menu = menu.child(col().w(280.0).gap(2.0).children(Style::ALL.map(|style| {
-            col()
-                .key(format!("style-{style:?}"))
-                .role("menuitem")
-                .label(t.style(style))
-                .w_full()
-                .px(8.0)
-                .py(5.0)
-                .radius(6.0)
-                .hover(k.c.hover)
-                .on_press(move |s: &mut State| s.start(Action::Rewrite(style)))
-                .child(text(t.style(style)).font(k.ty.ui).color(k.c.text_base))
-                .child(
-                    text(t.style_hint(style))
-                        .font(k.ty.text_small)
-                        .color(k.c.text_muted)
-                        .wrap(),
-                )
-        })));
+    for style in Style::ALL {
+        // Tone first, then length and clarity.
+        if style == Style::Shorter {
+            styles = styles.separator();
+        }
+        styles = styles.item(
+            MenuItem::new(t.style(style))
+                .icon(style_icon(style))
+                .description(t.style_hint(style))
+                .checked(style == current)
+                .on_select(move |s: &mut State| s.set_style(style)),
+        );
     }
-    menu.build(k, layer)
+    let action = split_part(
+        Button::new(t.rewrite)
+            .icon(&icons::PEN)
+            .shortcut("⌘3")
+            .on_press(move |s: &mut State| s.start(Action::Rewrite(current))),
+        k,
+    );
+    split(k, action, styles.build(k, layer))
+}
+
+fn style_icon(style: Style) -> &'static Icon {
+    match style {
+        Style::Formal => &icons::BRIEFCASE,
+        Style::Friendly => &icons::SMILE,
+        Style::Shorter => &icons::SHORTER,
+        Style::Clearer => &icons::EYE,
+    }
+}
+
+/// The part of a split control that opens `menu`, showing the choice `label`.
+fn picker(k: &Kit, label: &str, help: &str, menu: Menu) -> El {
+    split_part(
+        Button::new(label)
+            .icon(&icons::CHEV_DOWN)
+            .help(help)
+            .on_press(move |s: &mut State| s.toggle_menu(menu)),
+        k,
+    )
+}
+
+/// Build `button` as one part of a split control; the control highlights as a whole.
+fn split_part(button: Button, k: &Kit) -> El {
+    button
+        .variant(ButtonVariant::Ghost)
+        .build(k)
+        .radius(14.0)
+        .hover(Color::TRANSPARENT)
+}
+
+/// An action and the choice it uses, joined in one capsule with a rule between.
+fn split(k: &Kit, action: El, picker: El) -> El {
+    let group = row()
+        .h(28.0)
+        .px(2.0)
+        .center_y()
+        .child(action)
+        .child(el().w(1.0).h(16.0).fill(k.c.border_muted))
+        .child(picker);
+    buttons::surface(k, Tone::Secondary, group)
 }
 
 /// Translate and the language it writes in, joined in one control.
@@ -360,16 +395,12 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
     let open = s.menu_open(Menu::Language);
     let mut picker = Popover::new("languages")
-        .trigger(
-            Button::new(t.language(&s.settings.language))
-                .icon(&icons::CHEV_DOWN)
-                .variant(ButtonVariant::Ghost)
-                .help(t.translation_language)
-                .on_press(|s: &mut State| s.toggle_menu(Menu::Language))
-                .build(k)
-                .radius(14.0)
-                .hover(Color::TRANSPARENT),
-        )
+        .trigger(picker(
+            k,
+            t.language(&s.settings.language),
+            t.translation_language,
+            Menu::Language,
+        ))
         .open(open)
         .placement(Placement::BottomStart)
         .label(t.translation_language)
@@ -379,24 +410,14 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     if open {
         picker = picker.child(languages(s, k));
     }
-    let picker = picker.build(k, layer);
-    let group = row()
-        .h(28.0)
-        .px(2.0)
-        .center_y()
-        .child(
-            Button::new(t.translate)
-                .icon(&icons::GLOBE)
-                .variant(ButtonVariant::Ghost)
-                .shortcut("⌘2")
-                .on_press(|s: &mut State| s.start(Action::Translate))
-                .build(k)
-                .radius(14.0)
-                .hover(Color::TRANSPARENT),
-        )
-        .child(el().w(1.0).h(16.0).fill(k.c.border_muted))
-        .child(picker);
-    buttons::surface(k, Tone::Secondary, group)
+    let action = split_part(
+        Button::new(t.translate)
+            .icon(&icons::GLOBE)
+            .shortcut("⌘2")
+            .on_press(|s: &mut State| s.start(Action::Translate)),
+        k,
+    );
+    split(k, action, picker.build(k, layer))
 }
 
 /// The languages, favourites first; a star marks or unmarks one.
@@ -704,7 +725,7 @@ fn on_main_key(s: &mut State, key: &KeyEvent) -> bool {
     } else if key.is_command('2') {
         s.start(Action::Translate);
     } else if key.is_command('3') {
-        s.toggle_menu(Menu::Rewrite);
+        s.start(Action::Rewrite(s.settings.rewrite_style));
     } else if key.is_command('c') && key.mods.shift {
         s.copy();
     } else {

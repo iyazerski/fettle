@@ -28,6 +28,7 @@ pub static STRINGS: Strings = Strings {
     translating: "{} में अनुवाद हो रहा है…",
     translation: "{} अनुवाद",
     rewrite: "दोबारा लिखें",
+    rewrite_style: "लिखने की शैली",
     rewriting: "दोबारा लिखा जा रहा है…",
     rewritten: "दोबारा लिखा गया ({})",
     styles: ["औपचारिक", "दोस्ताना", "छोटा", "ज़्यादा साफ़"],
