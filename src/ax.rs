@@ -9,16 +9,18 @@ use std::mem::MaybeUninit;
 use std::ops::Range;
 use std::ptr::{self, NonNull};
 use std::sync::Once;
+use std::time::Duration;
 
 use objc2_app_kit::NSWorkspace;
 use objc2_application_services::{AXError, AXObserver, AXUIElement, AXValue, AXValueType};
 use objc2_core_foundation::{
-    CFArray, CFBoolean, CFIndex, CFNumber, CFRange, CFRetained, CFRunLoop, CFString, CFType,
-    CGPoint, CGRect, CGSize, kCFRunLoopCommonModes,
+    CFArray, CFBoolean, CFIndex, CFNumber, CFRange, CFRetained, CFRunLoop, CFRunLoopSource,
+    CFRunLoopSourceContext, CFString, CFType, CGPoint, CGRect, CGSize, kCFRunLoopCommonModes,
+    kCFRunLoopDefaultMode,
 };
 
-/// How long an Accessibility call waits for an app, in seconds: checks run
-/// on the UI thread, which a hung app mustn't stall.
+/// How long an Accessibility call waits for an app, in seconds, so a hung
+/// app can't hold the checker up for long.
 const TIMEOUT: f32 = 0.25;
 /// At most this many elements under a field are looked at to find its
 /// [`Runs`], so a huge web page can't stall the UI thread.
@@ -319,16 +321,18 @@ impl Runs {
     }
 }
 
-/// Calls a function on the UI thread whenever the app it watches changes
-/// text, caret, focus or window, until dropped. Apps that don't send these
-/// are still read on a timer; this only makes the rest quick.
+/// Calls a function, on the thread that made it, whenever the app it
+/// watches changes text, caret, focus or window, until dropped. The calls
+/// come while that thread [`wait`]s. Apps that don't send these are still
+/// read on a timer; this only makes the rest quick.
 pub struct Watch {
     observer: CFRetained<AXObserver>,
+    run_loop: CFRetained<CFRunLoop>,
     on_change: *mut Box<dyn Fn()>,
 }
 
 impl Watch {
-    /// Watch the app with `pid`. Must run on the UI thread, whose run loop delivers the calls.
+    /// Watch the app with `pid`.
     pub fn new(pid: i32, on_change: impl Fn() + 'static) -> Option<Self> {
         let mut out: *mut AXObserver = ptr::null_mut();
         // SAFETY: `out` receives a +1 reference on success.
@@ -341,6 +345,7 @@ impl Watch {
         let on_change: Box<Box<dyn Fn()>> = Box::new(Box::new(on_change));
         let watch = Self {
             observer,
+            run_loop: CFRunLoop::current()?,
             on_change: Box::into_raw(on_change),
         };
         // SAFETY: a plain CF object for the app with `pid`.
@@ -358,7 +363,7 @@ impl Watch {
         // SAFETY: an immutable constant set up before any code runs, and the
         // observer's own source.
         let (modes, source) = unsafe { (kCFRunLoopCommonModes, watch.observer.run_loop_source()) };
-        CFRunLoop::main()?.add_source(Some(&source), modes);
+        watch.run_loop.add_source(Some(&source), modes);
         Some(watch)
     }
 }
@@ -367,13 +372,65 @@ impl Drop for Watch {
     fn drop(&mut self) {
         // SAFETY: as in `new`.
         let (modes, source) = unsafe { (kCFRunLoopCommonModes, self.observer.run_loop_source()) };
-        if let Some(main) = CFRunLoop::main() {
-            main.remove_source(Some(&source), modes);
-        }
+        self.run_loop.remove_source(Some(&source), modes);
         // SAFETY: made by `Box::into_raw` in `new`, and the run loop no longer
         // calls `changed` with it.
         drop(unsafe { Box::from_raw(self.on_change) });
     }
+}
+
+/// Wakes the thread that made it from its [`wait`], from any thread. A wake
+/// that comes while the thread is busy ends its next wait at once.
+pub struct Waker {
+    source: CFRetained<CFRunLoopSource>,
+    run_loop: CFRetained<CFRunLoop>,
+}
+
+// SAFETY: a waker only signals its source and wakes its run loop, which
+// Core Foundation allows from any thread, and CF reference counts are atomic.
+unsafe impl Send for Waker {}
+// SAFETY: as for `Send`: both calls are thread-safe.
+unsafe impl Sync for Waker {}
+
+impl Waker {
+    /// Make a waker for the current thread.
+    pub fn new() -> Option<Self> {
+        let mut context = CFRunLoopSourceContext {
+            version: 0,
+            info: ptr::null_mut(),
+            retain: None,
+            release: None,
+            copyDescription: None,
+            equal: None,
+            hash: None,
+            schedule: None,
+            cancel: None,
+            perform: Some(woken),
+        };
+        // SAFETY: the context is valid for the call, which copies it, and
+        // its callback needs no `info`.
+        let source = unsafe { CFRunLoopSource::new(None, 0, &mut context) }?;
+        let run_loop = CFRunLoop::current()?;
+        // SAFETY: an immutable constant set up before any code runs.
+        run_loop.add_source(Some(&source), unsafe { kCFRunLoopDefaultMode });
+        Some(Self { source, run_loop })
+    }
+
+    pub fn wake(&self) {
+        self.source.signal();
+        self.run_loop.wake_up();
+    }
+}
+
+/// A [`Waker`]'s callback: being woken is all it's for.
+unsafe extern "C-unwind" fn woken(_: *mut c_void) {}
+
+/// Wait on the current thread for up to `timeout`, or until a [`Watch`]
+/// it made reports a change or a [`Waker`] it made is woken.
+pub fn wait(timeout: Duration) {
+    // SAFETY: an immutable constant set up before any code runs.
+    let mode = unsafe { kCFRunLoopDefaultMode };
+    CFRunLoop::run_in_mode(mode, timeout.as_secs_f64(), true);
 }
 
 unsafe extern "C-unwind" fn changed(
@@ -466,5 +523,39 @@ unsafe fn unpack<T>(value: &CFType, kind: AXValueType) -> Option<T> {
         value
             .value(kind, NonNull::from(&mut out).cast())
             .then(|| out.assume_init())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::time::Instant;
+
+    use super::*;
+
+    #[test]
+    fn a_waker_ends_its_threads_wait_even_when_woken_early() {
+        let (tx, rx) = mpsc::channel();
+        let (go, ready) = mpsc::channel::<()>();
+        let thread = std::thread::spawn(move || {
+            tx.send(Waker::new().expect("a run loop source")).unwrap();
+            // Woken before it waits: the first wait ends at once.
+            ready.recv().unwrap();
+            let start = Instant::now();
+            wait(Duration::from_secs(5));
+            let early = start.elapsed();
+            // Woken while it waits.
+            let start = Instant::now();
+            wait(Duration::from_secs(5));
+            (early, start.elapsed())
+        });
+        let waker = rx.recv().unwrap();
+        waker.wake();
+        go.send(()).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        waker.wake();
+        let (early, late) = thread.join().unwrap();
+        assert!(early < Duration::from_secs(1), "first wait took {early:?}");
+        assert!(late < Duration::from_secs(1), "second wait took {late:?}");
     }
 }

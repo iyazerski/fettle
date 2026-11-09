@@ -10,7 +10,7 @@ use objc2_core_foundation::CGRect;
 use rune::{AppHandle, Label, Phase, ShortcutId};
 use tokio::runtime::Handle;
 
-use super::checker::{self, Checker, Fix, Target};
+use super::checker::{Check, Checker, Fix, Target};
 use super::client::Client;
 use super::dictating::Dictation;
 use super::draft::{Answer, Draft, Status, complete};
@@ -25,6 +25,7 @@ use crate::llm::{Ask, Backend};
 use crate::mac;
 use crate::prompts::{self, Action};
 use crate::settings::{Credentials, Settings};
+use crate::underlines::Line;
 
 /// How far below the top of the screen the window opens.
 const TOP_MARGIN: f32 = 120.0;
@@ -266,26 +267,20 @@ impl State {
     /// Underline mistakes in other apps if the settings say so, else stop.
     pub(super) fn apply_underlines(&mut self) {
         if self.settings.underline_mistakes {
-            self.checker.start(&self.app, self.client.rt());
+            self.checker.start(&self.app);
         } else {
             self.checker.stop();
         }
     }
 
-    /// Underline the mistakes in the focused field, unless the window shows.
-    pub fn check_field(&mut self) {
-        if self.app.is_visible() || self.capturing {
-            self.checker.pause();
-        } else {
-            let check = self.checker.refresh();
-            self.proofread(check);
-        }
+    /// Underline `lines`, which checker `id` found.
+    pub fn show_underlines(&mut self, id: u64, lines: Vec<Line>) {
+        self.checker.show(id, lines);
     }
 
     /// The model's `fix` of the field's paragraph `units`, asked as check `id`.
     pub fn field_checked(&mut self, id: u64, units: Vec<u16>, fix: Option<Fix>) {
-        let check = self.checker.finished(id, units, fix);
-        self.proofread(check);
+        self.checker.finished(id, units, fix);
     }
 
     /// The model or where it runs changed: fixes from the old one no longer count.
@@ -295,10 +290,8 @@ impl State {
 
     /// Ask the model to fix a paragraph of the focused field, as the Fix
     /// action does. Without a model to ask, the field's edits go unchecked.
-    fn proofread(&mut self, check: Option<checker::Check>) {
-        let Some(checker::Check { id, units, text }) = check else {
-            return;
-        };
+    pub fn proofread(&mut self, check: Check) {
+        let Check { id, units, text } = check;
         let Ok((backend, model)) = Backend::with_model(&self.settings) else {
             self.checker.skip();
             return;
@@ -328,14 +321,19 @@ impl State {
         self.checker.asking(id, request);
     }
 
-    /// A click at `point` in another app: on an underline, open its paragraph and fix it.
+    /// A click at `point` in another app: on an underline, open its paragraph.
     pub fn underline_clicked(&mut self, point: (f64, f64)) {
+        if !self.app.is_visible() && !self.capturing {
+            self.checker.clicked(point);
+        }
+    }
+
+    /// Show the paragraph `target` opened from an underline, with the
+    /// model's `fix` of it, or fix it now if that's not known.
+    pub fn underline_opened(&mut self, target: Target, fix: Option<Fix>) {
         if self.app.is_visible() || self.capturing {
             return;
         }
-        let Some((target, fix)) = self.checker.clicked(point) else {
-            return;
-        };
         self.show_text(Some(target.text.clone()), Some(target.word));
         match fix {
             Some(fix) => self.draft.answered(
@@ -559,17 +557,37 @@ impl State {
         self.draft.cancel(self.t().stopped);
     }
 
-    /// Hide the window and paste the answer over the selection.
+    /// Hide the window and paste the answer over the selection, or over the
+    /// paragraph an underline opened once it's selected again.
     pub fn replace(&mut self) {
+        if self.draft.result().is_none() {
+            return;
+        }
+        match &self.target {
+            Some(target) if self.checker.select(target) => {}
+            Some(_) => self.draft.notice = Some(self.t().text_moved.into()),
+            None => self.paste(),
+        }
+    }
+
+    /// Paste the answer once the checker selected the paragraph it came
+    /// from, or say the text moved if it couldn't.
+    pub fn target_selected(&mut self, selected: bool) {
+        if self.target.is_none() || !self.app.is_visible() {
+            return;
+        }
+        if selected {
+            self.paste();
+        } else {
+            self.draft.notice = Some(self.t().text_moved.into());
+        }
+    }
+
+    /// Hide the window and paste the answer into the app in front.
+    fn paste(&mut self) {
         let Some(text) = self.draft.result().map(str::to_owned) else {
             return;
         };
-        if let Some(target) = &self.target
-            && !target.select()
-        {
-            self.draft.notice = Some(self.t().text_moved.into());
-            return;
-        }
         self.hide();
         self.client.rt().spawn_blocking(move || {
             std::thread::sleep(PASTE_DELAY);
