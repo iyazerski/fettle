@@ -3,7 +3,8 @@
 //!
 //! Text ranges count UTF-16 code units, as the API and `NSString` do.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
 use std::ops::Range;
@@ -83,10 +84,11 @@ const NOTIFICATIONS: [&str; 5] = [
 ];
 
 /// The apps Fettle reads from, remembering which it asked to expose their
-/// web content.
+/// web content, and how, to undo it once dropped: the content costs them
+/// memory and speed, and the browsers animate their windows differently.
 #[derive(Debug, Default)]
 pub struct Apps {
-    asked: HashSet<i32>,
+    asked: HashMap<i32, &'static str>,
 }
 
 /// The app in front and its focused element, if Fettle may read it.
@@ -118,8 +120,8 @@ impl Apps {
         }
         // SAFETY: a plain CF object for the app with `pid`.
         let app = unsafe { AXUIElement::new_application(pid) };
-        if self.asked.insert(pid) {
-            expose_web_content(&app, &id);
+        if let Entry::Vacant(entry) = self.asked.entry(pid) {
+            entry.insert(expose_web_content(&app, &id));
         }
         // Not the system-wide element's: that fails now and then with
         // "cannot complete" while the app's own answers.
@@ -159,10 +161,26 @@ fn is_skipped(id: &str) -> bool {
     SKIPPED_APPS.contains(&id) || SKIPPED_VENDORS.iter().any(|v| id.starts_with(v))
 }
 
+impl Drop for Apps {
+    fn drop(&mut self) {
+        // VoiceOver needs the web content too, and may have asked for it first.
+        if NSWorkspace::sharedWorkspace().isVoiceOverEnabled() {
+            return;
+        }
+        for (pid, attribute) in self.asked.drain() {
+            // SAFETY: a plain CF object for the app with `pid`.
+            let app = unsafe { AXUIElement::new_application(pid) };
+            let name = CFString::from_static_str(attribute);
+            // SAFETY: the attribute takes a CFBoolean. An app that quit returns an error, which is fine.
+            unsafe { app.set_attribute_value(&name, CFBoolean::new(false)) };
+        }
+    }
+}
+
 /// Ask an Electron app or a Chromium browser, `id`, to build its web
 /// content's accessibility tree, which they only do for screen readers
-/// unless asked. Other apps ignore it.
-fn expose_web_content(app: &AXUIElement, id: &str) {
+/// unless asked, and return the attribute set. Other apps ignore it.
+fn expose_web_content(app: &AXUIElement, id: &str) -> &'static str {
     // Chromium browsers ignore Electron's attribute and take the one
     // VoiceOver sets, after a 2-second wait. It changes how other apps
     // animate their windows, so it's only set on the browsers.
@@ -171,9 +189,10 @@ fn expose_web_content(app: &AXUIElement, id: &str) {
     } else {
         "AXManualAccessibility"
     };
-    let name = CFString::from_static_str(name);
+    let attribute = CFString::from_static_str(name);
     // SAFETY: the attribute takes a CFBoolean. Apps without it return an error, which is fine.
-    unsafe { app.set_attribute_value(&name, CFBoolean::new(true)) };
+    unsafe { app.set_attribute_value(&attribute, CFBoolean::new(true)) };
+    name
 }
 
 /// A text field in another app.

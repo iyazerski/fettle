@@ -77,6 +77,8 @@ pub(super) enum Command {
 pub(super) struct Handle {
     commands: Sender<Command>,
     waker: Waker,
+    /// Closes once the thread has ended and undone what it changed in other apps.
+    ended: Receiver<()>,
 }
 
 impl Handle {
@@ -84,6 +86,13 @@ impl Handle {
         // A closed channel means the thread is gone; there's nothing to tell.
         let _ = self.commands.send(command);
         self.waker.wake();
+    }
+
+    /// Stop the thread, and wait up to `timeout` for it to end: a slow app
+    /// it's asking can hold it up.
+    pub(super) fn stop_and_wait(self, timeout: Duration) {
+        self.send(Command::Stop);
+        let _ = self.ended.recv_timeout(timeout);
     }
 }
 
@@ -97,6 +106,7 @@ impl Drop for Handle {
 pub(super) fn spawn(app: AppHandle<State>, id: u64) -> Option<Handle> {
     let (commands, received) = mpsc::channel();
     let (ready, waker) = mpsc::sync_channel(1);
+    let (end, ended) = mpsc::channel::<()>();
     let spawned = std::thread::Builder::new()
         .name("fettle-checker".into())
         .spawn(move || {
@@ -107,13 +117,18 @@ pub(super) fn spawn(app: AppHandle<State>, id: u64) -> Option<Handle> {
             if started {
                 Worker::new(app, id, received).run();
             }
+            drop(end);
         });
     if let Err(e) = spawned {
         eprintln!("starting the checker: {e}");
         return None;
     }
     let waker = waker.recv().ok().flatten()?;
-    Some(Handle { commands, waker })
+    Some(Handle {
+        commands,
+        waker,
+        ended,
+    })
 }
 
 /// The checker's state on its thread.
