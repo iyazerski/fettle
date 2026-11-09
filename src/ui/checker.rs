@@ -25,7 +25,7 @@ use crate::underlines::{Clicks, Line, Underlines};
 const TICK: Duration = Duration::from_millis(300);
 /// How long the user must stop typing before an edited paragraph goes to the
 /// model, so a request covers a finished thought rather than each keystroke.
-const IDLE: Duration = Duration::from_millis(1500);
+const IDLE: Duration = Duration::from_millis(1200);
 /// Longer paragraphs, in UTF-16 units, aren't sent: each edit would resend them.
 const MAX_PARAGRAPH: usize = 4000;
 /// How many paragraphs' fixes are kept, so text seen before isn't sent again.
@@ -68,7 +68,10 @@ pub struct Check {
 /// What runs while underlining is on.
 struct Running {
     app: AppHandle<State>,
+    rt: Handle,
     ticker: JoinHandle<()>,
+    /// Reads the field once the user pauses, so the request doesn't wait for a tick.
+    wake: Option<JoinHandle<()>>,
     _clicks: Option<Clicks>,
     /// The watch on the app in front, with its pid.
     watch: Option<(i32, Watch)>,
@@ -79,7 +82,32 @@ struct Running {
 impl Drop for Running {
     fn drop(&mut self) {
         self.ticker.abort();
+        if let Some(wake) = &self.wake {
+            wake.abort();
+        }
     }
+}
+
+impl Running {
+    /// Read the field again once [`IDLE`] passes with no newer edit.
+    fn wake_after_idle(&mut self) {
+        if let Some(wake) = self.wake.take() {
+            wake.abort();
+        }
+        let app = self.app.clone();
+        self.wake = Some(self.rt.spawn(async move {
+            tokio::time::sleep(IDLE).await;
+            check_field(&app);
+        }));
+    }
+}
+
+/// Read the focused field on the UI thread.
+fn check_field(app: &AppHandle<State>) {
+    app.update_if(|s, _| {
+        s.check_field();
+        false
+    });
 }
 
 /// The field being underlined.
@@ -124,16 +152,15 @@ impl Checker {
             every.set_missed_tick_behavior(MissedTickBehavior::Skip);
             loop {
                 every.tick().await;
-                ticks.update_if(|s, _| {
-                    s.check_field();
-                    false
-                });
+                check_field(&ticks);
             }
         });
         let clicks = app.clone();
         self.running = Some(Running {
             app: app.clone(),
+            rt: rt.clone(),
             ticker,
+            wake: None,
             _clicks: Clicks::watch(move |at| clicks.update(move |s, _| s.underline_clicked(at))),
             watch: None,
             session: None,
@@ -167,12 +194,7 @@ impl Checker {
             .is_none_or(|(watched, _)| *watched != pid)
         {
             let app = running.app.clone();
-            let watch = Watch::new(pid, move || {
-                app.update_if(|s, _| {
-                    s.check_field();
-                    false
-                })
-            });
+            let watch = Watch::new(pid, move || check_field(&app));
             running.watch = watch.map(|w| (pid, w));
         }
         let same = running.session.as_ref().is_some_and(|s| s.field == field);
@@ -187,6 +209,7 @@ impl Checker {
                     // Text from the edited paragraph on may have moved.
                     session.layout.words.retain(|(word, _)| word.end <= start);
                     session.layout.runs = None;
+                    running.wake_after_idle();
                 }
             }
             _ => {

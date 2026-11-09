@@ -59,6 +59,17 @@ const SKIPPED_APPS: [&str; 23] = [
 /// Bundle ID prefixes of vendors whose apps are all skipped: every JetBrains
 /// IDE has its own ID.
 const SKIPPED_VENDORS: [&str; 1] = ["com.jetbrains."];
+/// Bundle ID prefixes of Chromium browsers, which build the accessibility
+/// tree of web pages, with where their text shows, only for a screen reader.
+const CHROMIUM_BROWSERS: [&str; 7] = [
+    "com.google.Chrome",
+    "org.chromium.Chromium",
+    "com.microsoft.edgemac",
+    "com.brave.Browser",
+    "com.vivaldi.Vivaldi",
+    "com.operasoftware.Opera",
+    "company.thebrowser.",
+];
 /// What a [`Watch`] listens for: edits, caret moves, focus moves, and
 /// windows moving under the text.
 const NOTIFICATIONS: [&str; 5] = [
@@ -95,17 +106,18 @@ impl Apps {
         });
         let front = NSWorkspace::sharedWorkspace().frontmostApplication()?;
         let pid = front.processIdentifier();
-        let skipped = front
+        let id = front
             .bundleIdentifier()
-            .is_some_and(|id| is_skipped(&id.to_string()));
+            .map(|id| id.to_string())
+            .unwrap_or_default();
         // SAFETY: getpid has no preconditions.
-        if skipped || pid == unsafe { libc::getpid() } {
+        if is_skipped(&id) || pid == unsafe { libc::getpid() } {
             return None;
         }
         // SAFETY: a plain CF object for the app with `pid`.
         let app = unsafe { AXUIElement::new_application(pid) };
         if self.asked.insert(pid) {
-            expose_web_content(&app);
+            expose_web_content(&app, &id);
         }
         // Not the system-wide element's: that fails now and then with
         // "cannot complete" while the app's own answers.
@@ -124,10 +136,19 @@ fn is_skipped(id: &str) -> bool {
     SKIPPED_APPS.contains(&id) || SKIPPED_VENDORS.iter().any(|v| id.starts_with(v))
 }
 
-/// Ask an Electron or Chromium app to build its accessibility tree, which
-/// such apps only do for screen readers unless asked. Other apps ignore it.
-fn expose_web_content(app: &AXUIElement) {
-    let name = CFString::from_static_str("AXManualAccessibility");
+/// Ask an Electron app or a Chromium browser, `id`, to build its web
+/// content's accessibility tree, which they only do for screen readers
+/// unless asked. Other apps ignore it.
+fn expose_web_content(app: &AXUIElement, id: &str) {
+    // Chromium browsers ignore Electron's attribute and take the one
+    // VoiceOver sets, after a 2-second wait. It changes how other apps
+    // animate their windows, so it's only set on the browsers.
+    let name = if CHROMIUM_BROWSERS.iter().any(|b| id.starts_with(b)) {
+        "AXEnhancedUserInterface"
+    } else {
+        "AXManualAccessibility"
+    };
+    let name = CFString::from_static_str(name);
     // SAFETY: the attribute takes a CFBoolean. Apps without it return an error, which is fine.
     unsafe { app.set_attribute_value(&name, CFBoolean::new(true)) };
 }
