@@ -31,6 +31,13 @@ pub static STRINGS: Strings = Strings {
         "Jaśniej",
         "Z dyktowania",
     ],
+    style_hints: [
+        "Uprzejmie i precyzyjnie, do maili służbowych",
+        "Ciepło i swobodnie, do współpracowników",
+        "Bez zbędnych słów, tylko to, co ważne",
+        "Proste słowa i krótkie zdania",
+        "Porządkuje podyktowany tekst",
+    ],
     show_changes: "Pokaż zmiany",
     thinking: "Myślę…",
     nothing_to_fix: "Wygląda dobrze. Nie ma czego poprawiać.",

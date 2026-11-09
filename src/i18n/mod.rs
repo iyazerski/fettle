@@ -147,6 +147,8 @@ pub struct Strings {
     pub rewritten: &'static str,
     /// Formal, Friendly, Shorter, Clearer, Dictation, as [`Style::ALL`](crate::prompts::Style::ALL).
     pub styles: [&'static str; 5],
+    /// When to pick each of `styles`, in the same order, shown under its name.
+    pub style_hints: [&'static str; 5],
     pub show_changes: &'static str,
     pub thinking: &'static str,
     pub nothing_to_fix: &'static str,
@@ -301,6 +303,11 @@ impl Strings {
     /// Return the name of `style` in this language.
     pub fn style(&self, style: Style) -> &'static str {
         self.styles[style as usize]
+    }
+
+    /// Return when to pick `style`, in this language.
+    pub fn style_hint(&self, style: Style) -> &'static str {
+        self.style_hints[style as usize]
     }
 
     /// Return the name of `language`, one of [`LANGUAGES`], in this language.

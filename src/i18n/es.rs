@@ -25,6 +25,13 @@ pub static STRINGS: Strings = Strings {
     rewriting: "Reescribiendo…",
     rewritten: "Reescrito ({})",
     styles: ["Formal", "Cercano", "Más corto", "Más claro", "Dictado"],
+    style_hints: [
+        "Educado y preciso, para correos de trabajo",
+        "Cálido y relajado, para compañeros",
+        "Quita el relleno, deja lo importante",
+        "Palabras sencillas y frases cortas",
+        "Limpia un texto dictado",
+    ],
     show_changes: "Mostrar cambios",
     thinking: "Pensando…",
     nothing_to_fix: "Todo bien. No hay nada que corregir.",

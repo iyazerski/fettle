@@ -30,8 +30,9 @@ const ANSWER_MAX: f32 = 320.0;
 /// The tallest the language list gets before it scrolls.
 const LANGUAGES_MAX: f32 = 250.0;
 /// Clear space under the window while a dropdown is open: the window is as
-/// tall as its content, and a dropdown may hang below it.
-const MENU_ROOM: f32 = LANGUAGES_MAX + 16.0;
+/// tall as its content, and a dropdown may hang below it. Rewrite's styles
+/// are the tallest, as some languages' hints take two lines.
+const MENU_ROOM: f32 = 300.0;
 
 /// Return the theme's kit with Fettle's violet, the app icon's colour, as the
 /// accent in place of the theme's blue.
@@ -244,19 +245,24 @@ fn rewrite(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .on_close(|s: &mut State| s.close_menu());
     // A closed popover drops its content, so skip building the list.
     if open {
-        menu = menu.child(col().w(200.0).gap(2.0).children(Style::ALL.map(|style| {
-            row()
+        menu = menu.child(col().w(280.0).gap(2.0).children(Style::ALL.map(|style| {
+            col()
                 .key(format!("style-{style:?}"))
                 .role("menuitem")
                 .label(t.style(style))
                 .w_full()
-                .h(30.0)
                 .px(8.0)
-                .center_y()
+                .py(5.0)
                 .radius(6.0)
                 .hover(k.c.hover)
                 .on_press(move |s: &mut State| s.start(Action::Rewrite(style)))
                 .child(text(t.style(style)).font(k.ty.ui).color(k.c.text_base))
+                .child(
+                    text(t.style_hint(style))
+                        .font(k.ty.text_small)
+                        .color(k.c.text_muted)
+                        .wrap(),
+                )
         })));
     }
     menu.build(k, layer)

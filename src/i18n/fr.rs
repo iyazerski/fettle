@@ -25,6 +25,13 @@ pub static STRINGS: Strings = Strings {
     rewriting: "Reformulation…",
     rewritten: "Reformulé ({})",
     styles: ["Formel", "Amical", "Plus court", "Plus clair", "Dictée"],
+    style_hints: [
+        "Poli et précis, pour les e-mails pro",
+        "Chaleureux et détendu, pour les collègues",
+        "Supprime le superflu, garde l'essentiel",
+        "Mots simples et phrases courtes",
+        "Nettoie un texte dicté",
+    ],
     show_changes: "Afficher les modifications",
     thinking: "Réflexion…",
     nothing_to_fix: "Tout est bon. Rien à corriger.",

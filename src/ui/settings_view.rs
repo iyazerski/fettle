@@ -98,7 +98,7 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
             .on_change(|s: &mut State, shortcut, _| s.change_shortcut(shortcut))
             .error_message(shortcut_error_message)
             .width(CONTROL)
-            .build(k),
+            .build(field_kit(k)),
         ),
         compact(
             k,
@@ -177,23 +177,45 @@ fn app_language(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .on_toggle(|s: &mut State| s.toggle_menu(Menu::AppLanguage))
         .on_close(|s: &mut State| s.close_menu())
         .on_choose(|s: &mut State, name, _| s.pick_app_language(name))
-        .build(k, layer)
+        .build(field_kit(k), layer)
 }
 
 /// Return the kit for segmented controls, made once per appearance from `k`,
-/// the window's kit. In light mode, their track is grey so the white selected
-/// segment stands out from the rest.
+/// the window's kit, with a recessed track and a raised selected segment.
 fn segmented_kit(k: &Kit) -> &'static Kit {
     static DARK: OnceLock<Kit> = OnceLock::new();
     static LIGHT: OnceLock<Kit> = OnceLock::new();
     let cell = if k.dark { &DARK } else { &LIGHT };
     cell.get_or_init(|| {
         let mut sk = k.clone();
-        if !k.dark {
+        if k.dark {
+            // By default the track is barely darker than its group and the
+            // selected segment is near black, so neither reads as a control.
+            sk.c.layer_01 = k.dark_a(0.22);
+            sk.c.bg_base = k.light(0.14);
+            sk.c.border_base = k.light(0.12);
+            sk.c.border_strong = k.light(0.18);
+        } else {
             // The default track is nearly as white as the selected segment on the light glass.
             sk.c.layer_01 = k.dark_a(0.07);
         }
         sk
+    })
+}
+
+/// Return the kit for fields and dropdowns, made once per appearance from
+/// `k`, the window's kit. In dark mode they're a shade lighter than their
+/// group, not near black.
+fn field_kit(k: &Kit) -> &'static Kit {
+    static DARK: OnceLock<Kit> = OnceLock::new();
+    static LIGHT: OnceLock<Kit> = OnceLock::new();
+    let cell = if k.dark { &DARK } else { &LIGHT };
+    cell.get_or_init(|| {
+        let mut fk = k.clone();
+        if k.dark {
+            fk.c.bg_base = k.light(0.06);
+        }
+        fk
     })
 }
 
@@ -412,7 +434,7 @@ fn api(s: &State, k: &Kit) -> [El; 2] {
                 .width(None)
                 .on_edit(|s: &mut State| &mut s.form.api_base)
                 .on_change(|s: &mut State, _| s.api_edited())
-                .build(k),
+                .build(field_kit(k)),
         ),
         wide(
             k,
@@ -424,7 +446,7 @@ fn api(s: &State, k: &Kit) -> [El; 2] {
                 .width(None)
                 .on_edit(|s: &mut State| &mut s.form.api_key)
                 .on_change(|s: &mut State, _| s.api_edited())
-                .build(k),
+                .build(field_kit(k)),
         ),
     ]
 }
@@ -457,7 +479,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
         .on_toggle(|s: &mut State| s.toggle_models())
         .on_close(|s: &mut State| s.close_menu())
         .on_choose(|s: &mut State, model, _| s.pick_model(model))
-        .build(k, layer);
+        .build(field_kit(k), layer);
     let Models::Failed(e) = &s.form.models else {
         return Some(wide(k, t.model, select));
     };

@@ -25,6 +25,13 @@ pub static STRINGS: Strings = Strings {
     rewriting: "Rewriting…",
     rewritten: "{} rewrite",
     styles: ["Formal", "Friendly", "Shorter", "Clearer", "Dictation"],
+    style_hints: [
+        "Polite and precise, for work emails",
+        "Warm and relaxed, for teammates",
+        "Cuts filler, keeps what matters",
+        "Simple words and short sentences",
+        "Cleans up speech-to-text",
+    ],
     show_changes: "Show changes",
     thinking: "Thinking…",
     nothing_to_fix: "Looks good. Nothing to fix.",
