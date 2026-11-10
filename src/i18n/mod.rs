@@ -74,6 +74,24 @@ impl Locale {
         }
     }
 
+    /// Return the language's ISO 639-1 code, as BCP 47 tags start.
+    pub fn code(self) -> &'static str {
+        match self {
+            Locale::English => "en",
+            Locale::Spanish => "es",
+            Locale::Chinese => "zh",
+            Locale::Hindi => "hi",
+            Locale::French => "fr",
+            Locale::Russian => "ru",
+            Locale::Arabic => "ar",
+            Locale::Portuguese => "pt",
+            Locale::German => "de",
+            Locale::Japanese => "ja",
+            Locale::Polish => "pl",
+            Locale::Korean => "ko",
+        }
+    }
+
     /// Return the first of `preferred` (BCP 47 tags like `pt-BR`, most
     /// preferred first) that Fettle speaks, or English.
     pub fn from_preferred<S: AsRef<str>>(preferred: &[S]) -> Locale {
@@ -81,23 +99,16 @@ impl Locale {
             .iter()
             .find_map(|tag| {
                 let code = tag.as_ref().split(['-', '_']).next().unwrap_or_default();
-                Some(match code {
-                    "en" => Locale::English,
-                    "es" => Locale::Spanish,
-                    "zh" => Locale::Chinese,
-                    "hi" => Locale::Hindi,
-                    "fr" => Locale::French,
-                    "ru" => Locale::Russian,
-                    "ar" => Locale::Arabic,
-                    "pt" => Locale::Portuguese,
-                    "de" => Locale::German,
-                    "ja" => Locale::Japanese,
-                    "pl" => Locale::Polish,
-                    "ko" => Locale::Korean,
-                    _ => return None,
-                })
+                Locale::ALL.into_iter().find(|l| l.code() == code)
             })
             .unwrap_or(Locale::English)
+    }
+
+    /// Sort `languages`, from [`LANGUAGES`], by their names in this language,
+    /// as its speakers order words.
+    pub fn sort_languages(self, languages: &mut [&'static str]) {
+        let t = self.strings();
+        crate::mac::sort_localized(languages, self.code(), |l| t.language(l));
     }
 
     /// Return the window's text in this language.
@@ -332,39 +343,11 @@ impl Strings {
             .position(|l| *l == language)
             .map_or("?", |i| self.languages[i])
     }
-
-    /// Sort `languages`, from [`LANGUAGES`], by their names in this language.
-    pub fn sort_languages(&self, languages: &mut [&'static str]) {
-        languages.sort_by_cached_key(|l| sort_key(self.language(l)));
-    }
 }
 
 /// Put `value` in place of the `{}` in `template`.
 pub fn fill(template: &str, value: impl std::fmt::Display) -> String {
     template.replacen("{}", &value.to_string(), 1)
-}
-
-/// `name` lowercased with Latin accents dropped, so "Árabe" sorts with the a's.
-fn sort_key(name: &str) -> String {
-    name.to_lowercase()
-        .chars()
-        .map(|c| match c {
-            'á' | 'à' | 'â' | 'ä' | 'ã' => 'a',
-            'é' | 'è' | 'ê' | 'ë' => 'e',
-            'í' | 'î' | 'ï' => 'i',
-            'ó' | 'ô' | 'ö' | 'õ' => 'o',
-            'ú' | 'û' | 'ü' => 'u',
-            'ç' => 'c',
-            'ñ' | 'ń' => 'n',
-            'ą' => 'a',
-            'ć' => 'c',
-            'ę' => 'e',
-            'ł' => 'l',
-            'ś' => 's',
-            'ź' | 'ż' => 'z',
-            _ => c,
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -389,7 +372,7 @@ mod tests {
     #[test]
     fn sorts_translation_languages_by_their_local_names() {
         let mut languages = vec!["Vietnamese", "Arabic", "German", "Amharic"];
-        Locale::Spanish.strings().sort_languages(&mut languages);
+        Locale::Spanish.sort_languages(&mut languages);
         // Alemán, Amárico, Árabe, Vietnamita.
         assert_eq!(languages, ["German", "Amharic", "Arabic", "Vietnamese"]);
     }

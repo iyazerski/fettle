@@ -5,44 +5,16 @@ use std::ops::Range;
 use std::time::Duration;
 
 use similar::{ChangeTag, TextDiff};
+use unicode_segmentation::UnicodeSegmentation;
 
 /// How long the diff may search for the smallest edit before it settles for
 /// a coarser one: a long, heavily rewritten text could take far longer.
 const DIFF_TIMEOUT: Duration = Duration::from_secs(1);
 
-/// Split `text` into words (letters, digits and inner apostrophes), runs of
-/// whitespace, and single other characters, so punctuation diffs on its own.
+/// Split `text` at Unicode word boundaries: words, runs of spaces, and
+/// single punctuation marks, so punctuation diffs on its own.
 fn tokens(text: &str) -> Vec<&str> {
-    #[derive(Clone, Copy, PartialEq, Eq)]
-    enum Class {
-        Word,
-        Space,
-        Other,
-    }
-    let class = |c: char| {
-        if c.is_alphanumeric() || c == '\'' || c == '’' {
-            Class::Word
-        } else if c.is_whitespace() {
-            Class::Space
-        } else {
-            Class::Other
-        }
-    };
-    let mut out = Vec::new();
-    let mut start = 0;
-    let mut last = None;
-    for (i, c) in text.char_indices() {
-        let kind = class(c);
-        if i > start && (last != Some(kind) || kind == Class::Other) {
-            out.push(&text[start..i]);
-            start = i;
-        }
-        last = Some(kind);
-    }
-    if start < text.len() {
-        out.push(&text[start..]);
-    }
-    out
+    text.split_word_bounds().collect()
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -273,6 +245,13 @@ mod tests {
             ("a b c d", "x y z d", "[-a b c-]{+x y z+} d", &["a b c"]),
             ("Fine as is.\n", "Fine as is.\n", "Fine as is.\n", &[]),
             ("Это хорошо", "Это хорошо.", "Это хорошо{+.+}", &["хорошо"]),
+            // Chinese has no spaces: each character is a word.
+            (
+                "我喜欢苹果",
+                "我喜欢香蕉",
+                "我喜欢[-苹果-]{+香蕉+}",
+                &["苹果"],
+            ),
         ];
         for (old, new, want, marked) in cases {
             let pieces = words(old, new);

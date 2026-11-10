@@ -9,9 +9,10 @@ description = "Fix grammar and translate the text selected in any Mac app with o
 
 [dependencies]
 anyhow = "1"
-base64 = "0.22"
+base64 = "0.23"
 block2 = "0.6"
 clap = { version = "4", features = ["derive"] }
+eventsource-stream = "0.2"
 futures-util = "0.3"
 libc = "0.2"
 objc2 = "0.6"
@@ -21,24 +22,27 @@ objc2-avf-audio = { version = "0.3", default-features = false, features = ["std"
 objc2-speech = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-avf-audio", "SFSpeechRecognitionMetadata", "SFSpeechRecognitionRequest", "SFSpeechRecognitionResult", "SFSpeechRecognitionTask", "SFSpeechRecognizer", "SFTranscription"] }
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "block2", "libc", "objc2-core-foundation", "NSAccessibility", "NSAppearance", "NSApplication", "NSBox", "NSColor", "NSButton", "NSControl", "NSGraphics", "NSImage", "NSMenu", "NSMenuItem", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSEvent", "NSScreen", "NSRunningApplication", "NSStatusBar", "NSStatusBarButton", "NSStatusItem", "NSView", "NSWindow", "NSWorkspace"] }
 objc2-application-services = { version = "0.3", default-features = false, features = ["std", "libc", "objc2", "HIServices", "AXError", "AXUIElement", "AXValue"] }
-objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFArray", "CFCGTypes", "CFDate", "CFNumber", "CFRunLoop", "CFString", "CFURL"] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFArray", "CFCGTypes", "CFDate", "CFDictionary", "CFNumber", "CFRunLoop", "CFString", "CFURL"] }
 objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGEvent", "CGEventSource", "CGEventTypes", "CGRemoteOperation"] }
-objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSError", "NSGeometry", "NSLocale", "NSString", "NSURL", "NSValue"] }
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSEnumerator", "NSError", "NSGeometry", "NSLocale", "NSObjCRuntime", "NSRange", "NSString", "NSURL"] }
+plist = "1"
+reqwest = { version = "0.13", default-features = false, features = ["form", "json", "query", "rustls-no-provider", "stream"] }
 ring = "0.17"
+# TLS crypto through ring, which Fettle already uses, rather than aws-lc-rs.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 # Rune is pre-release and changes often: keep one tested revision.
 rune = { git = "https://github.com/anomalyco/rune", rev = "7ed827a2b969ec737323c3e80d2bfc1b8032b609" }
 rune-kit = { git = "https://github.com/anomalyco/rune", rev = "7ed827a2b969ec737323c3e80d2bfc1b8032b609" }
 rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "7ed827a2b969ec737323c3e80d2bfc1b8032b609" }
 security-framework = "3"
+semver = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-similar = "2"
-tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
-url = "2"
-
-[dev-dependencies]
+similar = "3"
 tempfile = "3"
+tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+unicode-segmentation = "1"
+url = "2"
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"

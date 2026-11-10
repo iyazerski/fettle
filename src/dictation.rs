@@ -16,6 +16,7 @@ use objc2_speech::{
     SFSpeechAudioBufferRecognitionRequest, SFSpeechRecognitionResult, SFSpeechRecognitionTask,
     SFSpeechRecognizer, SFSpeechRecognizerAuthorizationStatus,
 };
+use unicode_segmentation::UnicodeSegmentation;
 
 /// The recognizer's error for a session that ended before any speech.
 const NO_SPEECH: isize = 1110;
@@ -249,8 +250,7 @@ impl Transcript {
 
 /// The words of `s`, to compare transcriptions whatever their punctuation.
 fn words(s: &str) -> impl Iterator<Item = &str> {
-    s.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| !w.is_empty())
+    s.unicode_words()
 }
 
 /// Whether `a` and `b` are one word, whatever their case.

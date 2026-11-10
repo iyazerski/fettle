@@ -8,14 +8,11 @@ use objc2::MainThreadOnly;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2_app_kit::{
-    NSBackingStoreType, NSBox, NSBoxType, NSColor, NSEvent, NSEventMask, NSScreen, NSTitlePosition,
-    NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSBackingStoreType, NSBox, NSBoxType, NSColor, NSEvent, NSEventMask, NSFloatingWindowLevel,
+    NSScreen, NSTitlePosition, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
-use objc2_foundation::MainThreadMarker;
-
-/// NSFloatingWindowLevel: over the app's windows, as Fettle's own window is.
-const FLOATING: isize = 3;
+use objc2_foundation::{MainThreadMarker, NSUnionRect};
 /// The bar's thickness, and how far under the word it sits, in points.
 const THICKNESS: f64 = 2.0;
 const GAP: f64 = 1.0;
@@ -80,7 +77,11 @@ impl Underlines {
                 )
             })
             .collect();
-        let frame = rects.iter().copied().reduce(union).unwrap_or_default();
+        let frame = rects
+            .iter()
+            .copied()
+            .reduce(|a, b| NSUnionRect(a, b))
+            .unwrap_or_default();
         let window = self.window.get_or_insert_with(|| overlay(mtm));
         let Some(content) = window.contentView() else {
             return;
@@ -144,7 +145,8 @@ fn overlay(mtm: MainThreadMarker) -> Retained<NSWindow> {
     window.setBackgroundColor(Some(&NSColor::clearColor()));
     window.setHasShadow(false);
     window.setIgnoresMouseEvents(true);
-    window.setLevel(FLOATING);
+    // Over the app's windows, as Fettle's own window is.
+    window.setLevel(NSFloatingWindowLevel);
     window.setCollectionBehavior(
         NSWindowCollectionBehavior::CanJoinAllSpaces
             | NSWindowCollectionBehavior::FullScreenAuxiliary
@@ -163,14 +165,6 @@ fn underline(mtm: MainThreadMarker) -> Retained<NSBox> {
     bar.setCornerRadius(THICKNESS / 2.0);
     bar.setFillColor(&NSColor::systemRedColor());
     bar
-}
-
-fn union(a: CGRect, b: CGRect) -> CGRect {
-    let x = a.origin.x.min(b.origin.x);
-    let y = a.origin.y.min(b.origin.y);
-    let right = (a.origin.x + a.size.width).max(b.origin.x + b.size.width);
-    let top = (a.origin.y + a.size.height).max(b.origin.y + b.size.height);
-    CGRect::new(CGPoint::new(x, y), CGSize::new(right - x, top - y))
 }
 
 /// Calls a function with the pointer, in AppKit's coordinates, on each left

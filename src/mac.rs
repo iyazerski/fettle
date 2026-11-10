@@ -2,24 +2,27 @@
 //! both through the pasteboard and synthetic ⌘C/⌘V, which need the
 //! Accessibility permission.
 
+use std::cmp::Ordering;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
 use objc2::rc::{Retained, autoreleasepool};
-use objc2::runtime::ProtocolObject;
+use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2_app_kit::{
     NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication, NSEvent,
     NSPasteboard, NSPasteboardItem, NSPasteboardTypeString, NSPasteboardWriting, NSScreen,
     NSWorkspace,
 };
-use objc2_core_foundation::CGRect;
+use objc2_application_services::{AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt};
+use objc2_core_foundation::{CFBoolean, CFDictionary, CGPoint, CGRect};
 use objc2_core_graphics::{
     CGEvent, CGEventFlags, CGEventSource, CGEventSourceStateID, CGEventTapLocation,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSArray, NSData, NSDictionary, NSLocale, NSNumber, NSString, NSURL,
+    MainThreadMarker, NSArray, NSData, NSLocale, NSPointInRect, NSRange, NSString,
+    NSStringCompareOptions, NSURL,
 };
 
 use crate::settings::Appearance;
@@ -36,11 +39,6 @@ const PASTE_WAIT: Duration = Duration::from_millis(500);
 /// (see nspasteboard.org).
 const TRANSIENT: &str = "org.nspasteboard.TransientType";
 
-#[link(name = "ApplicationServices", kind = "framework")]
-unsafe extern "C" {
-    fn AXIsProcessTrustedWithOptions(options: *const NSDictionary<NSString, NSNumber>) -> bool;
-}
-
 /// Whether Fettle may send keys to other apps.
 pub fn accessibility_trusted() -> bool {
     check_accessibility(false)
@@ -53,12 +51,11 @@ pub fn request_accessibility() -> bool {
 }
 
 fn check_accessibility(prompt: bool) -> bool {
-    let key = NSString::from_str("AXTrustedCheckOptionPrompt");
-    let value = NSNumber::new_bool(prompt);
-    let options = NSDictionary::from_slices(&[&*key], &[&*value]);
-    // SAFETY: the dictionary is a valid CFDictionary (toll-free bridged) that
-    // outlives the call.
-    unsafe { AXIsProcessTrustedWithOptions(&*options) }
+    // SAFETY: an immutable constant set up before any code runs.
+    let key = unsafe { kAXTrustedCheckOptionPrompt };
+    let options = CFDictionary::from_slices(&[key], &[CFBoolean::new(prompt)]);
+    // SAFETY: the options map a CFString key to a CFBoolean, as the function expects.
+    unsafe { AXIsProcessTrustedWithOptions(Some(options.as_opaque())) }
 }
 
 /// Draw the app in `appearance`: the window's blur and the theme Rune reports
@@ -94,11 +91,7 @@ pub fn pointer() -> Option<(f64, f64)> {
 fn screen_at(screens: &NSArray<NSScreen>, x: f64, y: f64) -> Option<Retained<NSScreen>> {
     screens
         .iter()
-        .find(|s| {
-            let f = s.frame();
-            (f.origin.x..f.origin.x + f.size.width).contains(&x)
-                && (f.origin.y..f.origin.y + f.size.height).contains(&y)
-        })
+        .find(|s| NSPointInRect(CGPoint::new(x, y), s.frame()))
         .or_else(|| screens.iter().next())
 }
 
@@ -170,6 +163,21 @@ pub fn preferred_languages() -> Vec<String> {
         .collect()
 }
 
+/// Sort `items` by their `name`s as people who speak `locale`, a BCP 47 tag,
+/// order words, ignoring case.
+pub fn sort_localized<T>(items: &mut [T], locale: &str, name: impl Fn(&T) -> &str) {
+    let locale = NSLocale::localeWithLocaleIdentifier(&NSString::from_str(locale));
+    let locale: &AnyObject = locale.as_ref();
+    items.sort_by(|a, b| {
+        let (a, b) = (NSString::from_str(name(a)), NSString::from_str(name(b)));
+        let all = NSRange::new(0, a.length());
+        let options = NSStringCompareOptions::CaseInsensitiveSearch;
+        // SAFETY: `locale` is an NSLocale, as the method takes.
+        let order = unsafe { a.compare_options_range_locale(&b, options, all, Some(locale)) };
+        Ordering::from(order)
+    });
+}
+
 pub fn open_url(url: &str) {
     if let Some(url) = NSURL::URLWithString(&NSString::from_str(url)) {
         NSWorkspace::sharedWorkspace().openURL(&url);
@@ -232,17 +240,6 @@ pub fn paste(text: &str) {
     post_command_key(KEY_V);
     sleep(PASTE_WAIT);
     saved.restore(written);
-}
-
-/// Put `text` on the pasteboard for good.
-pub fn copy(text: &str) {
-    autoreleasepool(|_| {
-        let pasteboard = NSPasteboard::generalPasteboard();
-        pasteboard.clearContents();
-        // SAFETY: as in `copy_selection`.
-        let kind = unsafe { NSPasteboardTypeString };
-        pasteboard.setString_forType(&NSString::from_str(text), kind);
-    });
 }
 
 fn change_count() -> isize {

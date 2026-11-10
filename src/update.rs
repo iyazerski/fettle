@@ -44,15 +44,11 @@ async fn latest(http: &reqwest::Client) -> Result<String> {
     Ok(release.tag_name.trim_start_matches('v').to_owned())
 }
 
-/// Whether version `candidate` comes after `current`, comparing dotted numbers.
+/// Whether version `candidate` comes after `current`, as semantic versions.
 fn newer(candidate: &str, current: &str) -> Result<bool> {
-    let parts = |v: &str| -> Result<Vec<u64>> {
-        v.split('.')
-            .map(str::parse)
-            .collect::<Result<_, _>>()
-            .with_context(|| format!("unexpected version {v}"))
-    };
-    Ok(parts(candidate)? > parts(current)?)
+    let parse =
+        |v: &str| semver::Version::parse(v).with_context(|| format!("unexpected version {v}"));
+    Ok(parse(candidate)? > parse(current)?)
 }
 
 /// Download release `version` and put it in place of the running Fettle.app.
@@ -192,7 +188,9 @@ mod tests {
             ("0.1.9", "0.1.10", false),
             ("0.1.5", "0.1.5", false),
             ("0.2.0", "0.1.99", true),
-            ("1.0", "0.9.9", true),
+            ("1.0.0", "0.9.9", true),
+            ("0.4.0", "0.4.0-beta", true),
+            ("0.4.0-beta", "0.3.0", true),
         ] {
             assert_eq!(
                 newer(candidate, current).unwrap(),
@@ -200,6 +198,6 @@ mod tests {
                 "{candidate} vs {current}"
             );
         }
-        assert!(newer("0.4.0-beta", "0.3.0").is_err());
+        assert!(newer("0.4", "0.3.0").is_err());
     }
 }

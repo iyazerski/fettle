@@ -689,11 +689,11 @@ impl State {
         self.draft.decline(n);
     }
 
-    pub fn copy(&mut self) {
+    pub fn copy(&mut self, tx: &mut Tx) {
         let Some(text) = self.draft.result() else {
             return;
         };
-        mac::copy(text);
+        tx.copy(text);
         self.draft.copied();
     }
 

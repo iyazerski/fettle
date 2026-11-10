@@ -18,6 +18,7 @@ mod state;
 mod view;
 
 use anyhow::{Context, Result};
+use objc2_app_kit::{NSFloatingWindowLevel, NSWindowCollectionBehavior};
 use rune::{App, AppSpec, MacWindowOptions, RunOptions, WindowOptions, WindowSpec};
 
 use crate::keychain;
@@ -26,12 +27,6 @@ use crate::settings::Settings;
 pub use self::state::Start;
 use self::state::State;
 use self::view::{CORNER, WIDTH, on_key, view};
-
-/// NSWindow collection behavior: on every Space, and over full-screen apps.
-const ALL_SPACES: usize = 1 << 0;
-const FULL_SCREEN_AUXILIARY: usize = 1 << 8;
-/// NSFloatingWindowLevel: above normal windows, under menus.
-const FLOATING: isize = 3;
 
 /// Run the app until it quits. The window owns the main thread, as macOS needs.
 pub fn run(start: Start) -> Result<()> {
@@ -108,8 +103,14 @@ pub fn run(start: Start) -> Result<()> {
         .macos(
             MacWindowOptions::default()
                 .nonactivating_panel(true)
-                .level(FLOATING)
-                .collection_behavior(ALL_SPACES | FULL_SCREEN_AUXILIARY)
+                // Above normal windows, under menus.
+                .level(NSFloatingWindowLevel)
+                // On every Space, and over full-screen apps.
+                .collection_behavior(
+                    (NSWindowCollectionBehavior::CanJoinAllSpaces
+                        | NSWindowCollectionBehavior::FullScreenAuxiliary)
+                        .0,
+                )
                 .corner_radius(CORNER),
         );
         vec![WindowSpec::from_app("fettle", app).configured_options(options)]
@@ -121,16 +122,17 @@ pub fn run(start: Start) -> Result<()> {
 /// Hold a lock for as long as Fettle runs, so a second copy (the login item and
 /// a manual start) quits instead of fighting over the shortcut.
 fn single_instance() -> Result<std::fs::File> {
-    use std::os::fd::AsRawFd;
     let path = Settings::path().with_file_name("fettle.lock");
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
     let file =
         std::fs::File::create(&path).with_context(|| format!("opening {}", path.display()))?;
-    // SAFETY: flock on a descriptor this function owns.
-    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } != 0 {
-        anyhow::bail!("Fettle is already running");
+    match file.try_lock() {
+        Ok(()) => Ok(file),
+        Err(std::fs::TryLockError::WouldBlock) => anyhow::bail!("Fettle is already running"),
+        Err(std::fs::TryLockError::Error(e)) => {
+            Err(e).with_context(|| format!("locking {}", path.display()))
+        }
     }
-    Ok(file)
 }

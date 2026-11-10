@@ -125,8 +125,7 @@ impl Apps {
             .bundleIdentifier()
             .map(|id| id.to_string())
             .unwrap_or_default();
-        // SAFETY: getpid has no preconditions.
-        if is_skipped(&id) || pid == unsafe { libc::getpid() } {
+        if is_skipped(&id) || u32::try_from(pid) == Ok(std::process::id()) {
             return None;
         }
         // SAFETY: a plain CF object for the app with `pid`.

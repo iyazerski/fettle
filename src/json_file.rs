@@ -2,7 +2,6 @@
 //! replaced whole and atomically.
 
 use std::io::{ErrorKind, Write};
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
 use anyhow::{Context, Result};
@@ -23,24 +22,14 @@ pub fn load<T: DeserializeOwned>(path: &Path) -> Result<Option<T>> {
 /// Write `value` to `path` atomically, readable only by the user (some of
 /// these files hold secrets).
 pub fn save<T: Serialize>(path: &Path, value: &T) -> Result<()> {
-    // Per process, so two copies of Fettle never write the same temporary file.
-    let tmp = path.with_extension(format!("tmp.{}", std::process::id()));
-    // A fresh file, so the mode applies: a leftover one keeps its own.
-    match std::fs::remove_file(&tmp) {
-        Err(e) if e.kind() != ErrorKind::NotFound => {
-            return Err(e).with_context(|| format!("removing {}", tmp.display()));
-        }
-        _ => {}
-    }
-    let mut file = std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .mode(0o600)
-        .open(&tmp)
-        .with_context(|| format!("writing {}", tmp.display()))?;
+    let writing = || format!("writing {}", path.display());
+    // Beside the file, so the rename stays on one volume; tempfile makes it 0600.
+    let dir = path.parent().unwrap_or(Path::new("."));
+    let mut file = tempfile::NamedTempFile::new_in(dir).with_context(writing)?;
     file.write_all(&serde_json::to_vec_pretty(value)?)?;
-    file.sync_all()?;
-    std::fs::rename(&tmp, path).with_context(|| format!("writing {}", path.display()))
+    file.as_file().sync_all()?;
+    file.persist(path).with_context(writing)?;
+    Ok(())
 }
 
 #[cfg(test)]

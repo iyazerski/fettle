@@ -159,6 +159,8 @@ impl Backend {
 /// The HTTP client for every call: generous on the whole answer, quick to
 /// give up on connecting.
 pub fn http() -> Result<reqwest::Client> {
+    // reqwest takes the process-wide provider; an Err means it's already installed.
+    let _ = rustls::crypto::ring::default_provider().install_default();
     reqwest::Client::builder()
         .user_agent(format!("fettle/{}", crate::VERSION))
         .connect_timeout(Duration::from_secs(10))

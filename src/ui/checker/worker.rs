@@ -11,7 +11,8 @@ use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
 use objc2::rc::autoreleasepool;
-use objc2_core_foundation::CGRect;
+use objc2_core_foundation::{CGPoint, CGRect};
+use objc2_foundation::NSPointInRect;
 use rune::AppHandle;
 
 use super::{Check, Fix, Target};
@@ -574,14 +575,11 @@ impl Paragraph {
 
 /// Whether the middle of `rect` is inside `frame`, if known.
 fn inside(rect: CGRect, frame: Option<CGRect>) -> bool {
-    let (x, y) = (
+    let middle = CGPoint::new(
         rect.origin.x + rect.size.width / 2.0,
         rect.origin.y + rect.size.height / 2.0,
     );
-    frame.is_none_or(|f| {
-        (f.origin.x..=f.origin.x + f.size.width).contains(&x)
-            && (f.origin.y..=f.origin.y + f.size.height).contains(&y)
-    })
+    frame.is_none_or(|f| NSPointInRect(middle, f))
 }
 
 /// Split `range` of `text` into its words, so a phrase over two lines gets an

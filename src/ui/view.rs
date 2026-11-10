@@ -428,10 +428,9 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
 
 /// The languages, favourites first; a star marks or unmarks one.
 fn languages(s: &State, k: &Kit) -> El {
-    let t = s.t();
     let (mut favourites, mut rest) = s.settings.languages();
-    t.sort_languages(&mut favourites);
-    t.sort_languages(&mut rest);
+    s.locale().sort_languages(&mut favourites);
+    s.locale().sort_languages(&mut rest);
     let mut list = col().w(240.0).gap(2.0);
     if !favourites.is_empty() {
         list = list
@@ -600,7 +599,10 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
                     Tone::Secondary,
                     if copied { t.copied } else { t.copy },
                     Some(if copied { &icons::CHECK } else { &icons::COPY }),
-                    |b| b.shortcut("⇧⌘C").on_press(|s: &mut State| s.copy()),
+                    |b| {
+                        b.shortcut("⇧⌘C")
+                            .on_press_tx(|s: &mut State, tx| s.copy(tx))
+                    },
                 ))
                 .child(buttons::button(
                     k,
@@ -743,13 +745,13 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     } else if key.is_command('q') {
         tx.quit();
     } else {
-        return s.page == Page::Main && on_main_key(s, key);
+        return s.page == Page::Main && on_main_key(s, key, tx);
     }
     true
 }
 
 /// Handle the shortcuts for the main page's actions and answer.
-fn on_main_key(s: &mut State, key: &KeyEvent) -> bool {
+fn on_main_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     if key.key == Key::Enter && key.mods.cmd {
         s.replace();
     } else if key.is_command('1') {
@@ -759,7 +761,7 @@ fn on_main_key(s: &mut State, key: &KeyEvent) -> bool {
     } else if key.is_command('3') {
         s.start(Action::Rewrite(s.settings.rewrite_style));
     } else if key.is_command('c') && key.mods.shift {
-        s.copy();
+        s.copy(tx);
     } else {
         return false;
     }
