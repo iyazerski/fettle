@@ -8,7 +8,7 @@ use serde::Serialize;
 use crate::mac;
 use crate::settings::home;
 
-const LABEL: &str = "dev.iyazerski.fettle";
+const LABEL: &str = crate::BUNDLE_ID;
 
 /// The LaunchAgent's property list, as `launchd.plist(5)` names its keys.
 #[derive(Serialize)]
@@ -47,7 +47,11 @@ pub fn enable() -> Result<()> {
         ],
         None => vec![exe.to_string_lossy().into_owned(), "--background".into()],
     };
-    let log = home().join("Library/Logs/fettle.log");
+    let log = home().join(if crate::DEV {
+        "Library/Logs/fettle-dev.log"
+    } else {
+        "Library/Logs/fettle.log"
+    });
     let agent = LaunchAgent {
         label: LABEL,
         program_arguments: args,

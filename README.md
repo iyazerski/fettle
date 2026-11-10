@@ -120,6 +120,7 @@ Fettle is a native Rust app built on the [Rune](https://github.com/anomalyco/run
 
 ```sh
 make install   # build Fettle.app and put it in /Applications
+make dev       # build Fettle Dev.app, a debug copy that runs beside it
 make test
 ```
 

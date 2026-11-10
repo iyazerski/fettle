@@ -32,6 +32,17 @@ pub const VERSION: &str = match option_env!("FETTLE_VERSION") {
     None => env!("CARGO_PKG_VERSION"),
 };
 
+/// Debug builds are Fettle Dev, with their own name, bundle ID, settings,
+/// keychain items, login item and shortcut, so they run beside the installed app.
+/// `scripts/bundle.sh` gives Fettle Dev.app the same name and ID.
+pub const DEV: bool = cfg!(debug_assertions);
+pub const NAME: &str = if DEV { "Fettle Dev" } else { "Fettle" };
+pub const BUNDLE_ID: &str = if DEV {
+    "dev.iyazerski.fettle.dev"
+} else {
+    "dev.iyazerski.fettle"
+};
+
 #[derive(Parser)]
 #[command(version = VERSION, about, long_about = None)]
 struct Cli {

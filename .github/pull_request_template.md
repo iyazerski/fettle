@@ -5,5 +5,5 @@
 ## Checks
 
 - [ ] `make test` passes, and the prek hooks ran.
-- [ ] I tried the change in Fettle.app (`make install`).
+- [ ] I tried the change in Fettle Dev.app (`make dev`).
 - [ ] If dependencies changed, I ran `make licenses`.

@@ -54,6 +54,11 @@ fn newer(candidate: &str, current: &str) -> Result<bool> {
 /// Download release `version` and put it in place of the running Fettle.app.
 /// Returns the app's path, to start it again.
 pub async fn install(http: &reqwest::Client, version: &str) -> Result<PathBuf> {
+    // A release would replace Fettle Dev.app with Fettle.app.
+    ensure!(
+        !crate::DEV,
+        "Fettle Dev doesn't update itself: rebuild it with make dev"
+    );
     let app = running_app()?;
     let url = format!("https://github.com/{REPO}/releases/download/v{version}/{ASSET}");
     let get = |url: String| async move {

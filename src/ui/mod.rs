@@ -47,7 +47,7 @@ pub fn run(start: Start) -> Result<()> {
         families: rune_theme_opencode::FAMILIES,
         on_key: Some(on_key),
         ..AppSpec::new(
-            "Fettle",
+            crate::NAME,
             (WIDTH, 240.0),
             || unreachable!("init() below builds the state"),
             view,
@@ -130,7 +130,9 @@ fn single_instance() -> Result<std::fs::File> {
         std::fs::File::create(&path).with_context(|| format!("opening {}", path.display()))?;
     match file.try_lock() {
         Ok(()) => Ok(file),
-        Err(std::fs::TryLockError::WouldBlock) => anyhow::bail!("Fettle is already running"),
+        Err(std::fs::TryLockError::WouldBlock) => {
+            anyhow::bail!("{} is already running", crate::NAME)
+        }
         Err(std::fs::TryLockError::Error(e)) => {
             Err(e).with_context(|| format!("locking {}", path.display()))
         }

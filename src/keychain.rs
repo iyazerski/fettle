@@ -9,13 +9,8 @@ use security_framework::passwords::{
 
 use crate::settings::Credentials;
 
-/// Debug builds keep their own items, so a test copy can't change the
-/// installed app's sign-in.
-const SERVICE: &str = if cfg!(debug_assertions) {
-    "dev.iyazerski.fettle.debug"
-} else {
-    "dev.iyazerski.fettle"
-};
+/// Per build flavor, so Fettle Dev can't change the installed app's sign-in.
+const SERVICE: &str = crate::BUNDLE_ID;
 const CHATGPT: &str = "chatgpt";
 const API_KEY: &str = "api-key";
 /// `errSecItemNotFound`.

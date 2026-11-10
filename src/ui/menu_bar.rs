@@ -14,7 +14,8 @@ use super::state::State;
 use crate::i18n::Strings;
 
 /// The SF Symbol it shows: the sparkles of Fettle's icon.
-const SYMBOL: &str = "sparkles";
+/// Fettle Dev's differs, to tell the two apart.
+const SYMBOL: &str = if crate::DEV { "hammer" } else { "sparkles" };
 
 define_class!(
     // SAFETY: NSObject has no subclassing requirements, and `Target` doesn't implement Drop.
@@ -64,7 +65,7 @@ impl MenuBar {
         if let Some(button) = item.button(mtm) {
             let image = NSImage::imageWithSystemSymbolName_accessibilityDescription(
                 &NSString::from_str(SYMBOL),
-                Some(&NSString::from_str("Fettle")),
+                Some(&NSString::from_str(crate::NAME)),
             );
             button.setImage(image.as_deref());
         }

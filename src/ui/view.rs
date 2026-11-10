@@ -112,7 +112,7 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let mut page = col()
         .w_full()
         .gap(12.0)
-        .child(header(s, k, Lead::Mark, "Fettle", main_tools(s, k)))
+        .child(header(s, k, Lead::Mark, crate::NAME, main_tools(s, k)))
         .child(source(s, k));
     if let Some(notice) = &s.draft.notice {
         page = page.child(note(k, notice, NoteKind::Info));

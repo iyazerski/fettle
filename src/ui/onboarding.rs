@@ -100,7 +100,7 @@ pub fn view(s: &State, k: &Kit, step: Step) -> El {
     col()
         .w_full()
         .gap(16.0)
-        .child(header(s, k, lead, "Fettle", vec![dots]))
+        .child(header(s, k, lead, crate::NAME, vec![dots]))
         .child(body)
 }
 

@@ -11,11 +11,14 @@ Thanks for helping with Fettle. Bug reports, ideas and pull requests are all wel
 You need macOS on Apple silicon and [Rust](https://rustup.rs).
 
 ```sh
-make install   # build Fettle.app and put it in /Applications
+make dev       # build Fettle Dev.app and start it beside your Fettle
 make test
+make install   # build Fettle.app and put it in /Applications
 ```
 
-A local build is signed ad hoc, so macOS asks for Accessibility again after each install.
+Use `make dev` to try a change. Fettle Dev is a debug build with its own name, settings, sign-in and shortcut (⌃⌥⇧E), so it doesn't touch the Fettle you use every day. Allow it in Accessibility once: it's signed with a local identity, so macOS keeps the grant across rebuilds. See [AGENTS.md](AGENTS.md) for details.
+
+`make install` signs ad hoc, so macOS asks for Accessibility again after each install.
 
 Before you open a pull request:
 

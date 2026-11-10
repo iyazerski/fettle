@@ -13,7 +13,12 @@ use crate::json_file;
 use crate::llm::Effort;
 use crate::prompts::Style;
 
-pub const DEFAULT_SHORTCUT: &str = "ctrl+alt+e";
+/// Fettle Dev adds ⇧, so it doesn't take the installed app's shortcut.
+pub const DEFAULT_SHORTCUT: &str = if crate::DEV {
+    "ctrl+alt+shift+e"
+} else {
+    "ctrl+alt+e"
+};
 pub const DEFAULT_API_BASE: &str = "https://api.openai.com/v1";
 /// A small, fast model that ChatGPT sign-in serves.
 pub const DEFAULT_CHATGPT_MODEL: &str = "gpt-6-luna";
@@ -176,9 +181,13 @@ pub struct ChatGptAuth {
 }
 
 impl Settings {
-    /// The settings file: `~/Library/Application Support/Fettle/settings.json`.
+    /// The settings file: `~/Library/Application Support/Fettle/settings.json`,
+    /// or `Fettle Dev/` for Fettle Dev.
     pub fn path() -> PathBuf {
-        home().join("Library/Application Support/Fettle/settings.json")
+        home().join(format!(
+            "Library/Application Support/{}/settings.json",
+            crate::NAME
+        ))
     }
 
     /// Load the settings at `path`; a missing file gives the defaults, and a
