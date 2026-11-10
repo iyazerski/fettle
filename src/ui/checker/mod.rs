@@ -154,11 +154,17 @@ impl Checker {
         });
     }
 
-    /// Select `target`'s paragraph in its field, so a paste replaces it.
-    /// The window hears back whether it could, unless this returns false:
-    /// underlining is off, and nothing can select it.
-    pub fn select(&self, target: &Target) -> bool {
-        self.send(Command::Select(target.units.clone()))
+    /// Check that `target`'s paragraph is still where it was opened. The
+    /// window hears back whether it is, unless this returns false:
+    /// underlining is off, and nothing can find it.
+    pub fn locate(&self, target: &Target) -> bool {
+        self.send(Command::Locate(target.units.clone()))
+    }
+
+    /// Change the paragraph opened into `text` in its field, once the window
+    /// hid, pasting only what differs so the rest keeps its links and styles.
+    pub fn replace(&self, text: String) {
+        self.send(Command::Replace(text));
     }
 
     /// Send `command` to the checker thread; false if underlining is off.

@@ -17,6 +17,7 @@ mod llm;
 mod login_item;
 mod mac;
 mod prompts;
+mod rich;
 mod settings;
 mod ui;
 mod underlines;

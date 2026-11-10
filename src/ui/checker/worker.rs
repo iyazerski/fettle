@@ -19,8 +19,10 @@ use super::{Check, Fix, Target};
 use crate::ax::{self, Apps, Field, Focus, Runs, Waker, Watch};
 use crate::diff;
 use crate::document::{Document, paragraph};
+use crate::mac::{self, Clip};
+use crate::rich;
 use crate::ui::pending::Pending;
-use crate::ui::state::State;
+use crate::ui::state::{PASTE_DELAY, State};
 use crate::underlines::Line;
 
 /// How often the focused field is read even if its app reports nothing, to
@@ -69,8 +71,10 @@ pub(super) enum Command {
     },
     /// The user clicked the underline `line`: open its paragraph.
     Open(Line),
-    /// Select the paragraph `units` opened, so a paste replaces it.
-    Select(Vec<u16>),
+    /// Check that the paragraph `units` opened is still where it was.
+    Locate(Vec<u16>),
+    /// Change the paragraph opened into this text, the window hidden.
+    Replace(String),
     Stop,
 }
 
@@ -266,13 +270,26 @@ impl Worker {
             }
             Command::Learn { units, fix } => self.remember(units, fix),
             Command::Open(line) => self.open(line),
-            Command::Select(units) => {
-                let selected = self
+            Command::Locate(units) => {
+                let found = self
                     .opened
                     .as_ref()
-                    .is_some_and(|p| p.units == units && p.select());
-                self.app.update(move |s, _| s.target_selected(selected));
+                    .is_some_and(|p| p.units == units && p.holds());
+                self.app.update(move |s, _| s.target_located(found));
             }
+            Command::Replace(text) => match &self.opened {
+                Some(opened) if opened.select() => {
+                    // Meanwhile the window hides, and the app gets its keys back for ⌘C.
+                    std::thread::sleep(PASTE_DELAY);
+                    let old = String::from_utf16_lossy(&opened.units);
+                    let clip = match mac::copy_selection() {
+                        Some(copied) => rich::replacement(&copied.clip, &old, &text),
+                        None => Clip::plain(&text),
+                    };
+                    mac::paste(&clip);
+                }
+                _ => eprintln!("pasting a fix: the paragraph moved"),
+            },
             Command::Stop => {}
         }
     }
@@ -563,13 +580,18 @@ impl Worker {
 }
 
 impl Paragraph {
-    /// Select the paragraph in its field, so a paste replaces it. Returns
-    /// false, selecting nothing, if the field no longer holds it there.
-    fn select(&self) -> bool {
+    /// Whether the field still holds the paragraph where it was.
+    fn holds(&self) -> bool {
         let mut text = Vec::new();
         self.field.read(MAX_TEXT, &mut text)
             && text.get(self.range.clone()) == Some(&self.units[..])
-            && self.field.select(self.range.clone())
+    }
+
+    /// Select the paragraph in its field, so a copy takes it and a paste
+    /// replaces it. Returns false, selecting nothing, if the field no longer
+    /// holds it there.
+    fn select(&self) -> bool {
+        self.holds() && self.field.select(self.range.clone())
     }
 }
 

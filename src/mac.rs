@@ -8,12 +8,13 @@ use std::sync::{Mutex, MutexGuard};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
+use objc2::AnyThread;
 use objc2::rc::{Retained, autoreleasepool};
 use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2_app_kit::{
-    NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication, NSEvent,
-    NSPasteboard, NSPasteboardItem, NSPasteboardTypeString, NSPasteboardWriting, NSScreen,
-    NSWorkspace,
+    NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication,
+    NSAttributedStringAppKitDocumentFormats, NSEvent, NSPasteboard, NSPasteboardItem,
+    NSPasteboardTypeString, NSPasteboardWriting, NSScreen, NSWorkspace,
 };
 use objc2_application_services::{AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt};
 use objc2_core_foundation::{CFBoolean, CFDictionary, CGPoint, CGRect};
@@ -21,8 +22,8 @@ use objc2_core_graphics::{
     CGEvent, CGEventFlags, CGEventSource, CGEventSourceStateID, CGEventTapLocation,
 };
 use objc2_foundation::{
-    MainThreadMarker, NSArray, NSData, NSLocale, NSPointInRect, NSRange, NSString,
-    NSStringCompareOptions, NSURL,
+    MainThreadMarker, NSArray, NSAttributedString, NSData, NSDictionary, NSLocale,
+    NSMutableAttributedString, NSPointInRect, NSRange, NSString, NSStringCompareOptions, NSURL,
 };
 
 use crate::settings::Appearance;
@@ -193,11 +194,34 @@ fn borrow() -> MutexGuard<'static, ()> {
     BORROWED.lock().expect("pasteboard lock poisoned")
 }
 
+/// What an app put on the pasteboard for one item: each type, by its
+/// identifier, with its data.
+#[derive(Debug, Clone, Default)]
+pub struct Clip(pub Vec<(String, Vec<u8>)>);
+
+impl Clip {
+    /// A clip of just `text`.
+    pub fn plain(text: &str) -> Self {
+        Self(vec![(PLAIN.to_owned(), text.as_bytes().to_vec())])
+    }
+}
+
+/// The type of UTF-8 plain text on the pasteboard.
+pub const PLAIN: &str = "public.utf8-plain-text";
+
+/// The selection in the frontmost app, as copied with ⌘C.
+#[derive(Debug)]
+pub struct Copied {
+    pub text: String,
+    /// Everything the app copied, rich formats too.
+    pub clip: Clip,
+}
+
 /// The text selected in the frontmost app, copied with ⌘C. The pasteboard
 /// gets its old contents back. `None` when nothing was copied: no selection,
 /// no permission, or an app that ignores ⌘C. Blocks for a moment, and while
 /// a paste borrows the pasteboard: call it off the main thread.
-pub fn copy_selection() -> Option<String> {
+pub fn copy_selection() -> Option<Copied> {
     let _borrowed = borrow();
     let saved = Saved::take();
     let before = saved.change_count;
@@ -210,31 +234,43 @@ pub fn copy_selection() -> Option<String> {
     if copied == before {
         return None;
     }
-    let text = autoreleasepool(|_| {
+    let (text, clip) = autoreleasepool(|_| {
         // SAFETY: NSPasteboardTypeString is an immutable constant that AppKit
         // sets up before any code runs.
         let kind = unsafe { NSPasteboardTypeString };
-        NSPasteboard::generalPasteboard()
-            .stringForType(kind)
-            .map(|s| s.to_string())
+        let pasteboard = NSPasteboard::generalPasteboard();
+        let text = pasteboard.stringForType(kind).map(|s| s.to_string());
+        let clip = Saved::items(&pasteboard).into_iter().next().map(|types| {
+            Clip(
+                types
+                    .into_iter()
+                    .map(|(kind, data)| (kind.to_string(), data.to_vec()))
+                    .collect(),
+            )
+        });
+        (text, clip.unwrap_or_default())
     });
     saved.restore(copied);
-    text.filter(|t| !t.trim().is_empty())
+    let text = text.filter(|t| !t.trim().is_empty())?;
+    Some(Copied { text, clip })
 }
 
-/// Paste `text` into the frontmost app with ⌘V, then give the pasteboard its
+/// Paste `clip` into the frontmost app with ⌘V, then give the pasteboard its
 /// old contents back. Blocks for a moment, and while a copy borrows the
 /// pasteboard: call it off the main thread.
-pub fn paste(text: &str) {
+pub fn paste(clip: &Clip) {
     let _borrowed = borrow();
     let saved = Saved::take();
     let written = autoreleasepool(|_| {
+        let item = NSPasteboardItem::new();
+        for (kind, data) in &clip.0 {
+            item.setData_forType(&NSData::with_bytes(data), &NSString::from_str(kind));
+        }
+        item.setData_forType(&NSData::new(), &NSString::from_str(TRANSIENT));
         let pasteboard = NSPasteboard::generalPasteboard();
         pasteboard.clearContents();
-        // SAFETY: as in `copy_selection`.
-        let kind = unsafe { NSPasteboardTypeString };
-        pasteboard.setString_forType(&NSString::from_str(text), kind);
-        pasteboard.setString_forType(&NSString::from_str(""), &NSString::from_str(TRANSIENT));
+        let items = [ProtocolObject::from_retained(item)];
+        pasteboard.writeObjects(&NSArray::from_retained_slice(&items));
         pasteboard.changeCount()
     });
     post_command_key(KEY_V);
@@ -257,6 +293,53 @@ fn post_command_key(key: u16) {
     }
 }
 
+/// Change the text of RTF `data` with `edit`, which gets the text of each
+/// run of one style, keeping each run's style. `None` if the data isn't
+/// RTF or `edit` returns false. RTF, unlike HTML, may be read off the main thread.
+pub fn edit_rtf(data: &[u8], edit: impl FnOnce(&mut [String]) -> bool) -> Option<Vec<u8>> {
+    autoreleasepool(|_| {
+        let data = NSData::with_bytes(data);
+        // SAFETY: no document attributes are asked for.
+        let text = unsafe {
+            NSAttributedString::initWithRTF_documentAttributes(
+                NSAttributedString::alloc(),
+                &data,
+                None,
+            )
+        }?;
+        let string = text.string();
+        let mut runs = Vec::new();
+        let mut at = 0;
+        while at < text.length() {
+            let mut range = NSRange::new(0, 0);
+            // SAFETY: `at` is inside the text, and `range` is a valid pointer.
+            let attributes = unsafe { text.attributesAtIndex_effectiveRange(at, &mut range) };
+            runs.push((string.substringWithRange(range).to_string(), attributes));
+            at = range.end();
+        }
+        let mut texts: Vec<String> = runs.iter().map(|(text, _)| text.clone()).collect();
+        if !edit(&mut texts) {
+            return None;
+        }
+        let out = NSMutableAttributedString::new();
+        for (text, (_, attributes)) in texts.iter().zip(&runs) {
+            // SAFETY: the attributes came from an attributed string.
+            let run = unsafe {
+                NSAttributedString::initWithString_attributes(
+                    NSAttributedString::alloc(),
+                    &NSString::from_str(text),
+                    Some(attributes),
+                )
+            };
+            out.appendAttributedString(&run);
+        }
+        let range = NSRange::new(0, out.length());
+        // SAFETY: no document attributes are given.
+        let rtf = unsafe { out.RTFFromRange_documentAttributes(range, &NSDictionary::new()) }?;
+        Some(rtf.to_vec())
+    })
+}
+
 /// Every item on the pasteboard, in every type, to put back after borrowing it.
 struct Saved {
     items: Vec<Vec<(Retained<NSString>, Retained<NSData>)>>,
@@ -267,21 +350,24 @@ impl Saved {
     fn take() -> Self {
         autoreleasepool(|_| {
             let pasteboard = NSPasteboard::generalPasteboard();
-            let items = pasteboard.pasteboardItems().map_or_else(Vec::new, |items| {
-                items
-                    .iter()
-                    .map(|item| {
-                        item.types()
-                            .iter()
-                            .filter_map(|kind| item.dataForType(&kind).map(|data| (kind, data)))
-                            .collect()
-                    })
-                    .collect()
-            });
             Self {
-                items,
+                items: Self::items(&pasteboard),
                 change_count: pasteboard.changeCount(),
             }
+        })
+    }
+
+    fn items(pasteboard: &NSPasteboard) -> Vec<Vec<(Retained<NSString>, Retained<NSData>)>> {
+        pasteboard.pasteboardItems().map_or_else(Vec::new, |items| {
+            items
+                .iter()
+                .map(|item| {
+                    item.types()
+                        .iter()
+                        .filter_map(|kind| item.dataForType(&kind).map(|data| (kind, data)))
+                        .collect()
+                })
+                .collect()
         })
     }
 

@@ -23,8 +23,9 @@ use super::view::{MIN_WIDTH, WIDTH};
 use crate::i18n::{Locale, Strings, fill};
 use crate::llm::on_device::{self, Availability, Refusal};
 use crate::llm::{Ask, Backend};
-use crate::mac;
+use crate::mac::{self, Clip, Copied};
 use crate::prompts::{self, Action, Style};
+use crate::rich;
 use crate::settings::{Credentials, Settings};
 use crate::underlines::Line;
 
@@ -32,7 +33,7 @@ use crate::underlines::Line;
 const TOP_MARGIN: f32 = 120.0;
 /// How long the window waits, hidden, before pasting, so the app the text
 /// came from has its key window back.
-const PASTE_DELAY: Duration = Duration::from_millis(120);
+pub(super) const PASTE_DELAY: Duration = Duration::from_millis(120);
 /// How long a dropdown's list waits for the window to grow for it: a few frames.
 const MENU_DELAY: Duration = Duration::from_millis(50);
 /// How long a closed dropdown's list takes to fade out: rune-kit's 0.25 s
@@ -75,6 +76,8 @@ pub struct State {
     /// Where the text came from when a click on an underline brought it, to
     /// paste the answer back over.
     target: Option<Target>,
+    /// What the shortcut copied, to paste the answer back over with its formatting.
+    copied: Option<Copied>,
 }
 
 /// An open dropdown.
@@ -213,6 +216,7 @@ impl State {
             checker: Checker::default(),
             menu_bar: None,
             target: None,
+            copied: None,
         }
     }
 
@@ -281,8 +285,11 @@ impl State {
         let app = self.app.clone();
         // Copying waits for the other app, off the UI thread.
         self.client.rt().spawn_blocking(move || {
-            let text = mac::copy_selection();
-            app.update(move |s, _| s.show_text(text, None));
+            let copied = mac::copy_selection();
+            app.update(move |s, _| {
+                s.show_text(copied.as_ref().map(|c| c.text.clone()), None);
+                s.copied = copied;
+            });
         });
     }
 
@@ -395,6 +402,7 @@ impl State {
         self.placement.over = word;
         self.capturing = false;
         self.target = None;
+        self.copied = None;
         self.stop();
         self.page = Page::Main;
         self.close_menu();
@@ -644,43 +652,54 @@ impl State {
     }
 
     /// Hide the window and paste the answer over the selection, or over the
-    /// paragraph an underline opened once it's selected again.
+    /// paragraph an underline opened once it's found again.
     pub fn replace(&mut self) {
         if self.draft.result().is_none() {
             return;
         }
         match &self.target {
-            Some(target) if self.checker.select(target) => {}
+            Some(target) if self.checker.locate(target) => {}
             Some(_) => self.draft.notice = Some(self.t().text_moved.into()),
             None => self.paste(),
         }
     }
 
-    /// Paste the answer once the checker selected the paragraph it came
-    /// from, or say the text moved if it couldn't.
-    pub fn target_selected(&mut self, selected: bool) {
+    /// Hide the window and have the checker change the paragraph the answer
+    /// came from into it, once the checker found the paragraph still there,
+    /// or say the text moved if it didn't.
+    pub fn target_located(&mut self, found: bool) {
         if self.target.is_none() || !self.app.is_visible() {
             return;
         }
-        if selected {
-            if let Some(fixed) = self.draft.fixed() {
-                self.checker.learn_fine(fixed);
-            }
-            self.paste();
-        } else {
+        if !found {
             self.draft.notice = Some(self.t().text_moved.into());
+            return;
         }
+        let Some(text) = self.draft.result().map(str::to_owned) else {
+            return;
+        };
+        if let Some(fixed) = self.draft.fixed() {
+            self.checker.learn_fine(fixed);
+        }
+        self.hide();
+        self.checker.replace(text);
     }
 
-    /// Hide the window and paste the answer into the app in front.
+    /// Hide the window and paste the answer into the app in front, with the
+    /// formatting of the selection it replaces.
     fn paste(&mut self) {
         let Some(text) = self.draft.result().map(str::to_owned) else {
             return;
         };
+        let copied = self.copied.take();
         self.hide();
         self.client.rt().spawn_blocking(move || {
+            let clip = match copied {
+                Some(copied) => rich::replacement(&copied.clip, &copied.text, &text),
+                None => Clip::plain(&text),
+            };
             std::thread::sleep(PASTE_DELAY);
-            mac::paste(&text);
+            mac::paste(&clip);
         });
     }
 

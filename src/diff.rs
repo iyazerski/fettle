@@ -132,6 +132,32 @@ pub fn result(pieces: &[Piece]) -> String {
         .collect()
 }
 
+/// Return the diff's changes as edits to the old text, last first: each the
+/// range of chars of the old text it replaces, and the text replacing it.
+/// Applied in this order, each range still points at the old text.
+pub fn edits(pieces: &[Piece]) -> Vec<(Range<usize>, String)> {
+    let mut out: Vec<(Range<usize>, String)> = Vec::new();
+    let mut at = 0;
+    let mut previous = Kind::Same;
+    for piece in pieces {
+        if piece.kind != Kind::Same && previous == Kind::Same {
+            out.push((at..at, String::new()));
+        }
+        match (piece.kind, out.last_mut()) {
+            (Kind::Same, _) => at += piece.text.chars().count(),
+            (Kind::Removed, Some((range, _))) => {
+                at += piece.text.chars().count();
+                range.end = at;
+            }
+            (Kind::Added, Some((_, text))) => text.push_str(&piece.text),
+            (Kind::Removed | Kind::Added, None) => unreachable!("a change starts an edit"),
+        }
+        previous = piece.kind;
+    }
+    out.reverse();
+    out
+}
+
 /// Whether the diff changes anything.
 pub fn changed(pieces: &[Piece]) -> bool {
     pieces.iter().any(|p| p.kind != Kind::Same)
@@ -259,6 +285,11 @@ mod tests {
             assert_eq!(side(&pieces, Kind::Added), old);
             assert_eq!(side(&pieces, Kind::Removed), new);
             assert_eq!(changed(&pieces), old != new);
+            let mut edited: Vec<char> = old.chars().collect();
+            for (range, text) in edits(&pieces) {
+                edited.splice(range, text.chars());
+            }
+            assert_eq!(edited.into_iter().collect::<String>(), new);
             let units: Vec<u16> = old.encode_utf16().collect();
             let got: Vec<String> = marks(&pieces)
                 .into_iter()
