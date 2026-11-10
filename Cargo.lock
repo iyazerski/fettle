@@ -667,6 +667,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "color_quant"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d7b894f5411737b7867f4827955924d7c254fc9f4d91a6aad6b097804b1018b"
+
+[[package]]
 name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1239,6 +1245,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gif"
+version = "0.14.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ee8cfcc411d9adbbaba82fb72661cc1bcca13e8bba98b364e62b2dba8f960159"
+dependencies = [
+ "color_quant",
+ "weezl",
+]
+
+[[package]]
 name = "gpu-allocator"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1579,12 +1595,25 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
+ "color_quant",
+ "gif",
+ "image-webp",
  "moxcms",
  "num-traits",
  "png 0.18.1",
  "tiff",
  "zune-core",
  "zune-jpeg",
+]
+
+[[package]]
+name = "image-webp"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+dependencies = [
+ "byteorder-lite",
+ "quick-error",
 ]
 
 [[package]]
@@ -3072,7 +3101,7 @@ dependencies = [
 [[package]]
 name = "rune"
 version = "0.0.1"
-source = "git+https://github.com/anomalyco/rune?rev=39301f6793266450a057f270da06b048a689be96#39301f6793266450a057f270da06b048a689be96"
+source = "git+https://github.com/anomalyco/rune?rev=7ed827a2b969ec737323c3e80d2bfc1b8032b609#7ed827a2b969ec737323c3e80d2bfc1b8032b609"
 dependencies = [
  "accesskit",
  "accesskit_macos",
@@ -3087,6 +3116,8 @@ dependencies = [
  "fontique",
  "futures-util",
  "half",
+ "icu_properties",
+ "icu_segmenter",
  "image",
  "js-sys",
  "libc",
@@ -3147,11 +3178,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rune-highlights"
+version = "0.0.1"
+source = "git+https://github.com/anomalyco/rune?rev=7ed827a2b969ec737323c3e80d2bfc1b8032b609#7ed827a2b969ec737323c3e80d2bfc1b8032b609"
+dependencies = [
+ "unicode-ident",
+ "wasmparser",
+]
+
+[[package]]
 name = "rune-kit"
 version = "0.0.1"
-source = "git+https://github.com/anomalyco/rune?rev=39301f6793266450a057f270da06b048a689be96#39301f6793266450a057f270da06b048a689be96"
+source = "git+https://github.com/anomalyco/rune?rev=7ed827a2b969ec737323c3e80d2bfc1b8032b609#7ed827a2b969ec737323c3e80d2bfc1b8032b609"
 dependencies = [
  "rune",
+ "rune-highlights",
  "rune-motion",
  "unicode-segmentation",
 ]
@@ -3159,12 +3200,12 @@ dependencies = [
 [[package]]
 name = "rune-motion"
 version = "0.1.0"
-source = "git+https://github.com/anomalyco/rune?rev=39301f6793266450a057f270da06b048a689be96#39301f6793266450a057f270da06b048a689be96"
+source = "git+https://github.com/anomalyco/rune?rev=7ed827a2b969ec737323c3e80d2bfc1b8032b609#7ed827a2b969ec737323c3e80d2bfc1b8032b609"
 
 [[package]]
 name = "rune-staging"
 version = "0.0.1"
-source = "git+https://github.com/anomalyco/rune?rev=39301f6793266450a057f270da06b048a689be96#39301f6793266450a057f270da06b048a689be96"
+source = "git+https://github.com/anomalyco/rune?rev=7ed827a2b969ec737323c3e80d2bfc1b8032b609#7ed827a2b969ec737323c3e80d2bfc1b8032b609"
 dependencies = [
  "wgpu",
 ]
@@ -3172,7 +3213,7 @@ dependencies = [
 [[package]]
 name = "rune-taffy"
 version = "0.0.1"
-source = "git+https://github.com/anomalyco/rune?rev=39301f6793266450a057f270da06b048a689be96#39301f6793266450a057f270da06b048a689be96"
+source = "git+https://github.com/anomalyco/rune?rev=7ed827a2b969ec737323c3e80d2bfc1b8032b609#7ed827a2b969ec737323c3e80d2bfc1b8032b609"
 dependencies = [
  "taffy",
 ]
@@ -3180,7 +3221,7 @@ dependencies = [
 [[package]]
 name = "rune-theme-opencode"
 version = "0.0.1"
-source = "git+https://github.com/anomalyco/rune?rev=39301f6793266450a057f270da06b048a689be96#39301f6793266450a057f270da06b048a689be96"
+source = "git+https://github.com/anomalyco/rune?rev=7ed827a2b969ec737323c3e80d2bfc1b8032b609#7ed827a2b969ec737323c3e80d2bfc1b8032b609"
 dependencies = [
  "rune",
  "rune-kit",
@@ -4248,6 +4289,16 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.245.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f08c9adee0428b7bddf3890fc27e015ac4b761cc608c822667102b8bfd6995e"
+dependencies = [
+ "bitflags 2.13.2",
+ "indexmap",
 ]
 
 [[package]]
