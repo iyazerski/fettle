@@ -673,8 +673,9 @@ impl State {
     /// Hide the window and have the checker change the paragraph the answer
     /// came from into it, once the checker found the paragraph still there,
     /// or say the text moved if it didn't.
-    pub fn target_located(&mut self, found: bool) {
-        if !matches!(self.origin, Some(Origin::Underline(_))) || !self.app.is_visible() {
+    pub fn target_located(&mut self, opened: Ticket, found: bool) {
+        let current = matches!(&self.origin, Some(Origin::Underline(t)) if t.opened == opened);
+        if !current || !self.app.is_visible() {
             return;
         }
         if !found {
