@@ -111,13 +111,19 @@ pub fn numbered(pieces: &[Piece]) -> impl Iterator<Item = (Option<usize>, &Piece
 
 /// Return the diff with change `n` (see [`numbered`]) undone: its removed
 /// words kept and its added ones dropped.
-pub fn decline(pieces: &[Piece], n: usize) -> Vec<Piece> {
-    let mut out = Vec::new();
-    for (change, piece) in numbered(pieces) {
-        match piece.kind {
-            Kind::Removed if change == Some(n) => push(&mut out, Kind::Same, &piece.text),
-            Kind::Added if change == Some(n) => {}
-            kind => push(&mut out, kind, &piece.text),
+pub fn decline(pieces: Vec<Piece>, n: usize) -> Vec<Piece> {
+    let changes: Vec<Option<usize>> = numbered(&pieces).map(|(change, _)| change).collect();
+    let mut out: Vec<Piece> = Vec::with_capacity(pieces.len());
+    for (change, mut piece) in changes.into_iter().zip(pieces) {
+        if change == Some(n) {
+            if piece.kind == Kind::Added {
+                continue;
+            }
+            piece.kind = Kind::Same;
+        }
+        match out.last_mut() {
+            Some(last) if last.kind == piece.kind => last.text.push_str(&piece.text),
+            _ => out.push(piece),
         }
     }
     out
@@ -316,12 +322,12 @@ mod tests {
             ),
         ];
         for (n, want, text) in cases {
-            let declined = decline(&pieces, n);
+            let declined = decline(pieces.clone(), n);
             assert_eq!(show(&declined), want, "change {n}");
             assert_eq!(result(&declined), text);
             assert_eq!(side(&declined, Kind::Added), old);
         }
-        let none = decline(&decline(&pieces, 0), 0);
+        let none = decline(decline(pieces, 0), 0);
         assert_eq!(result(&none), old);
         assert!(!changed(&none));
     }

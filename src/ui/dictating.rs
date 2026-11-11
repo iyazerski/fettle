@@ -36,10 +36,9 @@ pub struct Recording {
     pub levels: VecDeque<f32>,
 }
 
-/// What a session heard, while the model writes it up.
+/// A session done listening, while the model writes up what it heard.
 pub struct WriteUp {
     id: Ticket,
-    heard: String,
     /// The loudness the session ended with, oldest first.
     pub levels: VecDeque<f32>,
     /// How long the session listened.
@@ -52,14 +51,15 @@ impl Recording {
         self.started.elapsed()
     }
 
-    /// Stop the clock and let go of the microphone: what was heard goes to the model.
-    fn into_write_up(self) -> WriteUp {
-        WriteUp {
+    /// Stop the clock and let go of the microphone, and return what was heard
+    /// for the model.
+    fn into_write_up(self) -> (WriteUp, String) {
+        let write_up = WriteUp {
             took: self.duration(),
             id: self.id,
-            heard: self.heard,
             levels: self.levels,
-        }
+        };
+        (write_up, self.heard)
     }
 }
 
@@ -127,8 +127,9 @@ impl State {
                 let Some(Dictation::Listening(recording)) = self.dictation.take() else {
                     return;
                 };
-                if !recording.heard.trim().is_empty() {
-                    self.write_up(recording.into_write_up());
+                let (write_up, heard) = recording.into_write_up();
+                if !heard.trim().is_empty() {
+                    self.write_up(write_up, heard);
                 }
             }
             // What was heard before the failure goes in as heard, rather than being lost.
@@ -144,50 +145,50 @@ impl State {
         }
     }
 
-    /// Have the model turn what `write_up` heard into written text, then add
-    /// it. Without a model, the words go in as heard.
-    fn write_up(&mut self, write_up: WriteUp) {
-        let (backend, model) = match Backend::with_model(&self.settings) {
-            Ok(chosen) => chosen,
-            Err(_) => return self.add_dictated(&write_up.heard),
+    /// Have the model turn `heard`, what `write_up`'s session heard, into
+    /// written text, then add it. Without a model, the words go in as heard.
+    fn write_up(&mut self, write_up: WriteUp, heard: String) {
+        let Ok((backend, model)) = Backend::with_model(&self.settings) else {
+            return self.add_dictated(&heard);
         };
-        let (id, ask) = (
-            write_up.id,
-            Ask {
-                system: prompts::dictation(),
-                text: write_up.heard.clone(),
-                model,
-                effort: self.settings.effort(),
-            },
-        );
+        let id = write_up.id;
+        let ask = Ask {
+            system: prompts::dictation(),
+            text: heard,
+            model,
+            effort: self.settings.effort(),
+        };
         self.dictation = Some(Dictation::Writing(write_up));
         let client = self.client.clone();
         self.client.spawn(async move {
             let result = client.answer(backend, &ask).await;
-            client.app().update(move |s, _| s.written_up(id, result));
+            let heard = ask.text;
+            client
+                .app()
+                .update(move |s, _| s.written_up(id, &heard, result));
         });
     }
 
-    /// Add the model's write-up of session `id`, or what it heard as is if the
-    /// model failed: dictation is input, so a failed write-up isn't an error.
-    fn written_up(&mut self, id: Ticket, result: anyhow::Result<String>) {
+    /// Add the model's write-up of session `id`, or what it `heard` as is if
+    /// the model failed: dictation is input, so a failed write-up isn't an error.
+    fn written_up(&mut self, id: Ticket, heard: &str, result: anyhow::Result<String>) {
         // Hiding the window while the model worked gave up on the words.
-        let Some(Dictation::Writing(write_up)) = self
+        if self
             .dictation
             .take_if(|d| matches!(d, Dictation::Writing(write_up) if write_up.id == id))
-        else {
+            .is_none()
+        {
             return;
-        };
-        let heard = write_up.heard;
+        }
         match result {
             // Models add dashes speech never has.
             Ok(text) if !text.trim().is_empty() => {
-                self.add_dictated(&hyphens::restore(&heard, text.trim()));
+                self.add_dictated(&hyphens::restore(heard, text.trim()));
             }
-            Ok(_) => self.add_dictated(&heard),
+            Ok(_) => self.add_dictated(heard),
             Err(e) => {
                 eprintln!("writing up dictation: {e:#}");
-                self.add_dictated(&heard);
+                self.add_dictated(heard);
             }
         }
     }

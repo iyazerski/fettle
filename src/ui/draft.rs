@@ -157,7 +157,7 @@ impl Draft {
         }) = self.answer.as_mut()
             && diff::changed(changes)
         {
-            *changes = diff::decline(changes, n);
+            *changes = diff::decline(std::mem::take(changes), n);
             *text = diff::result(changes);
             *copied = false;
         }

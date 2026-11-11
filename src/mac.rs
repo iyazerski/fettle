@@ -308,21 +308,21 @@ pub fn edit_rtf(data: &[u8], edit: impl FnOnce(&mut [String]) -> bool) -> Option
             )
         }?;
         let string = text.string();
-        let mut runs = Vec::new();
+        let (mut texts, mut styles) = (Vec::new(), Vec::new());
         let mut at = 0;
         while at < text.length() {
             let mut range = NSRange::new(0, 0);
             // SAFETY: `at` is inside the text, and `range` is a valid pointer.
             let attributes = unsafe { text.attributesAtIndex_effectiveRange(at, &mut range) };
-            runs.push((string.substringWithRange(range).to_string(), attributes));
+            texts.push(string.substringWithRange(range).to_string());
+            styles.push(attributes);
             at = range.end();
         }
-        let mut texts: Vec<String> = runs.iter().map(|(text, _)| text.clone()).collect();
         if !edit(&mut texts) {
             return None;
         }
         let out = NSMutableAttributedString::new();
-        for (text, (_, attributes)) in texts.iter().zip(&runs) {
+        for (text, attributes) in texts.iter().zip(&styles) {
             // SAFETY: the attributes came from an attributed string.
             let run = unsafe {
                 NSAttributedString::initWithString_attributes(
