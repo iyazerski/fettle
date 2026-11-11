@@ -73,11 +73,16 @@ pub struct State {
     pub(super) width: f32,
     checker: Checker,
     menu_bar: Option<MenuBar>,
-    /// Where the text came from when a click on an underline brought it, to
-    /// paste the answer back over.
-    target: Option<Target>,
-    /// What the shortcut copied, to paste the answer back over with its formatting.
-    copied: Option<Copied>,
+    /// Where the text came from, to put the answer back there.
+    origin: Option<Origin>,
+}
+
+/// Where the window's text came from.
+enum Origin {
+    /// The shortcut copied it, to paste the answer over with its formatting.
+    Selection(Copied),
+    /// A click on an underline opened its paragraph, to change in its field.
+    Underline(Target),
 }
 
 /// An open dropdown.
@@ -215,8 +220,7 @@ impl State {
             width: WIDTH,
             checker: Checker::default(),
             menu_bar: None,
-            target: None,
-            copied: None,
+            origin: None,
         }
     }
 
@@ -286,10 +290,7 @@ impl State {
         // Copying waits for the other app, off the UI thread.
         self.client.rt().spawn_blocking(move || {
             let copied = mac::copy_selection();
-            app.update(move |s, _| {
-                s.show_text(copied.as_ref().map(|c| c.text.clone()), None);
-                s.copied = copied;
-            });
+            app.update(move |s, _| s.show_text(copied.map(Origin::Selection)));
         });
     }
 
@@ -382,7 +383,7 @@ impl State {
         if self.app.is_visible() || self.capturing {
             return;
         }
-        self.show_text(Some(target.text.clone()), Some(target.word));
+        self.show_text(Some(Origin::Underline(target)));
         match fix {
             Some(fix) => self.draft.answered(
                 Action::Fix,
@@ -394,19 +395,24 @@ impl State {
             ),
             None => self.start(Action::Fix),
         }
-        self.target = Some(target);
     }
 
-    /// Show `text` on the main page, over `word` if given, else at the top of the screen.
-    fn show_text(&mut self, text: Option<String>, word: Option<CGRect>) {
+    /// Show the text from `origin` on the main page: over the underlined word
+    /// it came from, else at the top of the screen.
+    fn show_text(&mut self, origin: Option<Origin>) {
+        // The origin keeps the text as it was, which the answer goes back over.
+        let (text, word) = match &origin {
+            Some(Origin::Selection(copied)) => (copied.text.clone(), None),
+            Some(Origin::Underline(target)) => (target.text.clone(), Some(target.word)),
+            None => (String::new(), None),
+        };
         self.placement.over = word;
         self.capturing = false;
-        self.target = None;
-        self.copied = None;
+        self.origin = origin;
         self.stop();
         self.page = Page::Main;
         self.close_menu();
-        self.draft.reset(text.unwrap_or_default());
+        self.draft.reset(text);
         self.show();
     }
 
@@ -631,7 +637,7 @@ impl State {
     /// as its check, so the paragraph isn't sent to the model again.
     fn run_finished(&mut self, run: u64, status: Status) {
         self.draft.finished(run, status);
-        if let Some(target) = &self.target
+        if let Some(Origin::Underline(target)) = &self.origin
             && self.draft.source.text == target.text
             && let Some(Answer {
                 action: Action::Fix,
@@ -657,18 +663,19 @@ impl State {
         if self.draft.result().is_none() {
             return;
         }
-        match &self.target {
-            Some(target) if self.checker.locate(target) => {}
-            Some(_) => self.draft.notice = Some(self.t().text_moved.into()),
-            None => self.paste(),
+        match &self.origin {
+            Some(Origin::Underline(target)) if self.checker.locate(target) => {}
+            Some(Origin::Underline(_)) => self.draft.notice = Some(self.t().text_moved.into()),
+            Some(Origin::Selection(_)) | None => self.paste(),
         }
     }
 
     /// Hide the window and have the checker change the paragraph the answer
     /// came from into it, once the checker found the paragraph still there,
     /// or say the text moved if it didn't.
-    pub fn target_located(&mut self, found: bool) {
-        if self.target.is_none() || !self.app.is_visible() {
+    pub fn target_located(&mut self, opened: Ticket, found: bool) {
+        let current = matches!(&self.origin, Some(Origin::Underline(t)) if t.opened == opened);
+        if !current || !self.app.is_visible() {
             return;
         }
         if !found {
@@ -691,7 +698,10 @@ impl State {
         let Some(text) = self.draft.result().map(str::to_owned) else {
             return;
         };
-        let copied = self.copied.take();
+        let copied = match self.origin.take() {
+            Some(Origin::Selection(copied)) => Some(copied),
+            Some(Origin::Underline(_)) | None => None,
+        };
         self.hide();
         self.client.rt().spawn_blocking(move || {
             let clip = match copied {

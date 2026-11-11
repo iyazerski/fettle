@@ -61,8 +61,8 @@ impl Saver {
     /// Save the newest settings now, unless they're saved already: Fettle is
     /// about to quit, and the task would not get to them.
     pub fn flush(&self) -> Result<()> {
-        let (revision, settings) = self.latest.borrow().clone();
-        self.store.write(revision, &settings)
+        let latest = self.latest.borrow();
+        self.store.write(latest.0, &latest.1)
     }
 }
 

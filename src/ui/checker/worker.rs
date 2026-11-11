@@ -21,7 +21,7 @@ use crate::diff;
 use crate::document::{Document, paragraph};
 use crate::mac::{self, Clip};
 use crate::rich;
-use crate::ui::pending::Pending;
+use crate::ui::pending::{Pending, Ticket};
 use crate::ui::state::{PASTE_DELAY, State};
 use crate::underlines::Line;
 
@@ -69,10 +69,15 @@ pub(super) enum Command {
         units: Vec<u16>,
         fix: Fix,
     },
+    /// Keep `fix` of the paragraph opened as `opened`, so it isn't sent again.
+    LearnOpened {
+        opened: Ticket,
+        fix: Fix,
+    },
     /// The user clicked the underline `line`: open its paragraph.
     Open(Line),
-    /// Check that the paragraph `units` opened is still where it was.
-    Locate(Vec<u16>),
+    /// Check that the paragraph opened as `.0` is still where it was.
+    Locate(Ticket),
     /// Change the paragraph opened into this text, the window hidden.
     Replace(String),
     Stop,
@@ -194,6 +199,8 @@ struct Layout {
 
 /// A paragraph in another app's text field, to paste an answer over.
 struct Paragraph {
+    /// This opening of it, which the window names it by.
+    opened: Ticket,
     field: Field,
     range: Range<usize>,
     units: Vec<u16>,
@@ -269,13 +276,18 @@ impl Worker {
                 self.recent.clear();
             }
             Command::Learn { units, fix } => self.remember(units, fix),
+            Command::LearnOpened { opened, fix } => {
+                if let Some(p) = self.opened.as_ref().filter(|p| p.opened == opened) {
+                    self.remember(p.units.clone(), fix);
+                }
+            }
             Command::Open(line) => self.open(line),
-            Command::Locate(units) => {
+            Command::Locate(opened) => {
                 let found = self
                     .opened
                     .as_ref()
-                    .is_some_and(|p| p.units == units && p.holds());
-                self.app.update(move |s, _| s.target_located(found));
+                    .is_some_and(|p| p.opened == opened && p.holds());
+                self.app.update(move |s, _| s.target_located(opened, found));
             }
             Command::Replace(text) => match &self.opened {
                 Some(opened) if opened.select() => {
@@ -450,13 +462,21 @@ impl Worker {
         let Some(units) = text.get(range.clone()) else {
             return;
         };
+        // A second click, as in a double-click, opens the same paragraph: keep
+        // its ticket, which the window took from the first.
+        let opened = self
+            .opened
+            .as_ref()
+            .filter(|p| p.field == session.field && p.range == range && p.units == units)
+            .map_or_else(Ticket::new, |p| p.opened);
         let target = Target {
+            opened,
             text: String::from_utf16_lossy(units),
-            units: units.to_vec(),
             word: line.word,
         };
         let fix = self.fixes.get(units).cloned();
         self.opened = Some(Paragraph {
+            opened,
             field: session.field.clone(),
             units: units.to_vec(),
             range,

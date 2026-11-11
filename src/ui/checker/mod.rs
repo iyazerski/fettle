@@ -15,7 +15,7 @@ use objc2_core_foundation::CGRect;
 use rune::AppHandle;
 
 use self::worker::{Command, Handle};
-use super::pending::Pending;
+use super::pending::{Pending, Ticket};
 use super::state::State;
 use crate::diff::{self, Piece};
 use crate::underlines::{Clicks, Line, Underlines};
@@ -58,8 +58,8 @@ pub struct Check {
 /// A paragraph opened from an underline, to fix and paste back over.
 #[derive(Debug)]
 pub struct Target {
-    /// The paragraph as the field holds it.
-    pub units: Vec<u16>,
+    /// This opening, which the checker knows the paragraph by.
+    pub opened: Ticket,
     pub text: String,
     /// The underlined word clicked, in points from the primary screen's top-left.
     pub word: CGRect,
@@ -136,8 +136,8 @@ impl Checker {
 
     /// Keep the model's `fix` of `target`'s paragraph, so it isn't sent again.
     pub fn learn(&self, target: &Target, fix: Fix) {
-        self.send(Command::Learn {
-            units: target.units.clone(),
+        self.send(Command::LearnOpened {
+            opened: target.opened,
             fix,
         });
     }
@@ -158,7 +158,7 @@ impl Checker {
     /// window hears back whether it is, unless this returns false:
     /// underlining is off, and nothing can find it.
     pub fn locate(&self, target: &Target) -> bool {
-        self.send(Command::Locate(target.units.clone()))
+        self.send(Command::Locate(target.opened))
     }
 
     /// Change the paragraph opened into `text` in its field, once the window

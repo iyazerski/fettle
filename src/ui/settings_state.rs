@@ -414,10 +414,10 @@ impl State {
 
     /// Download the new version, put it in place, and restart into it.
     pub fn install_update(&mut self) {
-        let Update::Available(version) = &self.update else {
+        let Update::Available(version) = &mut self.update else {
             return;
         };
-        let version = version.clone();
+        let version = std::mem::take(version);
         self.update = Update::Installing(version.clone());
         let client = self.client.clone();
         self.client.spawn(async move {

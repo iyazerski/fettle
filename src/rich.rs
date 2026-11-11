@@ -202,9 +202,13 @@ fn web_custom(data: &[u8], new: &str, edit: impl FnOnce(&mut [String]) -> bool) 
 fn edit_texty(texty: &str, edit: impl FnOnce(&mut [String]) -> bool) -> Option<String> {
     let mut delta: Value = serde_json::from_str(texty).ok()?;
     let ops = delta.get_mut("ops")?.as_array_mut()?;
+    // Taken out, leaving empty strings that mark where each goes back.
     let mut texts: Vec<String> = ops
-        .iter()
-        .filter_map(|op| op["insert"].as_str().map(str::to_owned))
+        .iter_mut()
+        .filter_map(|op| match op.get_mut("insert")? {
+            Value::String(text) => Some(std::mem::take(text)),
+            _ => None,
+        })
         .collect();
     if !edit(&mut texts) {
         return None;

@@ -61,15 +61,15 @@ pub async fn install(http: &reqwest::Client, version: &str) -> Result<PathBuf> {
     );
     let app = running_app()?;
     let url = format!("https://github.com/{REPO}/releases/download/v{version}/{ASSET}");
-    let get = |url: String| async move {
-        http.get(&url)
+    let get = async |url: &str| {
+        http.get(url)
             .send()
             .await?
             .error_for_status()
             .with_context(|| format!("downloading {url}"))
     };
-    let zip = get(url.clone()).await?.bytes().await?;
-    let sum = get(format!("{url}.sha256")).await?.text().await?;
+    let zip = get(&url).await?.bytes().await?;
+    let sum = get(&format!("{url}.sha256")).await?.text().await?;
     let expected = sum.split_whitespace().next().unwrap_or_default();
     let actual: String = ring::digest::digest(&ring::digest::SHA256, &zip)
         .as_ref()
@@ -80,9 +80,7 @@ pub async fn install(http: &reqwest::Client, version: &str) -> Result<PathBuf> {
         actual == expected,
         "the download is damaged: its checksum doesn't match"
     );
-    let target = app.clone();
-    tokio::task::spawn_blocking(move || swap(&target, &zip)).await??;
-    Ok(app)
+    tokio::task::spawn_blocking(move || swap(&app, &zip).map(|()| app)).await?
 }
 
 /// Start `app` once this process has quit.
