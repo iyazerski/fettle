@@ -462,7 +462,13 @@ impl Worker {
         let Some(units) = text.get(range.clone()) else {
             return;
         };
-        let opened = Ticket::new();
+        // A second click, as in a double-click, opens the same paragraph: keep
+        // its ticket, which the window took from the first.
+        let opened = self
+            .opened
+            .as_ref()
+            .filter(|p| p.field == session.field && p.range == range && p.units == units)
+            .map_or_else(Ticket::new, |p| p.opened);
         let target = Target {
             opened,
             text: String::from_utf16_lossy(units),
