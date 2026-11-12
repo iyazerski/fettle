@@ -3714,7 +3714,7 @@ limitations under the License.
 ## Apache License 2.0
 
 Used by:
-- rustls-pki-types 1.15.1
+- rustls-pki-types 1.16.0
 
 ```text
                               Apache License
@@ -4359,7 +4359,7 @@ Used by:
 - data-url 0.3.2
 - displaydoc 0.2.7
 - equivalent 1.0.3
-- errno 0.3.14
+- errno 0.3.15
 - fastrand 2.5.0
 - flate2 1.1.11
 - fontique 0.12.0
@@ -5328,8 +5328,8 @@ limitations under the License.
 ## Apache License 2.0
 
 Used by:
-- dpi 0.1.2
 - winit 0.30.13
+- dpi 0.1.2
 
 ```text
 Apache License
@@ -5609,6 +5609,7 @@ limitations under the License.
 ## Apache License 2.0
 
 Used by:
+- parley_engine 0.12.0
 - accesskit 0.25.2
 - accesskit_consumer 0.39.2
 - accesskit_macos 0.27.2
@@ -5629,8 +5630,8 @@ Used by:
 - litrs 1.0.1
 - miniz_oxide 0.8.9
 - miniz_oxide 0.9.1
-- naga-types 30.0.1
-- naga 30.0.1
+- naga-types 30.0.2
+- naga 30.0.2
 - num-conv 0.2.2
 - objc2-app-kit 0.3.2
 - objc2-application-services 0.3.2
@@ -5645,7 +5646,6 @@ Used by:
 - objc2-metal 0.3.2
 - objc2-quartz-core 0.3.2
 - objc2-speech 0.3.2
-- parley_engine 0.12.0
 - pin-project-lite 0.2.17
 - portable-atomic 1.15.0
 - proc-macro2 1.0.107
@@ -5672,12 +5672,12 @@ Used by:
 - unicode-ident 1.0.27
 - usvg 0.45.1
 - utf8parse 0.2.2
-- wgpu-core-deps-apple 30.0.1
-- wgpu-core 30.0.1
-- wgpu-hal 30.0.1
-- wgpu-naga-bridge 30.0.1
-- wgpu-types 30.0.1
-- wgpu 30.0.1
+- wgpu-core-deps-apple 30.0.2
+- wgpu-core 30.0.2
+- wgpu-hal 30.0.2
+- wgpu-naga-bridge 30.0.2
+- wgpu-types 30.0.2
+- wgpu 30.0.2
 
 ```text
 Apache License
@@ -6735,7 +6735,7 @@ THIS SOFTWARE.
 ## ISC License
 
 Used by:
-- rustls-webpki 0.103.16
+- rustls-webpki 0.103.17
 
 ```text
 Except as otherwise noted, this project is licensed under the following

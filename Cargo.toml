@@ -31,9 +31,9 @@ ring = "0.17"
 # TLS crypto through ring, which Fettle already uses, rather than aws-lc-rs.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 # Rune is pre-release and changes often: keep one tested revision.
-rune = { git = "https://github.com/anomalyco/rune", rev = "7ed827a2b969ec737323c3e80d2bfc1b8032b609" }
-rune-kit = { git = "https://github.com/anomalyco/rune", rev = "7ed827a2b969ec737323c3e80d2bfc1b8032b609" }
-rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "7ed827a2b969ec737323c3e80d2bfc1b8032b609" }
+rune = { git = "https://github.com/anomalyco/rune", rev = "d6d04d3e64180ba34ed4a976bb5fec9ff6769ad0" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "d6d04d3e64180ba34ed4a976bb5fec9ff6769ad0" }
+rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "d6d04d3e64180ba34ed4a976bb5fec9ff6769ad0" }
 security-framework = "3"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
@@ -44,6 +44,13 @@ tokio = { version = "1", features = ["io-util", "macros", "net", "rt-multi-threa
 unicode-segmentation = "1"
 url = "2"
 html-escape = "0.3"
+
+# Rune builds these crates with its own patches, and a dependency's `[patch]` doesn't
+# reach this workspace. Keep the rev the same as the Rune pin above. Rune's other
+# patches (wgpu-hal, accesskit_windows) only change Windows code.
+[patch.crates-io]
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "d6d04d3e64180ba34ed4a976bb5fec9ff6769ad0" }
+winit = { git = "https://github.com/anomalyco/rune", rev = "d6d04d3e64180ba34ed4a976bb5fec9ff6769ad0" }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
