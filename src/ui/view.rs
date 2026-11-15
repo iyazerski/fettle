@@ -425,7 +425,7 @@ fn language(s: &State, k: &Kit, name: &'static str) -> El {
     let star = el()
         .key(format!("star-{name}"))
         .role("button")
-        .label(if favourite {
+        .label_static(if favourite {
             t.remove_favourite
         } else {
             t.add_favourite
@@ -453,7 +453,7 @@ fn language(s: &State, k: &Kit, name: &'static str) -> El {
     row()
         .key(format!("language-{name}"))
         .role("option")
-        .label(t.language(name))
+        .label_static(t.language(name))
         .w_full()
         .h(30.0)
         .pl(3.0)

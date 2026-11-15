@@ -5609,10 +5609,10 @@ limitations under the License.
 ## Apache License 2.0
 
 Used by:
+- accesskit_macos 0.27.2
 - parley_engine 0.12.0
 - accesskit 0.25.2
 - accesskit_consumer 0.39.2
-- accesskit_macos 0.27.2
 - anyhow 1.0.104
 - arboard 3.7.0
 - blake3 1.8.7
@@ -5857,6 +5857,7 @@ pub(crate) static GB18030_2022_OVERRIDE_BYTES: [[u8; 2]; 18] = [
 ## BSD 3-Clause "New" or "Revised" License
 
 Used by:
+- tiny-skia-path 0.11.4
 - tiny-skia-path 0.11.4
 - tiny-skia 0.11.4
 
@@ -6763,7 +6764,7 @@ third-party/chromium/LICENSE.
 ## MIT License
 
 Used by:
-- mio 1.2.4
+- mio 1.2.5
 
 ```text
 Copyright (c) 2014 Carl Lerche and other MIO contributors
