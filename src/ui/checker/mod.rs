@@ -1,12 +1,3 @@
-//! Underlining mistakes as the user types in other apps: read the focused
-//! text field whenever the app reports a change, and on a timer for apps that
-//! don't; once the user pauses, ask the model to fix each paragraph they
-//! edited, as the Fix action does; and underline what its fix changes. A click
-//! on an underline opens the paragraph in the window with that fix.
-//!
-//! The reading runs on a thread of its own ([`worker`]), as other apps can
-//! be slow to answer; the window keeps the underlines and the clicks on them.
-
 mod worker;
 
 use std::time::Duration;
@@ -23,7 +14,6 @@ use crate::underlines::{Clicks, Line, Underlines};
 /// How long quitting waits for the checker to undo what it changed in other apps.
 const QUIT_WAIT: Duration = Duration::from_millis(500);
 
-/// The window's side of the checker.
 #[derive(Default)]
 pub struct Checker {
     running: Option<Running>,
@@ -32,21 +22,17 @@ pub struct Checker {
     started: u64,
 }
 
-/// What runs while underlining is on.
 struct Running {
     worker: Handle,
     _clicks: Option<Clicks>,
 }
 
-/// The model's fix of a paragraph, as the Fix action shows it.
 #[derive(Debug, Clone)]
 pub struct Fix {
     pub text: String,
-    /// The word diff from the paragraph to `text`.
     pub changes: Vec<Piece>,
 }
 
-/// A paragraph to ask the model to fix, as check `id`.
 #[derive(Debug)]
 pub struct Check {
     pub id: u64,
@@ -55,10 +41,8 @@ pub struct Check {
     pub text: String,
 }
 
-/// A paragraph opened from an underline, to fix and paste back over.
 #[derive(Debug)]
 pub struct Target {
-    /// This opening, which the checker knows the paragraph by.
     pub opened: Ticket,
     pub text: String,
     /// The underlined word clicked, in points from the primary screen's top-left.
@@ -66,7 +50,6 @@ pub struct Target {
 }
 
 impl Checker {
-    /// Start reading the focused field and watching clicks, unless already started.
     pub fn start(&mut self, app: &AppHandle<State>) {
         if self.running.is_some() {
             return;
@@ -87,8 +70,7 @@ impl Checker {
         self.underlines.hide();
     }
 
-    /// Stop before Fettle quits, waiting a moment for the checker to undo
-    /// what it changed in other apps, which the process ending would skip.
+    /// Wait for the worker's Accessibility cleanup, which process exit would skip.
     pub fn quit(&mut self) {
         if let Some(running) = self.running.take() {
             running.worker.stop_and_wait(QUIT_WAIT);
@@ -96,15 +78,12 @@ impl Checker {
         self.underlines.hide();
     }
 
-    /// Underline `lines`, which checker `id` found, unless it was stopped.
     pub fn show(&mut self, id: u64, lines: Vec<Line>) {
         if self.running.is_some() && id == self.started {
             self.underlines.show(lines);
         }
     }
 
-    /// Open the paragraph with the underline at `point`, in AppKit's
-    /// coordinates, if there's one there.
     pub fn clicked(&self, point: (f64, f64)) {
         if let Some(line) = self.underlines.hit(point) {
             self.send(Command::Open(line));
@@ -117,24 +96,18 @@ impl Checker {
         self.send(Command::Asking(id, request));
     }
 
-    /// Take the model's `fix` of paragraph `units`, asked as check `id`, or
-    /// `None` if the request failed.
     pub fn finished(&self, id: u64, units: Vec<u16>, fix: Option<Fix>) {
         self.send(Command::Finished { id, units, fix });
     }
 
-    /// Leave the edits of the field that asked for check `id` unchecked:
-    /// there's no model to ask.
     pub fn skip(&self, id: u64) {
         self.send(Command::Skip(id));
     }
 
-    /// Forget the fixes known: they came from another model.
     pub fn forget(&self) {
         self.send(Command::Forget);
     }
 
-    /// Keep the model's `fix` of `target`'s paragraph, so it isn't sent again.
     pub fn learn(&self, target: &Target, fix: Fix) {
         self.send(Command::LearnOpened {
             opened: target.opened,
@@ -142,8 +115,7 @@ impl Checker {
         });
     }
 
-    /// Take `paragraph` as having no mistakes, so it isn't sent or underlined:
-    /// a fix pasted back, where the user may have declined some changes.
+    /// Cache the accepted text as clean, including any changes the user declined.
     pub fn learn_fine(&self, paragraph: &str) {
         self.send(Command::Learn {
             units: paragraph.encode_utf16().collect(),
@@ -154,20 +126,15 @@ impl Checker {
         });
     }
 
-    /// Check that `target`'s paragraph is still where it was opened. The
-    /// window hears back whether it is, unless this returns false:
-    /// underlining is off, and nothing can find it.
+    /// Request an asynchronous location check; false if underlining is off.
     pub fn locate(&self, target: &Target) -> bool {
         self.send(Command::Locate(target.opened))
     }
 
-    /// Change the paragraph opened into `text` in its field, once the window
-    /// hid, pasting only what differs so the rest keeps its links and styles.
     pub fn replace(&self, text: String) {
         self.send(Command::Replace(text));
     }
 
-    /// Send `command` to the checker thread; false if underlining is off.
     fn send(&self, command: Command) -> bool {
         let Some(running) = &self.running else {
             return false;

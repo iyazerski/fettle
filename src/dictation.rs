@@ -1,6 +1,4 @@
-//! Dictation with Apple's speech recognizer: the microphone feeds it, and it
-//! reports what it hears so far. Winit's text input drops most of what macOS
-//! system dictation types, so Fettle listens itself.
+//! Winit drops most macOS system-dictation input, so Fettle listens through Speech directly.
 
 use std::cell::RefCell;
 use std::ptr::NonNull;
@@ -21,27 +19,20 @@ use unicode_segmentation::UnicodeSegmentation;
 /// The recognizer's error for a session that ended before any speech.
 const NO_SPEECH: isize = 1110;
 
-/// Why dictation can't run.
 #[derive(Debug)]
 pub enum Problem {
-    /// Speech recognition isn't allowed in System Settings.
     SpeechOff,
-    /// The microphone isn't allowed in System Settings.
     MicrophoneOff,
-    /// The recognizer can't run right now, as when it's offline.
     Unavailable,
-    /// macOS's own description of what went wrong.
     Failed(String),
 }
 
-/// What a session reports.
 #[derive(Debug)]
 pub enum Heard {
     /// Everything heard since the session started, as text.
     Words(String),
     /// How loud the microphone is, from 0 to 1, many times a second.
     Level(f32),
-    /// The session is over and its words are final.
     Done,
     Failed(String),
 }
@@ -53,8 +44,7 @@ pub struct Listening {
     task: Retained<SFSpeechRecognitionTask>,
 }
 
-/// Ask for speech recognition and the microphone, then call `done` on any
-/// thread with why dictation can't run, if it can't.
+/// The permission callback may run on any thread.
 pub fn authorize(done: impl FnOnce(Allowed) + Send + 'static) {
     let done = Once::new(done);
     // SAFETY: the status is a plain class property.
@@ -76,7 +66,6 @@ pub fn authorize(done: impl FnOnce(Allowed) + Send + 'static) {
     }
 }
 
-/// Ask for the microphone, then finish `done`.
 fn microphone(done: Once) {
     // SAFETY: AVFoundation defines the audio media type for the app's life.
     let Some(audio) = (unsafe { AVMediaTypeAudio }) else {
@@ -99,9 +88,7 @@ fn microphone(done: Once) {
 }
 
 impl Listening {
-    /// Listen to the microphone, calling `heard` with what it hears until the
-    /// session ends: on the audio thread for levels, else on the main thread.
-    /// Needs `authorize` to have passed.
+    /// Callbacks report levels on the audio thread and words on the main thread; authorize first.
     pub fn start(heard: impl Fn(Heard) + Send + Sync + 'static) -> Result<Self, Problem> {
         let heard = Arc::new(heard);
         // SAFETY: plain Speech and AVFAudio calls on the main thread, with
@@ -127,7 +114,6 @@ impl Listening {
                 move |buffer: NonNull<AVAudioPCMBuffer>, _: NonNull<AVAudioTime>| {
                     let buffer = buffer.as_ref();
                     feed.appendAudioPCMBuffer(buffer);
-                    // Each buffer, a small fraction of a second, draws one bar.
                     if let Some(level) = level(buffer) {
                         loud(Heard::Level(level));
                     }
@@ -214,20 +200,15 @@ unsafe fn level(buffer: &AVAudioPCMBuffer) -> Option<f32> {
     Some(((db + 50.0) / 40.0).clamp(0.0, 1.0))
 }
 
-/// What a session heard so far. The recognizer starts a new transcription
-/// after each pause, and once listening stops, repeats the last one or all
-/// of them as final.
+/// Recognition restarts after pauses and may repeat the last segment or the full session on stop.
 #[derive(Default)]
 struct Transcript {
-    /// Everything before the current transcription.
     said: String,
     /// The transcription kept at the last pause, until another starts.
     kept: Option<String>,
 }
 
 impl Transcript {
-    /// Take a result's transcription, `pause` when it's the last before a
-    /// pause, and return everything heard.
     fn take(&mut self, current: &str, pause: bool) -> String {
         if self
             .kept
@@ -248,26 +229,22 @@ impl Transcript {
     }
 }
 
-/// The words of `s`, to compare transcriptions whatever their punctuation.
 fn words(s: &str) -> impl Iterator<Item = &str> {
     s.unicode_words()
 }
 
-/// Whether `a` and `b` are one word, whatever their case.
 fn same_word(a: &str, b: &str) -> bool {
     a.chars()
         .flat_map(char::to_lowercase)
         .eq(b.chars().flat_map(char::to_lowercase))
 }
 
-/// Whether the words of `s` start with those of `prefix`. Stops at the
-/// first that differs, as a new transcription after a pause does at once.
+/// Stop at the first different word, as a new transcription after a pause usually does.
 fn starts_with_words(s: &str, prefix: &str) -> bool {
     let mut words_of_s = words(s);
     words(prefix).all(|p| words_of_s.next().is_some_and(|w| same_word(w, p)))
 }
 
-/// Whether `a` and `b` have the same words.
 fn same_words(a: &str, b: &str) -> bool {
     let (mut a, mut b) = (words(a), words(b));
     loop {
@@ -279,7 +256,6 @@ fn same_words(a: &str, b: &str) -> bool {
     }
 }
 
-/// `before`, then `after`, with a space between when both have text.
 pub fn join(before: &str, after: &str) -> String {
     match (before.trim_end(), after.trim_start()) {
         ("", after) => after.to_owned(),
@@ -288,7 +264,6 @@ pub fn join(before: &str, after: &str) -> String {
     }
 }
 
-/// Why dictation can't run, if it can't.
 type Allowed = Result<(), Problem>;
 type Callback = Box<dyn FnOnce(Allowed) + Send>;
 
@@ -302,7 +277,6 @@ impl Once {
         Self(Arc::new(Mutex::new(Some(Box::new(f)))))
     }
 
-    /// Run the callback, if it hasn't run yet.
     fn call(&self, allowed: Allowed) {
         let f = self.0.lock().unwrap_or_else(|e| e.into_inner()).take();
         if let Some(f) = f {
@@ -318,7 +292,6 @@ mod tests {
     #[test]
     fn keeps_each_pause_once() {
         let mut t = Transcript::default();
-        // (transcription, before a pause, everything heard)
         let steps = [
             ("Nice", false, "Nice"),
             ("Nice it works", true, "Nice it works"),

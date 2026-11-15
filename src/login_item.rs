@@ -1,5 +1,3 @@
-//! Start at login: a per-user LaunchAgent that runs the app in the background.
-
 use std::path::PathBuf;
 
 use anyhow::{Context, Result};
@@ -10,7 +8,6 @@ use crate::settings::home;
 
 const LABEL: &str = crate::BUNDLE_ID;
 
-/// The LaunchAgent's property list, as `launchd.plist(5)` names its keys.
 #[derive(Serialize)]
 #[serde(rename_all = "PascalCase")]
 struct LaunchAgent {
@@ -30,8 +27,6 @@ pub fn enabled() -> bool {
     plist_path().exists()
 }
 
-/// Start this executable, hidden, at every login. It takes effect from the
-/// next login: the running copy is already the one in the background.
 pub fn enable() -> Result<()> {
     let exe = std::env::current_exe().context("finding Fettle's executable")?;
     // From a bundle, start through LaunchServices, so opening Fettle.app later
@@ -67,7 +62,6 @@ pub fn enable() -> Result<()> {
     plist::to_file_xml(&path, &agent).with_context(|| format!("writing {}", path.display()))
 }
 
-/// Stop starting at login. The running copy keeps running.
 pub fn disable() -> Result<()> {
     match std::fs::remove_file(plist_path()) {
         Err(e) if e.kind() != std::io::ErrorKind::NotFound => {

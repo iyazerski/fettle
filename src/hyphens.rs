@@ -1,7 +1,6 @@
 //! Hyphens in model answers: models put dashes where a text had hyphens,
 //! even when told not to.
 
-/// Dashes models put in place of a hyphen, often dropping its spaces too.
 const DASHES: [char; 2] = ['—', '–'];
 
 /// Replace the [`DASHES`] in `text` that `original` lacks with spaced

@@ -1,6 +1,3 @@
-//! The welcome steps on the first run: what Fettle does, where the model runs,
-//! the Accessibility permission, and a first try on a sample.
-
 use rune::{Cursor, El, Shortcut, TextStyle, col, icon, row, spacer, text};
 use rune_kit::{Button, ButtonVariant, Kit};
 
@@ -37,7 +34,6 @@ impl Step {
 }
 
 impl State {
-    /// Show the welcome steps, where they were left, or from the start.
     pub fn open_onboarding(&mut self) {
         self.recheck_accessibility();
         self.recheck_on_device();
@@ -48,7 +44,6 @@ impl State {
         self.show();
     }
 
-    /// Go to the step `to` picks after the current one, if it picks one.
     fn move_step(&mut self, to: fn(Step) -> Option<Step>) {
         if let Page::Onboarding(step) = self.page
             && let Some(step) = to(step)
@@ -57,13 +52,11 @@ impl State {
         }
     }
 
-    /// Finish the welcome steps and hide until the shortcut.
     fn finish_onboarding(&mut self) {
         self.end_onboarding();
         self.hide();
     }
 
-    /// Finish the welcome steps on the main page, with a sample to try.
     fn try_sample(&mut self) {
         self.end_onboarding();
         self.draft.reset(self.t().sample.to_owned());
@@ -83,7 +76,6 @@ pub fn view(s: &State, k: &Kit, step: Step) -> El {
         Step::Access => access(s, k),
         Step::Done => done(s, k),
     };
-    // Back from every step after the first.
     let lead = if step == Step::Welcome {
         Lead::Mark
     } else {
@@ -104,7 +96,6 @@ pub fn view(s: &State, k: &Kit, step: Step) -> El {
         .child(body)
 }
 
-/// A step's title, text and content, with its buttons at the bottom right.
 fn page(k: &Kit, title: &str, body: &str, content: Option<El>, buttons: Vec<El>) -> El {
     let heading = TextStyle {
         size: 19.0,
@@ -134,7 +125,6 @@ fn next(k: &Kit, label: &str) -> El {
     })
 }
 
-/// The shortcut as keycaps, like ⌃⌥E.
 fn shortcut(s: &State) -> String {
     s.settings
         .shortcut
@@ -176,8 +166,6 @@ fn model(s: &State, k: &Kit) -> El {
     page(k, t.model_title, "", Some(choices), vec![next(k, t.next)])
 }
 
-/// A card for `provider` that picks it when pressed; the picked one shows
-/// whether it's ready.
 fn choice(s: &State, k: &Kit, provider: Provider, title: &str, body: &str) -> El {
     let picked = s.settings.provider == provider;
     let (edge, fill) = if picked {

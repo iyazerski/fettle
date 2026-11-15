@@ -1,18 +1,13 @@
-//! The word diff between the selected text and its fixed version, as
-//! Grammarly shows it: removed words, then the words that replace them.
-
 use std::ops::Range;
 use std::time::Duration;
 
 use similar::{ChangeTag, TextDiff};
 use unicode_segmentation::UnicodeSegmentation;
 
-/// How long the diff may search for the smallest edit before it settles for
-/// a coarser one: a long, heavily rewritten text could take far longer.
+/// Bound expensive searches on long rewrites; fall back to a coarser diff.
 const DIFF_TIMEOUT: Duration = Duration::from_secs(1);
 
-/// Split `text` at Unicode word boundaries: words, runs of spaces, and
-/// single punctuation marks, so punctuation diffs on its own.
+/// Unicode boundaries separate punctuation from words, unlike whitespace splitting.
 fn tokens(text: &str) -> Vec<&str> {
     text.split_word_bounds().collect()
 }
@@ -30,9 +25,7 @@ pub struct Piece {
     pub text: String,
 }
 
-/// Diff `old` against `new` by words. Changes split only by spaces read as
-/// one edit, so a rewritten phrase shows as the old phrase, then the new one,
-/// rather than word against word.
+/// Group changes separated only by whitespace into a single phrase replacement.
 pub fn words(old: &str, new: &str) -> Vec<Piece> {
     let (old, new) = (tokens(old), tokens(new));
     let diff = TextDiff::configure()
@@ -75,7 +68,6 @@ pub fn words(old: &str, new: &str) -> Vec<Piece> {
     out
 }
 
-/// Append `text` as `kind`, joining it to the last piece when that has the same kind.
 fn push(out: &mut Vec<Piece>, kind: Kind, text: &str) {
     if text.is_empty() {
         return;
@@ -89,9 +81,7 @@ fn push(out: &mut Vec<Piece>, kind: Kind, text: &str) {
     }
 }
 
-/// Pair each piece with the number of the change it's part of, counting
-/// from 0, or `None` if it's the same on both sides. A change is a run of
-/// removed and added pieces: the words removed and those replacing them.
+/// Number contiguous removed/added groups from zero; unchanged pieces have no number.
 pub fn numbered(pieces: &[Piece]) -> impl Iterator<Item = (Option<usize>, &Piece)> {
     let mut next = 0;
     let mut previous = Kind::Same;
@@ -109,8 +99,6 @@ pub fn numbered(pieces: &[Piece]) -> impl Iterator<Item = (Option<usize>, &Piece
     })
 }
 
-/// Return the diff with change `n` (see [`numbered`]) undone: its removed
-/// words kept and its added ones dropped.
 pub fn decline(pieces: Vec<Piece>, n: usize) -> Vec<Piece> {
     let changes: Vec<Option<usize>> = numbered(&pieces).map(|(change, _)| change).collect();
     let mut out: Vec<Piece> = Vec::with_capacity(pieces.len());
@@ -129,7 +117,6 @@ pub fn decline(pieces: Vec<Piece>, n: usize) -> Vec<Piece> {
     out
 }
 
-/// Return the new text: what the diff changes the old one into.
 pub fn result(pieces: &[Piece]) -> String {
     pieces
         .iter()
@@ -138,9 +125,7 @@ pub fn result(pieces: &[Piece]) -> String {
         .collect()
 }
 
-/// Return the diff's changes as edits to the old text, last first: each the
-/// range of chars of the old text it replaces, and the text replacing it.
-/// Applied in this order, each range still points at the old text.
+/// Character-indexed edits, last first, so applying one doesn't shift the remaining ranges.
 pub fn edits(pieces: &[Piece]) -> Vec<(Range<usize>, String)> {
     let mut out: Vec<(Range<usize>, String)> = Vec::new();
     let mut at = 0;
@@ -164,15 +149,12 @@ pub fn edits(pieces: &[Piece]) -> Vec<(Range<usize>, String)> {
     out
 }
 
-/// Whether the diff changes anything.
 pub fn changed(pieces: &[Piece]) -> bool {
     pieces.iter().any(|p| p.kind != Kind::Same)
 }
 
-/// Return what the diff changes in the old text, as UTF-16 ranges, sorted
-/// and apart: removed words, and for a word added between two, the word it
-/// joins (`tasty` for a comma after it) or else the word after it (`store`
-/// for `the` before it).
+/// Sorted, merged UTF-16 marks in the old text. Insertions mark the adjoining word:
+/// the preceding word for a comma after it, or the following word for an insertion before it.
 pub fn marks(pieces: &[Piece]) -> Vec<Range<usize>> {
     let old: Vec<u16> = pieces
         .iter()
@@ -277,7 +259,6 @@ mod tests {
             ("a b c d", "x y z d", "[-a b c-]{+x y z+} d", &["a b c"]),
             ("Fine as is.\n", "Fine as is.\n", "Fine as is.\n", &[]),
             ("Это хорошо", "Это хорошо.", "Это хорошо{+.+}", &["хорошо"]),
-            // Chinese has no spaces: each character is a word.
             (
                 "我喜欢苹果",
                 "我喜欢香蕉",

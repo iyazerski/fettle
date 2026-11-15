@@ -1,6 +1,3 @@
-//! The main page's text and the answer about it: which run is current, and
-//! what a run's late pieces may still change.
-
 use rune::TextEdit;
 use tokio::task::JoinHandle;
 
@@ -8,14 +5,10 @@ use crate::diff::{self, Piece};
 use crate::hyphens;
 use crate::prompts::Action;
 
-/// The text to work on and the answer about it.
 pub struct Draft {
-    /// The selection, editable.
     pub source: TextEdit,
     pub answer: Option<Answer>,
-    /// Show the fixed text as a word diff rather than plain text.
     pub show_changes: bool,
-    /// A one-line note under the text: nothing selected, a save error.
     pub notice: Option<String>,
     /// Counts runs, so a late piece of an old answer is dropped.
     run: u64,
@@ -27,13 +20,11 @@ pub struct Answer {
 }
 
 pub enum Status {
-    /// Streaming run `run`'s answer into `text`.
     Running {
         run: u64,
         job: JoinHandle<()>,
         text: String,
     },
-    /// The user stopped the run.
     Stopped,
     Done {
         text: String,
@@ -55,14 +46,12 @@ impl Draft {
         }
     }
 
-    /// Start over on `text`.
     pub fn reset(&mut self, text: String) {
         self.answer = None;
         self.notice = None;
         self.source.replace_text(text);
     }
 
-    /// Stop the running answer, if any, and return the number of the next run.
     pub fn cancel(&mut self) -> u64 {
         self.run += 1;
         if let Some(answer) = self.answer.as_mut()
@@ -74,7 +63,6 @@ impl Draft {
         self.run
     }
 
-    /// Show that `action` failed with `message`.
     pub fn fail(&mut self, action: Action, message: String) {
         self.answer = Some(Answer {
             action,
@@ -82,12 +70,10 @@ impl Draft {
         });
     }
 
-    /// Show `status` as `action`'s answer, known without a run.
     pub fn answered(&mut self, action: Action, status: Status) {
         self.answer = Some(Answer { action, status });
     }
 
-    /// Show `action`'s run `run`, which `job` streams in.
     pub fn running(&mut self, action: Action, run: u64, job: JoinHandle<()>) {
         self.answer = Some(Answer {
             action,
@@ -99,14 +85,12 @@ impl Draft {
         });
     }
 
-    /// Add `delta` to run `run`'s answer, if it's still the one running.
     pub fn delta(&mut self, run: u64, delta: &str) {
         if let Some(text) = self.running_text(run) {
             text.push_str(delta);
         }
     }
 
-    /// End run `run` with `status`, if it's still the one running.
     pub fn finished(&mut self, run: u64, status: Status) {
         if self.running_text(run).is_none() {
             return;
@@ -125,7 +109,6 @@ impl Draft {
         }
     }
 
-    /// Return the finished answer's text.
     pub fn result(&self) -> Option<&str> {
         match &self.answer.as_ref()?.status {
             Status::Done { text, .. } => Some(text),
@@ -133,7 +116,6 @@ impl Draft {
         }
     }
 
-    /// Mark the finished answer as copied.
     pub fn copied(&mut self) {
         if let Some(Answer {
             status: Status::Done { copied, .. },
@@ -144,7 +126,6 @@ impl Draft {
         }
     }
 
-    /// Undo change `n` of the finished Fix answer, keeping the original's words there.
     pub fn decline(&mut self, n: usize) {
         if let Some(Answer {
             status:
@@ -163,7 +144,6 @@ impl Draft {
         }
     }
 
-    /// Return the finished answer's text if it's a fix.
     pub fn fixed(&self) -> Option<&str> {
         let answer = self.answer.as_ref()?;
         match &answer.status {
@@ -172,7 +152,6 @@ impl Draft {
         }
     }
 
-    /// Whether the answer is a translation, which a new language redoes.
     pub fn translated(&self) -> bool {
         self.answer
             .as_ref()
@@ -180,10 +159,6 @@ impl Draft {
     }
 }
 
-/// Return the status of an `action` on `original` whose answer streamed in
-/// full as `text`: done, with Fix's word diff, unless the model returned
-/// nothing, which fails with `empty`. Dashes `original` doesn't use become
-/// hyphens again, as models add them even when told not to.
 pub fn complete(action: Action, original: &str, text: &str, empty: &str) -> Status {
     if text.trim().is_empty() {
         return Status::Failed(empty.into());

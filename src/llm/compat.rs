@@ -1,5 +1,3 @@
-//! An OpenAI-compatible API: streamed chat completions and the model list.
-
 use anyhow::{Result, bail};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -7,7 +5,6 @@ use serde_json::{Value, json};
 use super::sse::{self, Flow};
 use super::{Ask, Effort, check, error_message};
 
-/// Stream the answer to `ask` with reasoning `effort`, or the model's default for `None`.
 pub async fn stream(
     http: &reqwest::Client,
     base: &str,

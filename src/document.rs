@@ -1,11 +1,5 @@
-//! A text field's text as the user edits it, and the mistakes found in it.
-//!
-//! An edit shifts the mistakes around it and marks the paragraphs it touched
-//! for checking, so only what the user writes is checked, not the text the
-//! field held already, which shows only the mistakes known from before.
-//! Checks run one paragraph at a time.
-//!
-//! Ranges count UTF-16 code units, as the Accessibility API does.
+//! Check only edited paragraphs, one at a time; retain known mistakes in untouched text.
+//! All ranges count UTF-16 code units, matching Accessibility.
 
 use std::ops::Range;
 
@@ -25,14 +19,11 @@ enum Check {
     Idle,
     Running {
         id: u64,
-        /// Where the paragraph checked is in the text now.
         span: Range<usize>,
-        /// Whether an edit changed the paragraph since, so the answer is stale.
         outdated: bool,
     },
 }
 
-/// A paragraph to check.
 #[derive(Debug)]
 pub struct Request {
     pub id: u64,
@@ -40,8 +31,7 @@ pub struct Request {
 }
 
 impl Document {
-    /// Start on `text`, taking it as checked, with the mistakes `known`
-    /// returns for each paragraph, as ranges in it.
+    /// Treat the initial text as checked, restoring only mistakes already known.
     pub fn new(text: Vec<u16>, mut known: impl FnMut(&[u16]) -> Option<Vec<Range<usize>>>) -> Self {
         let mut mistakes = Vec::new();
         let mut start = 0;
@@ -67,7 +57,6 @@ impl Document {
         &self.mistakes
     }
 
-    /// Return the id of the check running, if any.
     pub fn checking(&self) -> Option<u64> {
         match self.check {
             Check::Running { id, .. } => Some(id),
@@ -75,8 +64,7 @@ impl Document {
         }
     }
 
-    /// Take `new` as the text. Returns where the paragraph the edit starts in
-    /// begins, as layout before it is unchanged, or `None` if the text is the same.
+    /// Return the start of the first affected paragraph; layout before it remains valid.
     pub fn edit(&mut self, new: &[u16]) -> Option<usize> {
         if self.text == new {
             return None;
@@ -124,8 +112,6 @@ impl Document {
         Some(start)
     }
 
-    /// Return the next paragraph with letters in it to check as `id`, unless
-    /// one is being checked or none is left.
     pub fn next(&mut self, id: u64) -> Option<Request> {
         if matches!(self.check, Check::Running { .. }) {
             return None;
@@ -153,9 +139,7 @@ impl Document {
         None
     }
 
-    /// Take the mistakes check `id` found, as ranges in its paragraph, or
-    /// keep the old ones if it found nothing to go on (`None`). Returns
-    /// whether the mistakes changed: not for a stale or unknown check.
+    /// Keep existing marks on failure (`None`), and ignore stale or unknown checks.
     pub fn finish(&mut self, id: u64, found: Option<Vec<Range<usize>>>) -> bool {
         let Check::Running {
             id: running,
@@ -182,14 +166,11 @@ impl Document {
         true
     }
 
-    /// Take every edit as checked, with the mistakes known before it, and
-    /// drop the running check's answer.
     pub fn skip(&mut self) {
         self.unchecked.clear();
         self.check = Check::Idle;
     }
 
-    /// Add `span` to the unchecked spans, merging it with those it meets.
     fn mark(&mut self, mut span: Range<usize>) {
         let from = self.unchecked.partition_point(|s| s.end < span.start);
         let to = self.unchecked.partition_point(|s| s.start <= span.end);
@@ -209,12 +190,10 @@ struct Edit {
 }
 
 impl Edit {
-    /// Whether the edit changed text inside `range`.
     fn overlaps(&self, range: &Range<usize>) -> bool {
         range.start < self.old_end && range.end > self.start
     }
 
-    /// Whether the edit changed text inside or right next to `range`.
     fn touches(&self, range: &Range<usize>) -> bool {
         range.start <= self.old_end && range.end >= self.start
     }
@@ -236,12 +215,10 @@ impl Edit {
     }
 }
 
-/// Whether `unit` ends a paragraph.
 fn breaks(unit: u16) -> bool {
     matches!(unit, 0x0A | 0x0D | 0x2028 | 0x2029)
 }
 
-/// Return the paragraph around `at` in `text`, without its line break.
 pub fn paragraph(text: &[u16], at: usize) -> Range<usize> {
     let at = at.min(text.len());
     let start = text[..at]
@@ -267,7 +244,6 @@ mod tests {
         String::from_utf16_lossy(&text[range])
     }
 
-    /// Run every pending check with a checker that flags words starting with "x".
     fn check_all(doc: &mut Document) -> Vec<String> {
         let mut checked = Vec::new();
         let mut id = 100;
@@ -298,32 +274,29 @@ mod tests {
 
     #[test]
     fn checks_only_edited_paragraphs_and_keeps_the_rest_in_place() {
-        // The text it starts with counts as checked, with the mistakes known in it.
         let known = |p: &[u16]| (p == units("c")).then(|| std::iter::once(0..1).collect());
-        let mut doc = Document::new(units("a xold\nb xtwo\nc"), known);
+        let mut doc = Document::new(units("a xold\nb xtwo\r\nc"), known);
         assert!(doc.next(1).is_none());
         assert_eq!(marked(&doc), ["c"]);
 
-        // A paste over two paragraphs checks each.
-        doc.edit(&units("a xold\nb xtwo xmore\nc xnew\n\n42"));
+        doc.edit(&units("a xold\nb xtwo xmore\r\nc xnew\n\n42"));
         assert_eq!(check_all(&mut doc), ["b xtwo xmore", "c xnew"]);
         assert_eq!(marked(&doc), ["xtwo", "xmore", "xnew"]);
 
-        // Typing before them shifts their marks; an edit inside a mark drops it.
         assert_eq!(
-            doc.edit(&units("a xold!\nb xtwo xmore\nc xnew\n\n42")),
+            doc.edit(&units("a xold!\nb xtwo xmore\r\nc xnew\n\n42")),
             Some(0)
         );
         assert_eq!(marked(&doc), ["xtwo", "xmore", "xnew"]);
         assert_eq!(
-            doc.edit(&units("a xold!\nb xtwo xmXore\nc xnew\n\n42")),
+            doc.edit(&units("a xold!\nb xtwo xmXore\r\nc xnew\n\n42")),
             Some(8)
         );
         assert_eq!(marked(&doc), ["xtwo", "xnew"]);
         assert_eq!(check_all(&mut doc), ["a xold!", "b xtwo xmXore"]);
         assert_eq!(marked(&doc), ["xold!", "xtwo", "xmXore", "xnew"]);
         assert_eq!(
-            doc.edit(&units("a xold!\nb xtwo xmXore\nc xnew\n\n42")),
+            doc.edit(&units("a xold!\nb xtwo xmXore\r\nc xnew\n\n42")),
             None
         );
     }
@@ -339,31 +312,15 @@ mod tests {
         assert!(!doc.finish(1, Some(Vec::new())));
         assert_eq!(check_all(&mut doc), ["xbcd"]);
         assert_eq!(marked(&doc), ["xbcd"]);
-        // A failed check keeps the marks it had.
         doc.edit(&units("xa\nxbcde"));
         let request = doc.next(3).unwrap();
         assert!(!doc.finish(request.id, None));
         assert_eq!(marked(&doc), ["xbcd"]);
-        // Without a model, edits go unchecked and a running check is dropped.
         doc.edit(&units("xa\nxbcdef"));
         let request = doc.next(4).unwrap();
         doc.skip();
         assert!(doc.next(5).is_none());
         assert!(!doc.finish(request.id, Some(Vec::new())));
         assert_eq!(marked(&doc), ["xbcd"]);
-    }
-
-    #[test]
-    fn finds_the_paragraph_around_a_position() {
-        let text = units("Hi.\nThey was here.\r\nBye");
-        let cases = [
-            (0, "Hi."),
-            (9, "They was here."),
-            (4, "They was here."),
-            (21, "Bye"),
-        ];
-        for (at, want) in cases {
-            assert_eq!(show(&text, paragraph(&text, at)), want, "at {at}");
-        }
     }
 }

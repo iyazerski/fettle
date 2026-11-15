@@ -1,10 +1,3 @@
-//! The settings page: where the model runs, which model, whether it reasons,
-//! the look, the shortcut, login item and permission, updates, and credits.
-//!
-//! Settings sit in rounded groups. A wide control (picker, dropdown, field)
-//! fills the same column on the right of its label, and a compact one (switch,
-//! status) sits at the right edge, so every row lines up.
-
 use std::sync::OnceLock;
 
 use rune::{Cursor, El, col, icon, row, spacer, text};
@@ -24,7 +17,6 @@ use crate::llm::on_device::Availability;
 use crate::mac;
 use crate::settings::{Appearance, Provider};
 
-/// The providers, in the order the settings list them.
 const PROVIDERS: [Provider; 3] = [Provider::OnDevice, Provider::ChatGpt, Provider::Api];
 
 const AUTHOR: &str = "Ihar Yazerski";
@@ -33,11 +25,8 @@ const REPO_URL: &str = "https://github.com/iyazerski/fettle";
 const LICENSE_URL: &str = "https://github.com/iyazerski/fettle/blob/main/LICENSE";
 const NOTICES_URL: &str = "https://github.com/iyazerski/fettle/blob/main/THIRD_PARTY_LICENSES.md";
 
-/// The space inside a group, around its rows.
 const PAD: f32 = 12.0;
-/// The label column's width.
 const LABEL: f32 = 130.0;
-/// A wide control's width: the window less its padding, the group's, the label and the gap.
 fn control(s: &State) -> f32 {
     s.width - 2.0 * 14.0 - 2.0 * PAD - LABEL - 12.0
 }
@@ -143,13 +132,11 @@ pub fn view(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .child(credits(s, k))
 }
 
-/// The provider picker, with whether the picked one is ready under it.
 fn provider(s: &State, k: &Kit, sk: &Kit) -> El {
     let t = s.t();
     let status = match s.settings.provider {
         Provider::OnDevice => Some(on_device(s, k)),
         Provider::ChatGpt => Some(chatgpt(s, k)),
-        // Its URL and key follow as rows of their own.
         Provider::Api => None,
     };
     col()
@@ -169,7 +156,6 @@ fn provider(s: &State, k: &Kit, sk: &Kit) -> El {
         .children(status)
 }
 
-/// The window's language: System, then each language in its own name.
 fn app_language(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
     let options: Vec<&str> = std::iter::once(t.system_language)
@@ -192,8 +178,6 @@ fn app_language(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
         .build(field_kit(k), layer)
 }
 
-/// Return the kit for segmented controls, made once per appearance from `k`,
-/// the window's kit, with a recessed track and a raised selected segment.
 fn segmented_kit(k: &Kit) -> &'static Kit {
     static DARK: OnceLock<Kit> = OnceLock::new();
     static LIGHT: OnceLock<Kit> = OnceLock::new();
@@ -215,9 +199,6 @@ fn segmented_kit(k: &Kit) -> &'static Kit {
     })
 }
 
-/// Return the kit for fields and dropdowns, made once per appearance from
-/// `k`, the window's kit. In dark mode they're a shade lighter than their
-/// group, not near black.
 fn field_kit(k: &Kit) -> &'static Kit {
     static DARK: OnceLock<Kit> = OnceLock::new();
     static LIGHT: OnceLock<Kit> = OnceLock::new();
@@ -231,8 +212,6 @@ fn field_kit(k: &Kit) -> &'static Kit {
     })
 }
 
-/// Who made Fettle, its license, the licenses of what it's built from, and its
-/// source, each a link, centred under the groups.
 fn credits(s: &State, k: &Kit) -> El {
     let t = s.t();
     let faint = |label: &str| text(label).font(k.ty.text_small).color(k.c.text_faint);
@@ -260,7 +239,6 @@ fn credits(s: &State, k: &Kit) -> El {
         .child(spacer())
 }
 
-/// The version and where updating stands, with the update and Quit buttons.
 fn about(s: &State, k: &Kit) -> El {
     let t = s.t();
     let status = |label: String| text(label).font(k.ty.text_small).color(k.c.text_muted);
@@ -337,8 +315,6 @@ fn about(s: &State, k: &Kit) -> El {
     block
 }
 
-/// Whether Apple's on-device model can run, with a way to System Settings when
-/// a setting there stops it.
 pub(super) fn on_device(s: &State, k: &Kit) -> El {
     let t = s.t();
     if s.on_device == Availability::Ready {
@@ -433,7 +409,6 @@ pub(super) fn chatgpt(s: &State, k: &Kit) -> El {
     }
 }
 
-/// The API's URL and key rows.
 fn api(s: &State, k: &Kit) -> [El; 2] {
     let t = s.t();
     [
@@ -463,7 +438,6 @@ fn api(s: &State, k: &Kit) -> [El; 2] {
     ]
 }
 
-/// The model dropdown, once the provider can list its models.
 fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
     let t = s.t();
     let current = s.settings.model()?;
@@ -538,7 +512,6 @@ pub(super) fn accessibility(s: &State, k: &Kit) -> El {
         }))
 }
 
-/// A group's title, above it.
 fn section(k: &Kit, title: &str) -> El {
     col().w_full().pt(8.0).pl(4.0).child(
         text(title.to_owned())
@@ -547,7 +520,6 @@ fn section(k: &Kit, title: &str) -> El {
     )
 }
 
-/// `rows` in a rounded box, with a line between each two.
 fn group(k: &Kit, rows: Vec<El>) -> El {
     // In dark mode, a lift over the window: the dark base would hide the fields in it.
     let fill = if k.dark {
@@ -569,7 +541,6 @@ fn group(k: &Kit, rows: Vec<El>) -> El {
     card
 }
 
-/// A row with `label` on the left and a wide `control` filling the column on its right.
 fn wide(k: &Kit, label: &str, control: El) -> El {
     row()
         .w_full()
@@ -589,8 +560,6 @@ fn wide(k: &Kit, label: &str, control: El) -> El {
         .child(col().grow(1.0).child(control))
 }
 
-/// A row with `label`, and `hint` under it, on the left, and a compact
-/// `control` at the right edge.
 fn compact(k: &Kit, label: &str, hint: Option<&str>, control: El) -> El {
     let hint = hint.map(|h| {
         text(h.to_owned())

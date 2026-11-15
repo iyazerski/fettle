@@ -1,6 +1,3 @@
-//! The menu bar item: Fettle's sparkles in the menu bar, with a menu to open
-//! the window, open the settings, or quit.
-
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
@@ -13,8 +10,6 @@ use rune::AppHandle;
 use super::state::State;
 use crate::i18n::Strings;
 
-/// The SF Symbol it shows: the sparkles of Fettle's icon.
-/// Fettle Dev's differs, to tell the two apart.
 const SYMBOL: &str = if crate::DEV { "hammer" } else { "sparkles" };
 
 define_class!(
@@ -43,7 +38,6 @@ define_class!(
     }
 );
 
-/// The item in the menu bar, there until dropped.
 pub struct MenuBar {
     mtm: MainThreadMarker,
     item: Retained<NSStatusItem>,
@@ -52,8 +46,6 @@ pub struct MenuBar {
 }
 
 impl MenuBar {
-    /// Put the item in the menu bar, its menu labelled in `t`'s language.
-    /// `None` off the main thread.
     pub fn new(app: AppHandle<State>, t: &Strings) -> Option<Self> {
         let mtm = MainThreadMarker::new()?;
         let target: Retained<Target> = {
@@ -74,7 +66,6 @@ impl MenuBar {
         Some(bar)
     }
 
-    /// Label the menu in `t`'s language.
     pub fn set_labels(&self, t: &Strings) {
         let menu = NSMenu::new(self.mtm);
         menu.addItem(&self.menu_item(t.open_fettle, sel!(openFettle:)));
@@ -84,7 +75,6 @@ impl MenuBar {
         self.item.setMenu(Some(&menu));
     }
 
-    /// Make a menu item titled `title` that sends `action` to the target.
     fn menu_item(&self, title: &str, action: Sel) -> Retained<NSMenuItem> {
         // SAFETY: `action` is one of `Target`'s methods, and `self.target`
         // outlives the menu, which goes with `self.item`.

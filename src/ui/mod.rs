@@ -1,6 +1,4 @@
-//! The floating window: a nonactivating panel, so the app the text came from
-//! stays active and can take the result back. A global shortcut copies the
-//! selection and opens it; model calls run on a small tokio runtime beside it.
+//! A nonactivating panel keeps the source app active so it can take the pasted result.
 
 mod buttons;
 mod checker;
@@ -28,7 +26,7 @@ pub use self::state::Start;
 use self::state::State;
 use self::view::{CORNER, WIDTH, on_key, view};
 
-/// Run the app until it quits. The window owns the main thread, as macOS needs.
+/// Keep the window on the main thread, as AppKit requires.
 pub fn run(start: Start) -> Result<()> {
     let _only = single_instance()?;
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -119,8 +117,7 @@ pub fn run(start: Start) -> Result<()> {
     Ok(())
 }
 
-/// Hold a lock for as long as Fettle runs, so a second copy (the login item and
-/// a manual start) quits instead of fighting over the shortcut.
+/// Hold until exit so login-item and manual launches can't compete for the shortcut.
 fn single_instance() -> Result<std::fs::File> {
     let path = Settings::path().with_file_name("fettle.lock");
     if let Some(dir) = path.parent() {

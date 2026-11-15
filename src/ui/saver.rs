@@ -1,5 +1,4 @@
-//! Saving the settings off the UI thread: the file and the keychain can be slow,
-//! and a save that's still waiting gives way to a newer one.
+//! Save off the UI thread; queued changes give way to the newest settings.
 
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -13,7 +12,6 @@ use super::state::State;
 use crate::keychain;
 use crate::settings::{Credentials, Settings};
 
-/// Sends each change of the settings to a task that writes them in order.
 pub struct Saver {
     /// The newest settings to save, numbered by revision.
     latest: watch::Sender<(u64, Settings)>,
@@ -21,8 +19,6 @@ pub struct Saver {
 }
 
 impl Saver {
-    /// Start saving `settings`' changes to `path` on `rt`, where the keychain
-    /// holds `saved`, and report failures to `app`.
     pub fn new(
         rt: &Handle,
         app: AppHandle<State>,
@@ -50,7 +46,6 @@ impl Saver {
         Self { latest, store }
     }
 
-    /// Save `settings` soon.
     pub fn save(&self, settings: &Settings) {
         self.latest.send_modify(|(revision, latest)| {
             *revision += 1;
@@ -58,22 +53,20 @@ impl Saver {
         });
     }
 
-    /// Save the newest settings now, unless they're saved already: Fettle is
-    /// about to quit, and the task would not get to them.
+    /// Flush synchronously on quit, before the background task loses its runtime.
     pub fn flush(&self) -> Result<()> {
         let latest = self.latest.borrow();
         self.store.write(latest.0, &latest.1)
     }
 }
 
-/// Where the settings go, and the revision and credentials last written there.
 struct Store {
     path: PathBuf,
     written: Mutex<(u64, Credentials)>,
 }
 
 impl Store {
-    /// Write revision `revision` of the settings, unless a later one is written already.
+    /// Ignore revisions already written by a newer background save or quit-time flush.
     fn write(&self, revision: u64, settings: &Settings) -> Result<()> {
         let mut written = self.written.lock().expect("settings store lock poisoned");
         if revision <= written.0 {
