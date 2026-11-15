@@ -429,6 +429,7 @@ fn api(s: &State, k: &Kit) -> [El; 2] {
             TextInput::new(&s.form.api_key)
                 .secure()
                 .label(t.api_key)
+                .description(t.api_key_placeholder)
                 .placeholder(t.api_key_placeholder)
                 .width(None)
                 .on_edit(|s: &mut State| &mut s.form.api_key)
