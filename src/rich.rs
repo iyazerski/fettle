@@ -1,8 +1,3 @@
-//! Keep the formatting of text pasted back over what it fixes: the rich
-//! formats the app copied (HTML, RTF, Slack's own) get the same edits as the
-//! plain text, so a changed word keeps the style and link of the word it
-//! replaces, and the rest stays as it was.
-
 use std::ops::Range;
 use std::time::Duration;
 
@@ -18,18 +13,12 @@ const RTF: &str = "public.rtf";
 const WEB_CUSTOM: &str = "org.chromium.web-custom-data";
 /// Slack's copy of its message box's text: a Quill delta.
 const TEXTY: &str = "slack/texty";
-/// A web page's plain text type among its own.
 const WEB_PLAIN: &str = "text/plain";
-/// HTML elements whose text doesn't show.
 const HIDDEN: [&str; 4] = ["head", "script", "style", "title"];
-/// How long lining up a rich text with the plain one may take before it
-/// settles for a coarser match, which leaves more edits out.
+/// Bound rich/plain alignment work; a coarser match may leave more edits out.
 const ALIGN_TIMEOUT: Duration = Duration::from_millis(200);
 
-/// Return what to paste for `new`, the text replacing `old`, which the app
-/// copied as `clip`: `new` as plain text, and each rich format of `clip`
-/// that takes the same edits. Other types are left out, as they hold the
-/// old text.
+/// Drop formats that can't take the same edits: they still hold the old text.
 pub fn replacement(clip: &Clip, old: &str, new: &str) -> Clip {
     let edits = diff::edits(&diff::words(old, new));
     let edit = |texts: &mut [String]| apply(texts, old, &edits);
@@ -48,9 +37,7 @@ pub fn replacement(clip: &Clip, old: &str, new: &str) -> Clip {
     out
 }
 
-/// Apply `edits` of `old` (see [`diff::edits`]) to `texts`, the pieces of a
-/// rich text that reads like `old`. Returns false, changing nothing, if an
-/// edit falls where the two read differently.
+/// Reject all edits if any falls outside text shared by the plain and rich copies.
 fn apply(texts: &mut [String], old: &str, edits: &[(Range<usize>, String)]) -> bool {
     let joined = texts.concat();
     let diff = TextDiff::configure()
@@ -81,9 +68,7 @@ fn apply(texts: &mut [String], old: &str, edits: &[(Range<usize>, String)]) -> b
     true
 }
 
-/// Replace `range` of the chars of `texts`, joined, with `text`, which goes
-/// in the piece holding the first char replaced or, for an insertion, the
-/// char before it, as typing there would.
+/// Replacement text inherits the first replaced character's style; insertions use the preceding one.
 fn splice(texts: &mut [String], range: Range<usize>, text: &str) {
     let owner_char = if range.is_empty() {
         range.start.checked_sub(1)
@@ -110,13 +95,10 @@ fn splice(texts: &mut [String], range: Range<usize>, text: &str) {
     }
 }
 
-/// Return the byte offset of char `n` of `text`, or its length past the end.
 fn byte(text: &str, n: usize) -> usize {
     text.char_indices().nth(n).map_or(text.len(), |(i, _)| i)
 }
 
-/// Edit the text between the tags of HTML `data` with `edit`, keeping the
-/// tags, and the text it doesn't change, as they are.
 fn html(data: &[u8], edit: impl FnOnce(&mut [String]) -> bool) -> Option<Vec<u8>> {
     let source = std::str::from_utf8(data).ok()?;
     let nodes = text_nodes(source);
@@ -143,8 +125,6 @@ fn html(data: &[u8], edit: impl FnOnce(&mut [String]) -> bool) -> Option<Vec<u8>
     Some(out.into_bytes())
 }
 
-/// Return where `html` has text between its tags that shows: not in
-/// comments or hidden elements.
 fn text_nodes(html: &str) -> Vec<Range<usize>> {
     let mut out = Vec::new();
     let mut hidden: Option<String> = None;
@@ -179,9 +159,6 @@ fn text_nodes(html: &str) -> Vec<Range<usize>> {
     out
 }
 
-/// Edit Slack's copy among the types a web page copied in Chrome, with
-/// `new` as their plain text. `None` if Slack's copy isn't among them; the
-/// page's other types are left out, as they hold the old text.
 fn web_custom(data: &[u8], new: &str, edit: impl FnOnce(&mut [String]) -> bool) -> Option<Vec<u8>> {
     let mut types = unpickle(data)?;
     let (_, texty) = types.iter_mut().find(|(kind, _)| kind == TEXTY)?;
@@ -197,8 +174,6 @@ fn web_custom(data: &[u8], new: &str, edit: impl FnOnce(&mut [String]) -> bool) 
     pickle(&types)
 }
 
-/// Edit the text of Quill delta `texty` with `edit`, keeping each insert's
-/// attributes. Embeds, like mentions and emoji, stay as they are.
 fn edit_texty(texty: &str, edit: impl FnOnce(&mut [String]) -> bool) -> Option<String> {
     let mut delta: Value = serde_json::from_str(texty).ok()?;
     let ops = delta.get_mut("ops")?.as_array_mut()?;
@@ -223,9 +198,8 @@ fn edit_texty(texty: &str, edit: impl FnOnce(&mut [String]) -> bool) -> Option<S
     Some(delta.to_string())
 }
 
-/// Read Chrome's pickled types: the payload's size and the number of types,
-/// then each type and its data as UTF-16 strings, every number a
-/// little-endian u32 and every string its length in units, padded to 4 bytes.
+/// Chrome pickle: payload size, type count, then UTF-16 key/value strings.
+/// Integers are little-endian u32; strings count code units and pad to 4-byte boundaries.
 fn unpickle(data: &[u8]) -> Option<Vec<(String, String)>> {
     let mut pickle = Unpickler { data, at: 4 };
     let count = pickle.number()?;
@@ -263,7 +237,6 @@ impl Unpickler<'_> {
     }
 }
 
-/// Pickle `types` as Chrome does (see [`unpickle`]).
 fn pickle(types: &[(String, String)]) -> Option<Vec<u8>> {
     let mut body = u32::try_from(types.len()).ok()?.to_le_bytes().to_vec();
     for text in types.iter().flat_map(|(kind, value)| [kind, value]) {
@@ -308,7 +281,6 @@ mod tests {
                     "<meta charset='utf-8'><p>This is a <b>bold word</b> and a <a href=\"x\">link</a> here.</p>",
                 ),
             ),
-            // An added comma joins the word before it.
             (
                 "<p>Fish &amp; <i>chips</i> and peas<!-- note --></p>",
                 "Fish & chips and peas",
@@ -321,7 +293,6 @@ mod tests {
                 "This is",
                 Some("<head><title>Ths</title></head><p>This is</p>"),
             ),
-            // Text the plain one doesn't have where the edit goes: left out.
             ("<p>Something else</p>", OLD, NEW, None),
         ];
         for (html, old, new, want) in cases {

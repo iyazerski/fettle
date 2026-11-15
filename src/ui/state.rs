@@ -1,8 +1,3 @@
-//! The window's state and what changes it on the main page: showing the
-//! selection, running an action, and moving the window. The text and answer
-//! are in [`draft`](super::draft), the settings page's part in
-//! [`settings_state`](super::settings_state).
-
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -29,15 +24,12 @@ use crate::rich;
 use crate::settings::{Credentials, Settings};
 use crate::underlines::Line;
 
-/// How far below the top of the screen the window opens.
 const TOP_MARGIN: f32 = 120.0;
-/// How long the window waits, hidden, before pasting, so the app the text
-/// came from has its key window back.
+/// Let the source app regain its key window before pasting.
 pub(super) const PASTE_DELAY: Duration = Duration::from_millis(120);
-/// How long a dropdown's list waits for the window to grow for it: a few frames.
+/// Allow a few frames for the window to grow before showing the list.
 const MENU_DELAY: Duration = Duration::from_millis(50);
-/// How long a closed dropdown's list takes to fade out: rune-kit's 0.25 s
-/// close spring, plus a little to settle.
+/// Rune-kit's 0.25 s close spring, plus time to settle.
 const MENU_FADE: Duration = Duration::from_millis(300);
 /// How far the window opened from an underline sits from its word, in points.
 const WORD_GAP: f64 = 6.0;
@@ -47,18 +39,13 @@ pub struct State {
     pub(super) client: Client,
     pub(super) settings: Settings,
     saver: Saver,
-    /// Whether Apple's on-device model can run, as last checked.
     pub(super) on_device: Availability,
     pub(super) page: Page,
     pub(super) draft: Draft,
     pub(super) dictation: Option<Dictation>,
-    /// Keep the window open when another app takes focus.
     pub(super) pinned: bool,
-    /// The language macOS prefers, of those the window speaks.
     system_locale: Locale,
-    /// The dropdown that's open.
     pub(super) menu: Option<Dropdown>,
-    /// Whether Fettle may copy and paste in other apps.
     pub(super) trusted: bool,
     /// Whether macOS's Accessibility prompt was asked for since launch.
     pub(super) asked_accessibility: bool,
@@ -69,23 +56,17 @@ pub struct State {
     /// over the first one's borrowed pasteboard.
     capturing: bool,
     placement: Placement,
-    /// The window's width in points: what the main page's actions take.
     pub(super) width: f32,
     checker: Checker,
     menu_bar: Option<MenuBar>,
-    /// Where the text came from, to put the answer back there.
     origin: Option<Origin>,
 }
 
-/// Where the window's text came from.
 enum Origin {
-    /// The shortcut copied it, to paste the answer over with its formatting.
     Selection(Copied),
-    /// A click on an underline opened its paragraph, to change in its field.
     Underline(Target),
 }
 
-/// An open dropdown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dropdown {
     pub(super) menu: Menu,
@@ -94,34 +75,26 @@ pub struct Dropdown {
     stage: Stage,
 }
 
-/// Where an open dropdown is between growing the window and giving the room back.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Stage {
-    /// The list waits a few frames for the window to grow, since a window that
-    /// fits its content doesn't lay out again when its height changes, and the
-    /// list would be cut to the old height.
+    /// Wait for the window to grow: content-fitting windows don't relayout on height changes.
     Growing,
     Shown,
-    /// The list fades out. The window keeps its room until it's gone, or the
-    /// fading list would flip above its trigger.
+    /// Keep the list's room during fade-out so it doesn't flip above its trigger.
     Closing,
 }
 
-/// Where the window is, and the drag moving it.
 #[derive(Default)]
 struct Placement {
     /// The window's top-left in physical pixels, once Fettle has placed it.
     position: Option<(i32, i32)>,
-    /// Where a drag of the window began.
     drag: Option<Drag>,
-    /// The word the window sits over until dragged, in points from the
-    /// primary screen's top-left: the underline it opened from.
+    /// Underlined word, in points from the primary screen's top-left; cleared on drag.
     over: Option<CGRect>,
     /// The window's width and height in points, as last laid out.
     size: (f32, f32),
 }
 
-/// The pointer and the window's top-left when a drag of the window began.
 #[derive(Clone, Copy)]
 struct Drag {
     pointer: (f64, f64),
@@ -129,8 +102,6 @@ struct Drag {
 }
 
 impl Placement {
-    /// Follow a drag's `phase` with the pointer at `pointer`, and return
-    /// where the window moves to, if it moves.
     fn drag(&mut self, phase: Phase, pointer: Option<(f64, f64)>) -> Option<(i32, i32)> {
         match phase {
             Phase::Down => {
@@ -157,10 +128,8 @@ impl Placement {
     }
 }
 
-/// How Fettle starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Start {
-    /// Show the settings.
     Shown,
     /// Stay hidden until the shortcut (how it runs at login).
     Hidden,
@@ -224,8 +193,6 @@ impl State {
         }
     }
 
-    /// Take the shortcut, and show the welcome steps on the first run, or the
-    /// settings if `start` says so.
     pub fn started(&mut self, start: Start) {
         self.apply_appearance();
         self.apply_labels();
@@ -250,8 +217,6 @@ impl State {
         mac::set_appearance(self.settings.appearance);
     }
 
-    /// Name the items of Rune's own menus, a text field's Cut, Copy and Paste,
-    /// in the window's language.
     pub(super) fn apply_labels(&self) {
         let t = self.t();
         rune::set_labels(move |label| match label {
@@ -265,8 +230,6 @@ impl State {
         }
     }
 
-    /// The shortcut: hide the window if it shows, else copy the selection
-    /// and show it.
     pub fn summon(&mut self) {
         if self.capturing {
             return;
@@ -287,15 +250,12 @@ impl State {
         }
         self.capturing = true;
         let app = self.app.clone();
-        // Copying waits for the other app, off the UI thread.
         self.client.rt().spawn_blocking(move || {
             let copied = mac::copy_selection();
             app.update(move |s, _| s.show_text(copied.map(Origin::Selection)));
         });
     }
 
-    /// The menu bar's Open Fettle: what the shortcut does, except that it
-    /// leaves a shown window open.
     pub fn open_from_menu_bar(&mut self) {
         if self.app.is_visible() {
             self.app.focus();
@@ -304,7 +264,6 @@ impl State {
         }
     }
 
-    /// Show the menu bar item if the settings say so, else take it away.
     pub(super) fn apply_menu_bar(&mut self) {
         if !self.settings.menu_bar {
             self.menu_bar = None;
@@ -313,7 +272,6 @@ impl State {
         }
     }
 
-    /// Underline mistakes in other apps if the settings say so, else stop.
     pub(super) fn apply_underlines(&mut self) {
         if self.settings.underline_mistakes {
             self.checker.start(&self.app);
@@ -322,23 +280,18 @@ impl State {
         }
     }
 
-    /// Underline `lines`, which checker `id` found.
     pub fn show_underlines(&mut self, id: u64, lines: Vec<Line>) {
         self.checker.show(id, lines);
     }
 
-    /// The model's `fix` of the field's paragraph `units`, asked as check `id`.
     pub fn field_checked(&mut self, id: u64, units: Vec<u16>, fix: Option<Fix>) {
         self.checker.finished(id, units, fix);
     }
 
-    /// The model or where it runs changed: fixes from the old one no longer count.
     pub(super) fn model_changed(&mut self) {
         self.checker.forget();
     }
 
-    /// Ask the model to fix a paragraph of the focused field, as the Fix
-    /// action does. Without a model to ask, the field's edits go unchecked.
     pub fn proofread(&mut self, check: Check) {
         let Check { id, units, text } = check;
         let Ok((backend, model)) = Backend::with_model(&self.settings) else {
@@ -370,15 +323,12 @@ impl State {
         self.checker.asking(id, request);
     }
 
-    /// A click at `point` in another app: on an underline, open its paragraph.
     pub fn underline_clicked(&mut self, point: (f64, f64)) {
         if !self.app.is_visible() && !self.capturing {
             self.checker.clicked(point);
         }
     }
 
-    /// Show the paragraph `target` opened from an underline, with the
-    /// model's `fix` of it, or fix it now if that's not known.
     pub fn underline_opened(&mut self, target: Target, fix: Option<Fix>) {
         if self.app.is_visible() || self.capturing {
             return;
@@ -397,8 +347,6 @@ impl State {
         }
     }
 
-    /// Show the text from `origin` on the main page: over the underlined word
-    /// it came from, else at the top of the screen.
     fn show_text(&mut self, origin: Option<Origin>) {
         // The origin keeps the text as it was, which the answer goes back over.
         let (text, word) = match &origin {
@@ -431,8 +379,6 @@ impl State {
         self.app.open();
     }
 
-    /// The window was laid out `size` points large: keep it as wide as
-    /// it should be, and over its word.
     pub fn laid_out(&mut self, size: (f32, f32), tx: &mut Tx) {
         self.placement.size = size;
         // Also here, so a width the window didn't take is asked for again.
@@ -450,14 +396,11 @@ impl State {
         }
     }
 
-    /// Make the window `width` points wide, as the main page's actions need
-    /// to fit on one line, or [`MIN_WIDTH`] if that's wider.
     pub fn fit_width(&mut self, width: f32, tx: &mut Tx) {
         self.width = width.ceil().max(MIN_WIDTH);
         self.resize(tx);
     }
 
-    /// Resize the window to `width`, unless it's that wide already.
     fn resize(&self, tx: &mut Tx) {
         if (self.width - self.placement.size.0).abs() > 0.5 {
             tx.resize_window_instant((self.width, self.placement.size.1));
@@ -473,9 +416,7 @@ impl State {
         self.app.hide();
     }
 
-    /// The window lost focus: hide it, unless it's pinned, shows the welcome
-    /// steps, which a new user can't open again without the shortcut, or macOS
-    /// is asking to allow dictation.
+    /// Stay open during onboarding, permission prompts, and shortcut recording.
     pub fn blurred(&mut self) {
         let onboarding = matches!(self.page, Page::Onboarding(_));
         let asking = matches!(self.dictation, Some(Dictation::Asking));
@@ -484,12 +425,10 @@ impl State {
         }
     }
 
-    /// Return the window's text in the language it speaks.
     pub fn t(&self) -> &'static Strings {
         self.locale().strings()
     }
 
-    /// Return the language the window speaks: the chosen one, or macOS's.
     pub fn locale(&self) -> Locale {
         self.settings.app_language.unwrap_or(self.system_locale)
     }
@@ -506,15 +445,13 @@ impl State {
         self.draft.source.replace_text(String::new());
     }
 
-    /// Move the window with the pointer. The panel is outside winit's reach, so
-    /// `.window_drag()` can't move it.
+    /// The panel is outside winit's reach, so `.window_drag()` can't move it.
     pub fn drag(&mut self, phase: Phase) {
         if let Some(at) = self.placement.drag(phase, mac::pointer()) {
             self.app.set_position(at);
         }
     }
 
-    /// Close the open dropdown, and give its room back once its list faded out.
     pub fn close_menu(&mut self) {
         let Some(open) = &mut self.menu else {
             return;
@@ -565,24 +502,20 @@ impl State {
         });
     }
 
-    /// Whether `menu` is the dropdown that's open.
     pub fn menu_is(&self, menu: Menu) -> bool {
         self.menu
             .is_some_and(|open| open.menu == menu && open.stage != Stage::Closing)
     }
 
-    /// Whether any dropdown is open.
     pub fn any_menu(&self) -> bool {
         self.menu.is_some_and(|open| open.stage != Stage::Closing)
     }
 
-    /// Whether `menu`'s list shows.
     pub fn menu_open(&self, menu: Menu) -> bool {
         self.menu
             .is_some_and(|open| open.menu == menu && open.stage == Stage::Shown)
     }
 
-    /// Run `action` on the text in the window.
     pub fn start(&mut self, action: Action) {
         self.close_menu();
         let t = self.t();
@@ -633,8 +566,7 @@ impl State {
         self.draft.running(action, run, job);
     }
 
-    /// End run `run` with `status`. A fix of a clicked paragraph also counts
-    /// as its check, so the paragraph isn't sent to the model again.
+    /// Cache a clicked paragraph's fix so the checker doesn't send it again.
     fn run_finished(&mut self, run: u64, status: Status) {
         self.draft.finished(run, status);
         if let Some(Origin::Underline(target)) = &self.origin
@@ -652,13 +584,10 @@ impl State {
         }
     }
 
-    /// Stop the running answer, if any.
     pub fn stop(&mut self) {
         self.draft.cancel();
     }
 
-    /// Hide the window and paste the answer over the selection, or over the
-    /// paragraph an underline opened once it's found again.
     pub fn replace(&mut self) {
         if self.draft.result().is_none() {
             return;
@@ -670,9 +599,6 @@ impl State {
         }
     }
 
-    /// Hide the window and have the checker change the paragraph the answer
-    /// came from into it, once the checker found the paragraph still there,
-    /// or say the text moved if it didn't.
     pub fn target_located(&mut self, opened: Ticket, found: bool) {
         let current = matches!(&self.origin, Some(Origin::Underline(t)) if t.opened == opened);
         if !current || !self.app.is_visible() {
@@ -692,8 +618,6 @@ impl State {
         self.checker.replace(text);
     }
 
-    /// Hide the window and paste the answer into the app in front, with the
-    /// formatting of the selection it replaces.
     fn paste(&mut self) {
         let Some(text) = self.draft.result().map(str::to_owned) else {
             return;
@@ -713,7 +637,6 @@ impl State {
         });
     }
 
-    /// Undo change `n` of the fix shown.
     pub fn decline(&mut self, n: usize) {
         self.draft.decline(n);
     }
@@ -735,7 +658,6 @@ impl State {
         }
     }
 
-    /// Make `style` Rewrite's style and rewrite the text in it.
     pub fn set_style(&mut self, style: Style) {
         self.settings.rewrite_style = style;
         self.save();
@@ -755,8 +677,7 @@ impl State {
         self.report(fill(self.t().save_failed, format_args!("{error:#}")));
     }
 
-    /// Fettle is quitting: save what's unsaved now, as the saving task won't
-    /// get to it, and stop underlining, so other apps get back what it changed.
+    /// Flush before the runtime stops, and undo Accessibility changes before exit.
     pub fn quitting(&mut self) {
         if let Err(e) = self.saver.flush() {
             eprintln!("saving the settings: {e:#}");
@@ -764,7 +685,6 @@ impl State {
         self.checker.quit();
     }
 
-    /// Show `message` on the page that's open.
     pub(super) fn report(&mut self, message: String) {
         match self.page {
             Page::Main | Page::Onboarding(_) => self.draft.notice = Some(message),

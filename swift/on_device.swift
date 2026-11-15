@@ -1,5 +1,3 @@
-// A C interface to Apple's on-device model (Foundation Models), which has only
-// a Swift API. build.rs compiles this into a static library that Rust links.
 
 import Foundation
 import FoundationModels
@@ -23,7 +21,6 @@ private let tooLong: Int32 = 2
 private let language: Int32 = 3
 private let blocked: Int32 = 4
 
-/// Whether the model can run now, as one of the status codes above.
 @_cdecl("fettle_on_device_status")
 public func status() -> Int32 {
     guard #available(macOS 26, *) else { return oldMacOS }
@@ -35,12 +32,11 @@ public func status() -> Int32 {
     }
 }
 
-/// A running answer, so Rust can cancel it.
 final class Job {
     var task: Task<Void, Never>?
 }
 
-/// The pointers Rust passed in. Rust keeps `context` alive until `onDone`.
+/// Rust keeps `context` alive until `onDone`.
 struct Callbacks: @unchecked Sendable {
     let context: UnsafeMutableRawPointer?
     let onChunk: OnChunk
@@ -51,8 +47,7 @@ struct Callbacks: @unchecked Sendable {
     }
 }
 
-/// Stream the answer to `prompt` under `instructions`. Returns a job that
-/// `fettle_on_device_end` must release; `onDone` runs exactly once.
+/// Rust must release the returned job with `fettle_on_device_end`; `onDone` runs exactly once.
 @_cdecl("fettle_on_device_stream")
 public func stream(
     _ instructions: UnsafePointer<CChar>,
@@ -73,7 +68,6 @@ public func stream(
     return Unmanaged.passRetained(job).toOpaque()
 }
 
-/// Cancel the job if it still runs, and release it.
 @_cdecl("fettle_on_device_end")
 public func end(_ job: UnsafeMutableRawPointer) {
     Unmanaged<Job>.fromOpaque(job).takeRetainedValue().task?.cancel()

@@ -1,6 +1,3 @@
-//! Compile the Swift bridge to Apple's on-device model (`swift/on_device.swift`)
-//! into a static library, and link it with the Swift runtime macOS ships.
-
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -38,7 +35,6 @@ fn main() {
     println!("cargo:rustc-link-arg=-Wl,-weak_framework,FoundationModels");
 }
 
-/// Run `command`, failing the build if it fails, and return its trimmed output.
 fn run(command: &mut Command) -> String {
     let output = command
         .output()

@@ -1,7 +1,3 @@
-//! A ChatGPT plan as the model: the browser sign-in Codex uses (OAuth with
-//! PKCE and a callback on localhost:1455), token refresh, and the Codex
-//! Responses endpoint.
-
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, anyhow, bail};
@@ -24,15 +20,10 @@ const TOKEN_URL: &str = "https://auth.openai.com/oauth/token";
 const REDIRECT_URI: &str = "http://localhost:1455/auth/callback";
 const SCOPE: &str = "openid profile email offline_access";
 const CODEX_URL: &str = "https://chatgpt.com/backend-api/codex";
-/// The JWT claim with the ChatGPT account.
 const AUTH_CLAIM: &str = "https://api.openai.com/auth";
-/// Refresh this long before the access token expires.
 const REFRESH_EARLY: i64 = 300;
-/// How long the browser sign-in may take.
 const LOGIN_TIMEOUT: Duration = Duration::from_secs(300);
 
-/// Sign in through the browser: listen for the callback, have `open` show
-/// the sign-in page, and trade the code it returns for tokens.
 pub async fn login(http: &reqwest::Client, open: impl FnOnce(&str)) -> Result<ChatGptAuth> {
     let verifier = random_token(32)?;
     let challenge = URL_SAFE_NO_PAD.encode(ring::digest::digest(
@@ -74,13 +65,11 @@ pub async fn login(http: &reqwest::Client, open: impl FnOnce(&str)) -> Result<Ch
     tokens.into_auth(None)
 }
 
-/// Whether `auth`'s access token expires soon enough to refresh it first.
 pub fn expiring(auth: &ChatGptAuth) -> bool {
     auth.expires_at - now() <= REFRESH_EARLY
 }
 
-/// Trade `auth`'s refresh token for new tokens. The old refresh token stops
-/// working, so refresh one sign-in only once.
+/// Refresh tokens are single-use; serialize refreshes of the same sign-in.
 pub async fn refresh(http: &reqwest::Client, auth: &ChatGptAuth) -> Result<ChatGptAuth> {
     let tokens = token(
         http,
@@ -95,7 +84,6 @@ pub async fn refresh(http: &reqwest::Client, auth: &ChatGptAuth) -> Result<ChatG
     tokens.into_auth(Some(auth))
 }
 
-/// Stream the answer to `ask` with reasoning `effort`, or the model's default for `None`.
 pub async fn stream(
     http: &reqwest::Client,
     auth: &ChatGptAuth,
@@ -155,7 +143,6 @@ pub async fn stream(
     .await
 }
 
-/// The models the plan offers.
 pub async fn models(http: &reqwest::Client, auth: &ChatGptAuth) -> Result<Vec<String>> {
     #[derive(Deserialize)]
     struct List {
@@ -182,7 +169,6 @@ pub async fn models(http: &reqwest::Client, auth: &ChatGptAuth) -> Result<Vec<St
         .collect())
 }
 
-/// The message of a `response.failed` or `error` event.
 fn failure(event: &Value) -> String {
     let message = event
         .pointer("/response/error/message")
@@ -200,7 +186,7 @@ struct Tokens {
 }
 
 impl Tokens {
-    /// The sign-in these tokens make, keeping what a refresh leaves out from `old`.
+    /// Refresh responses can omit unchanged fields; retain those from the old sign-in.
     fn into_auth(self, old: Option<&ChatGptAuth>) -> Result<ChatGptAuth> {
         let account_id = claims(&self.access_token)
             .and_then(|c| {
@@ -235,8 +221,7 @@ async fn token(http: &reqwest::Client, form: &[(&str, &str)]) -> Result<Tokens> 
     Ok(check(response).await?.json().await?)
 }
 
-/// Serve the browser until it brings the sign-in back, and return its code.
-/// Each connection is read on its own: browsers open idle ones ahead of use.
+/// Read connections independently: browsers open idle ones before sending the callback.
 async fn callback(listener: &TcpListener, state: &str) -> Result<String> {
     let mut heads = JoinSet::new();
     loop {
@@ -266,7 +251,6 @@ async fn callback(listener: &TcpListener, state: &str) -> Result<String> {
 const NOT_FOUND: &[u8] =
     b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
 
-/// Read a request's head from `socket`, and return the socket with the request's target.
 async fn read_head(mut socket: TcpStream) -> std::io::Result<(TcpStream, String)> {
     let mut head = Vec::new();
     let mut buf = [0u8; 2048];
@@ -282,7 +266,6 @@ async fn read_head(mut socket: TcpStream) -> std::io::Result<(TcpStream, String)
     Ok((socket, target))
 }
 
-/// Answer the browser's sign-in callback at `url` with a page, and return its code.
 async fn finish_sign_in(mut socket: TcpStream, url: &url::Url, state: &str) -> Result<String> {
     let param = |name: &str| {
         url.query_pairs()

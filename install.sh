@@ -1,5 +1,4 @@
 #!/usr/bin/env sh
-# Install or update Fettle.app from the latest release, and start it.
 # Set FETTLE_VERSION=vX.Y.Z to pin a release.
 set -eu
 
@@ -32,15 +31,13 @@ if ! codesign --verify --strict -R "$signer" "$install_tmp/Fettle.app"; then
   exit 1
 fi
 
-# /Applications when it's writable without sudo, else ~/Applications.
 apps="/Applications"
 if [ ! -w "$apps" ]; then
   apps="$HOME/Applications"
   mkdir -p "$apps"
 fi
 
-# An ad-hoc signature changes with every build, so its Accessibility grant
-# can't carry over to the new app. Releases now keep one signature.
+# Ad-hoc signatures change across builds, invalidating the old Accessibility grant.
 adhoc=false
 if codesign -dv "$apps/Fettle.app" 2>&1 | grep -q 'Signature=adhoc'; then
   adhoc=true

@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
-# Make the self-signed "Fettle Dev" signing identity on first use, unlock its
-# keychain, and print the keychain's path. `make dev` signs every Fettle Dev
-# build with it: one stable identity lets macOS keep the Accessibility grant
-# across rebuilds, which an ad-hoc signature can't.
-#
-# The identity lives in its own keychain, out of the search list, so nothing
-# else sees it. That keychain's random password is in the login keychain.
+# A stable signing identity preserves Accessibility across debug rebuilds.
+# Keep it out of the keychain search list; store its password in the login keychain.
 set -euo pipefail
 
 identity="Fettle Dev"

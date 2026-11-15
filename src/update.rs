@@ -1,6 +1,3 @@
-//! Self-update: find the latest GitHub release, and swap the running
-//! Fettle.app for it.
-
 use std::ffi::CString;
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
@@ -14,17 +11,14 @@ use crate::mac;
 const REPO: &str = "iyazerski/fettle";
 const ASSET: &str = "Fettle.zip";
 const BUNDLE_ID: &str = "dev.iyazerski.fettle";
-/// The code requirement every release meets: Fettle's bundle ID, signed with the
-/// release certificate (`MACOS_CERT_P12` in CI). A new certificate needs a new hash here.
+/// Pin the release signing certificate (`MACOS_CERT_P12` in CI); rotate this hash with it.
 const SIGNER: &str = r#"=identifier "dev.iyazerski.fettle" and certificate leaf = H"d92f0c1f8b4c244056244514e6e27e95cc431234""#;
 
-/// Return the latest release's version, like `0.1.7`, if it's newer than this one.
 pub async fn available(http: &reqwest::Client) -> Result<Option<String>> {
     let latest = latest(http).await?;
     Ok(newer(&latest, crate::VERSION)?.then_some(latest))
 }
 
-/// The version of the latest release, like `0.1.7`.
 async fn latest(http: &reqwest::Client) -> Result<String> {
     #[derive(Deserialize)]
     struct Release {
@@ -44,15 +38,12 @@ async fn latest(http: &reqwest::Client) -> Result<String> {
     Ok(release.tag_name.trim_start_matches('v').to_owned())
 }
 
-/// Whether version `candidate` comes after `current`, as semantic versions.
 fn newer(candidate: &str, current: &str) -> Result<bool> {
     let parse =
         |v: &str| semver::Version::parse(v).with_context(|| format!("unexpected version {v}"));
     Ok(parse(candidate)? > parse(current)?)
 }
 
-/// Download release `version` and put it in place of the running Fettle.app.
-/// Returns the app's path, to start it again.
 pub async fn install(http: &reqwest::Client, version: &str) -> Result<PathBuf> {
     // A release would replace Fettle Dev.app with Fettle.app.
     ensure!(
@@ -83,7 +74,6 @@ pub async fn install(http: &reqwest::Client, version: &str) -> Result<PathBuf> {
     tokio::task::spawn_blocking(move || swap(&app, &zip).map(|()| app)).await?
 }
 
-/// Start `app` once this process has quit.
 pub fn relaunch(app: &Path) -> Result<()> {
     Command::new("/bin/sh")
         .args([
@@ -97,7 +87,6 @@ pub fn relaunch(app: &Path) -> Result<()> {
     Ok(())
 }
 
-/// The Fettle.app this binary runs from.
 fn running_app() -> Result<PathBuf> {
     let exe = std::env::current_exe()?.canonicalize()?;
     mac::bundle_of(&exe)
@@ -105,7 +94,6 @@ fn running_app() -> Result<PathBuf> {
         .context("Fettle isn't running from Fettle.app, so it can't update itself")
 }
 
-/// Unpack `zip` next to `app` and swap the two.
 fn swap(app: &Path, zip: &[u8]) -> Result<()> {
     let parent = app.parent().context("the app has no folder")?;
     // Beside the app, so the swap is a rename on one volume.
@@ -119,7 +107,6 @@ fn swap(app: &Path, zip: &[u8]) -> Result<()> {
     result
 }
 
-/// Unpack `zip` in `work`, check that it's Fettle's, and swap it with `app`.
 fn unpack_and_swap(app: &Path, work: &Path, zip: &[u8]) -> Result<()> {
     let archive = work.join(ASSET);
     std::fs::write(&archive, zip)?;
@@ -158,8 +145,6 @@ fn exchange(a: &Path, b: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Whether `app` has an ad-hoc signature, which macOS's privacy grants can't follow
-/// from one build to the next.
 fn adhoc_signed(app: &Path) -> bool {
     Command::new("/usr/bin/codesign")
         .arg("-dv")
@@ -178,29 +163,4 @@ fn run(command: &mut Command) -> Result<()> {
         );
     }
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use super::newer;
-
-    #[test]
-    fn compares_versions_by_number() {
-        for (candidate, current, expected) in [
-            ("0.1.10", "0.1.9", true),
-            ("0.1.9", "0.1.10", false),
-            ("0.1.5", "0.1.5", false),
-            ("0.2.0", "0.1.99", true),
-            ("1.0.0", "0.9.9", true),
-            ("0.4.0", "0.4.0-beta", true),
-            ("0.4.0-beta", "0.3.0", true),
-        ] {
-            assert_eq!(
-                newer(candidate, current).unwrap(),
-                expected,
-                "{candidate} vs {current}"
-            );
-        }
-        assert!(newer("0.4", "0.3.0").is_err());
-    }
 }

@@ -1,22 +1,14 @@
-//! Capsule buttons: a solid accent one for the main action and a quiet one
-//! for the rest.
-
 use rune::{Color, El, Icon, Shadow, icon, row, text};
 use rune_kit::{Button, ButtonVariant, ControlSize, Kit};
 
-/// The capsule's height, as a large push button's, and so its corner radius.
 const HEIGHT: f32 = 28.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tone {
-    /// The accent fill, as a switch that is on: the main action.
     Primary,
-    /// A quiet fill with a hairline edge: the other actions.
     Secondary,
 }
 
-/// A capsule button labelled `label`, with `glyph` before it. `configure` adds
-/// the press, shortcut and help.
 pub fn button(
     k: &Kit,
     tone: Tone,
@@ -42,7 +34,6 @@ pub fn button(
     surface(k, tone, configure(button).build(k).px(14.0)).press_scale(0.98)
 }
 
-/// Paint `e` as a capsule in `tone`; it highlights as one while hovered.
 pub fn surface(k: &Kit, tone: Tone, e: El) -> El {
     let c = &k.c;
     let shadow = |alpha: f32| Shadow {

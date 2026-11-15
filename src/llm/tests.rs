@@ -3,7 +3,6 @@ use tokio::net::TcpListener;
 
 use super::*;
 
-/// Serve one request with `status` and `body`, and hand back the request.
 async fn serve_once(
     status: &str,
     content_type: &str,
@@ -12,8 +11,6 @@ async fn serve_once(
     serve(&[(status, content_type, body)]).await
 }
 
-/// Serve a request for each of `replies`, `(status, content type, body)`,
-/// in turn, and hand back the requests.
 async fn serve(replies: &[(&str, &str, &str)]) -> (String, tokio::task::JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}/v1", listener.local_addr().unwrap());
@@ -36,7 +33,6 @@ async fn serve(replies: &[(&str, &str, &str)]) -> (String, tokio::task::JoinHand
     (base, task)
 }
 
-/// Answer the next request on `listener` with `reply`, and return the request.
 async fn answer_one(listener: &TcpListener, reply: &str) -> String {
     let (mut socket, _) = listener.accept().await.unwrap();
     let mut request = Vec::new();
@@ -73,37 +69,52 @@ fn ask(effort: Effort) -> Ask {
 }
 
 #[tokio::test]
-async fn api_streams_the_answer() {
-    let events = concat!(
+async fn api_streams_only_complete_answers() {
+    let deltas = concat!(
         "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n\n",
         "data: {\"choices\":[{\"delta\":{\"content\":\"the \"}}]}\n\n",
         "data: {\"choices\":[{\"delta\":{\"content\":\"text\"}}]}\n\n",
-        "data: [DONE]\n\n",
     );
-    let (base, request) = serve_once("200 OK", "text/event-stream", events).await;
-    let backend = Backend::Api {
-        base,
-        key: "sk-1".into(),
-    };
-    let mut answer = String::new();
-    backend
-        .stream(&http().unwrap(), &ask(Effort::Low), |d| answer.push_str(d))
-        .await
-        .unwrap();
-    assert_eq!(answer, "the text");
+    let cases = [
+        ("data: [DONE]\n\n", Ok(())),
+        (
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
+            Ok(()),
+        ),
+        (
+            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n",
+            Err("the answer was cut off (length)"),
+        ),
+        ("", Err("the answer stopped early")),
+    ];
+    for (end, want) in cases {
+        let events = format!("{deltas}{end}");
+        let (base, request) = serve_once("200 OK", "text/event-stream", &events).await;
+        let backend = Backend::Api {
+            base,
+            key: "sk-1".into(),
+        };
+        let mut answer = String::new();
+        let got = backend
+            .stream(&http().unwrap(), &ask(Effort::Low), |d| answer.push_str(d))
+            .await
+            .map_err(|e| e.to_string());
+        assert_eq!(got, want.map_err(str::to_owned), "ending {end:?}");
+        assert_eq!(answer, "the text");
 
-    let request = request.await.unwrap().remove(0);
-    assert!(request.starts_with("POST /v1/chat/completions "));
-    assert!(
-        request
-            .to_ascii_lowercase()
-            .contains("authorization: bearer sk-1")
-    );
-    let body: Value = serde_json::from_str(request.split_once("\r\n\r\n").unwrap().1).unwrap();
-    assert_eq!(body["model"], "m1");
-    assert_eq!(body["reasoning_effort"], "low");
-    assert_eq!(body["messages"][0]["content"], "Fix it.");
-    assert_eq!(body["messages"][1]["content"], "teh text");
+        let request = request.await.unwrap().remove(0);
+        assert!(request.starts_with("POST /v1/chat/completions "));
+        assert!(
+            request
+                .to_ascii_lowercase()
+                .contains("authorization: bearer sk-1")
+        );
+        let body: Value = serde_json::from_str(request.split_once("\r\n\r\n").unwrap().1).unwrap();
+        assert_eq!(body["model"], "m1");
+        assert_eq!(body["reasoning_effort"], "low");
+        assert_eq!(body["messages"][0]["content"], "Fix it.");
+        assert_eq!(body["messages"][1]["content"], "teh text");
+    }
 }
 
 #[tokio::test]
@@ -187,36 +198,6 @@ async fn api_lists_models_sorted() {
         backend.models(&http().unwrap()).await.unwrap(),
         ["alpha", "zeta"]
     );
-}
-
-#[tokio::test]
-async fn api_answers_count_only_when_the_stream_says_they_are_done() {
-    let delta = "data: {\"choices\":[{\"delta\":{\"content\":\"the text\"}}]}\n\n";
-    let cases = [
-        ("data: [DONE]\n\n", Ok(())),
-        (
-            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n",
-            Ok(()),
-        ),
-        (
-            "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}]}\n\n",
-            Err("the answer was cut off (length)"),
-        ),
-        ("", Err("the answer stopped early")),
-    ];
-    for (end, want) in cases {
-        let events = format!("{delta}{end}");
-        let (base, _request) = serve_once("200 OK", "text/event-stream", &events).await;
-        let backend = Backend::Api {
-            base,
-            key: String::new(),
-        };
-        let got = backend
-            .stream(&http().unwrap(), &ask(Effort::None), |_| {})
-            .await
-            .map_err(|e| e.to_string());
-        assert_eq!(got, want.map_err(str::to_owned), "ending {end:?}");
-    }
 }
 
 #[test]

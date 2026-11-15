@@ -1,7 +1,3 @@
-//! The settings page's own state, and what the page changes: where the model
-//! runs, which model, the look, the shortcut, the login item, the permission,
-//! and updates.
-
 use rune::{Shortcut, ShortcutError, TextEdit, Tx};
 use rune_kit::ShortcutRecorderState;
 
@@ -12,10 +8,8 @@ use crate::llm::{Backend, chatgpt, on_device};
 use crate::settings::{Appearance, ChatGptAuth, Provider, Settings};
 use crate::{login_item, mac, update};
 
-/// System Settings' Apple Intelligence & Siri pane.
 const APPLE_INTELLIGENCE_URL: &str = "x-apple.systempreferences:com.apple.Siri-Settings.extension";
 
-/// The settings page's own state.
 pub struct Form {
     pub api_base: TextEdit,
     pub api_key: TextEdit,
@@ -23,7 +17,6 @@ pub struct Form {
     pub models: Models,
     pub login: Login,
     pub at_login: bool,
-    /// A problem to show at the top of the page.
     pub error: Option<FormError>,
 }
 
@@ -38,7 +31,6 @@ pub enum FormError {
 }
 
 impl FormError {
-    /// Return the problem as the page shows it, in the language of `t`.
     pub fn message<'a>(&'a self, t: &'static Strings) -> &'a str {
         match self {
             FormError::Accessibility => t.accessibility_needed,
@@ -63,8 +55,6 @@ pub enum Login {
     Failed(String),
 }
 
-/// Where checking for a new version stands. Each step leads only to the
-/// next: a check from `Idle`, `Latest` or `Failed`, an install from `Available`.
 pub enum Update {
     Idle,
     Checking,
@@ -133,8 +123,6 @@ impl State {
         self.save();
     }
 
-    /// Show the window in the language the picker lists as `name`, or follow
-    /// macOS for any other choice.
     pub fn pick_app_language(&mut self, name: &str) {
         self.close_menu();
         self.settings.app_language = Locale::ALL.into_iter().find(|l| l.native_name() == name);
@@ -142,7 +130,6 @@ impl State {
         self.save();
     }
 
-    /// Copy the API fields from the form into the settings.
     pub fn api_edited(&mut self) {
         let base = self.form.api_base.text.trim();
         if self.settings.api_base != base {
@@ -154,7 +141,6 @@ impl State {
         self.save();
     }
 
-    /// Open or close the model list, loading it first if needed.
     pub fn toggle_models(&mut self) {
         let opening = !self.menu_is(Menu::Model);
         self.toggle_menu(Menu::Model);
@@ -174,7 +160,6 @@ impl State {
         }
     }
 
-    /// Load the provider's models, if it has models to pick and can list them.
     pub fn load_models(&mut self) {
         if self.settings.model().is_none() {
             return;
@@ -191,8 +176,6 @@ impl State {
         }));
     }
 
-    /// Show the model list load `ticket` returned, unless a newer load or
-    /// list replaced it.
     fn models_loaded(&mut self, ticket: Ticket, result: anyhow::Result<Vec<String>>) {
         if !matches!(&self.form.models, Models::Loading(load) if load.answers(ticket)) {
             return;
@@ -223,13 +206,10 @@ impl State {
             client.app().update(move |s, _| s.signed_in(ticket, result));
         });
         self.form.login = Login::Waiting(waiting);
-        // The window floats above every app, so it would cover the browser's sign-in
-        // page. It comes back with the result.
+        // Hide the floating window so it doesn't cover the browser's sign-in page.
         self.hide();
     }
 
-    /// Take the result of sign-in `ticket`, unless it was cancelled or
-    /// started again.
     fn signed_in(&mut self, ticket: Ticket, result: Result<ChatGptAuth, String>) {
         if !matches!(&self.form.login, Login::Waiting(waiting) if waiting.answers(ticket)) {
             return;
@@ -243,7 +223,6 @@ impl State {
             }
             Err(e) => self.form.login = Login::Failed(e),
         }
-        // Back to where the sign-in started: the welcome steps or the settings.
         if matches!(self.page, Page::Onboarding(_)) {
             self.show();
         } else {
@@ -262,8 +241,7 @@ impl State {
         self.save();
     }
 
-    /// Keep `auth`, refreshed from the sign-in with refresh token `old_refresh`,
-    /// unless that sign-in has since been signed out or replaced.
+    /// Discard a refresh if the user has signed out or replaced the sign-in since it began.
     pub(super) fn saved_auth(&mut self, old_refresh: &str, auth: ChatGptAuth) {
         if self
             .settings
@@ -302,9 +280,7 @@ impl State {
         }
     }
 
-    /// Ask macOS for Accessibility: its own prompt the first time, which lists
-    /// Fettle in System Settings, then System Settings itself, since macOS
-    /// prompts only once per launch.
+    /// macOS prompts once per launch; later requests must open System Settings.
     pub fn ask_accessibility(&mut self) {
         if self.asked_accessibility {
             self.recheck_accessibility();
@@ -325,13 +301,10 @@ impl State {
         self.on_device = on_device::availability();
     }
 
-    /// Open Apple Intelligence & Siri in System Settings.
     pub fn open_apple_intelligence(&mut self) {
         mac::open_url(APPLE_INTELLIGENCE_URL);
     }
 
-    /// Record whether macOS lets Fettle press keys, and drop the request to
-    /// allow it once it does.
     pub(super) fn set_trusted(&mut self, trusted: bool) {
         self.trusted = trusted;
         if trusted && matches!(self.form.error, Some(FormError::Accessibility)) {
@@ -354,11 +327,9 @@ impl State {
         }
     }
 
-    /// Move the global shortcut to `shortcut`: take the new one before
-    /// letting go of the old, so a refused chord keeps the old working.
+    /// Register the new shortcut first so a refused chord leaves the old one working.
     pub fn change_shortcut(&mut self, shortcut: Option<&Shortcut>) -> Result<(), ShortcutError> {
         let Some(shortcut) = shortcut else {
-            // Without a shortcut Fettle can't be reached at all.
             return Err(ShortcutError::InvalidAccelerator("empty".into()));
         };
         let old = self.shortcut.take();
@@ -390,7 +361,6 @@ impl State {
         }
     }
 
-    /// Look for a new version, unless a check or an install is under way.
     pub fn check_update(&mut self) {
         if matches!(self.update, Update::Checking | Update::Installing(_)) {
             return;
@@ -412,7 +382,6 @@ impl State {
         });
     }
 
-    /// Download the new version, put it in place, and restart into it.
     pub fn install_update(&mut self) {
         let Update::Available(version) = &mut self.update else {
             return;

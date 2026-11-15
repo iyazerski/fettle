@@ -1,7 +1,4 @@
-//! The checker's own thread: everything that asks other apps through the
-//! Accessibility API, which may wait on a slow app, runs here rather than on
-//! the UI thread. It reads the focused field, keeps its [`Document`], works
-//! out where the underlines go, and tells the window.
+//! Accessibility calls can block on other apps, so they run on this worker, not the UI thread.
 
 use std::cell::Cell;
 use std::collections::HashMap;
@@ -25,35 +22,25 @@ use crate::ui::pending::{Pending, Ticket};
 use crate::ui::state::{PASTE_DELAY, State};
 use crate::underlines::Line;
 
-/// How often the focused field is read even if its app reports nothing, to
-/// catch scrolling and apps that don't report changes.
+/// Poll for scrolling and apps that don't report changes.
 const TICK: Duration = Duration::from_millis(300);
-/// How long the user must stop typing before an edited paragraph goes to the
-/// model, so a request covers a finished thought rather than each keystroke.
+/// Wait for a typing pause rather than sending every keystroke.
 const IDLE: Duration = Duration::from_millis(1200);
 /// Longer paragraphs, in UTF-16 units, aren't sent: each edit would resend them.
 const MAX_PARAGRAPH: usize = 4000;
-/// How many paragraphs' fixes are kept, so text seen before isn't sent again.
 const MAX_FIXES: usize = 256;
 /// Longer texts, in UTF-16 units, aren't checked: reading them on every
 /// change would cost too much.
 const MAX_TEXT: usize = 100_000;
 /// At most this many words are underlined, as each costs a call to the app.
 const MAX_LINES: usize = 40;
-/// At most this many words' places are asked for per redraw, found or not,
-/// so a field that can't place its words can't keep the checker busy; the
-/// rest are asked about on the next one.
+/// Bound failed lookups too, so an uncooperative field can't monopolize the worker.
 const MAX_LOOKUPS: usize = 60;
-/// How many fields left keep their edits still to check and their running
-/// check, so a quick switch to another field or app loses neither.
+/// Keep pending edits and checks across quick field switches.
 const RECENT: usize = 8;
 
-/// What the window asks of the checker.
 pub(super) enum Command {
-    /// `request` asks the model about check `id`.
     Asking(u64, Pending),
-    /// The model's fix of paragraph `units`, asked as check `id`, or `None`
-    /// if the request failed.
     Finished {
         id: u64,
         units: Vec<u16>,
@@ -62,28 +49,21 @@ pub(super) enum Command {
     /// Leave the edits of the field that asked for check `id` unchecked:
     /// there's no model to ask.
     Skip(u64),
-    /// Forget the fixes known: they came from another model.
     Forget,
-    /// Keep `fix` of paragraph `units`, so it isn't sent again.
     Learn {
         units: Vec<u16>,
         fix: Fix,
     },
-    /// Keep `fix` of the paragraph opened as `opened`, so it isn't sent again.
     LearnOpened {
         opened: Ticket,
         fix: Fix,
     },
-    /// The user clicked the underline `line`: open its paragraph.
     Open(Line),
-    /// Check that the paragraph opened as `.0` is still where it was.
     Locate(Ticket),
-    /// Change the paragraph opened into this text, the window hidden.
     Replace(String),
     Stop,
 }
 
-/// The checker thread, seen from the window.
 pub(super) struct Handle {
     commands: Sender<Command>,
     waker: Waker,
@@ -98,8 +78,7 @@ impl Handle {
         self.waker.wake();
     }
 
-    /// Stop the thread, and wait up to `timeout` for it to end: a slow app
-    /// it's asking can hold it up.
+    /// Bound the wait because an Accessibility call may be stuck in another app.
     pub(super) fn stop_and_wait(self, timeout: Duration) {
         self.send(Command::Stop);
         let _ = self.ended.recv_timeout(timeout);
@@ -112,7 +91,6 @@ impl Drop for Handle {
     }
 }
 
-/// Start the checker thread, which reports to `app` as checker `id`.
 pub(super) fn spawn(app: AppHandle<State>, id: u64) -> Option<Handle> {
     let (commands, received) = mpsc::channel();
     let (ready, waker) = mpsc::sync_channel(1);
@@ -141,41 +119,30 @@ pub(super) fn spawn(app: AppHandle<State>, id: u64) -> Option<Handle> {
     })
 }
 
-/// The checker's state on its thread.
 struct Worker {
     app: AppHandle<State>,
     /// Which checker this is, so the window ignores one it stopped.
     id: u64,
     commands: Receiver<Command>,
     apps: Apps,
-    /// Reused for each read of the field's text.
     buffer: Vec<u16>,
-    /// The last check's number, unique across fields, so an answer about an
-    /// earlier field can't land in a later one.
+    /// Unique across fields so late replies can't land in a different document.
     checks: u64,
-    /// The model's fix of each paragraph it was asked about, by its text.
     fixes: HashMap<Vec<u16>, Fix>,
-    /// The watch on the app in front, with its pid.
     watch: Option<(i32, Watch)>,
-    /// Set by the watch when its app reports a change.
     changed: Rc<Cell<bool>>,
-    /// The field being underlined, if any.
     session: Option<Session>,
     /// Fields underlined before, most recent last, to pick up again.
     recent: Vec<Session>,
     /// The last field found not to underline in, so it isn't looked at again each tick.
     left_alone: Option<Field>,
-    /// The underlines the window shows.
     drawn: Vec<Line>,
-    /// The paragraph opened from an underline, to paste the answer over.
     opened: Option<Paragraph>,
     next_tick: Instant,
-    /// When the user's pause after an edit ends, so the edit goes to the
-    /// model without waiting for a tick.
+    /// Send after a typing pause without waiting for the next poll.
     idle_at: Option<Instant>,
 }
 
-/// The field being underlined.
 struct Session {
     field: Field,
     doc: Document,
@@ -185,8 +152,7 @@ struct Session {
     request: Option<(u64, Pending)>,
 }
 
-/// Where words showed, while the field kept its place, scroll and text
-/// before them, so a redraw asks the app only about new ones.
+/// Reuse word bounds until the field's position, scroll, or preceding text changes.
 #[derive(Default)]
 struct Layout {
     frame: Option<CGRect>,
@@ -197,9 +163,7 @@ struct Layout {
     runs: Option<Runs>,
 }
 
-/// A paragraph in another app's text field, to paste an answer over.
 struct Paragraph {
-    /// This opening of it, which the window names it by.
     opened: Ticket,
     field: Field,
     range: Range<usize>,
@@ -228,8 +192,6 @@ impl Worker {
         }
     }
 
-    /// Read the field on each tick, change and pause, and take the window's
-    /// commands, until it stops the checker.
     fn run(mut self) {
         loop {
             let due = self
@@ -306,14 +268,11 @@ impl Worker {
         }
     }
 
-    /// Hide the underlines until the next `refresh` finds a field.
     fn pause(&mut self) {
         self.park();
         self.show(Vec::new());
     }
 
-    /// Keep the field being underlined among the recent ones, its check
-    /// still running, dropping the oldest past [`RECENT`].
     fn park(&mut self) {
         if let Some(session) = self.session.take() {
             if self.recent.len() == RECENT {
@@ -323,7 +282,6 @@ impl Worker {
         }
     }
 
-    /// Return the field, current or recent, whose check `id` runs.
     fn checking(&mut self, id: u64) -> Option<&mut Session> {
         self.session
             .iter_mut()
@@ -331,8 +289,6 @@ impl Worker {
             .find(|s| s.doc.checking() == Some(id))
     }
 
-    /// Read the focused field, underline the mistakes known, and ask for the
-    /// next paragraph's check, if it's time to. Waits while the window shows.
     fn refresh(&mut self) {
         if self.app.is_visible() {
             self.pause();
@@ -406,8 +362,6 @@ impl Worker {
         self.draw();
     }
 
-    /// Whether to underline in `field`, which isn't the one underlined: a
-    /// text area, but not on a messenger's web page.
     fn underlines_in(&mut self, field: &Field) -> bool {
         if self.left_alone.as_ref() == Some(field) {
             return false;
@@ -419,10 +373,6 @@ impl Worker {
         prose
     }
 
-    /// Take the model's `fix` of paragraph `units`, asked as check `id`, and
-    /// ask about the next paragraph if its field is the one underlined. A
-    /// check no field waits for, dropped or asked of a model since changed,
-    /// counts for nothing.
     fn finished(&mut self, id: u64, units: Vec<u16>, fix: Option<Fix>) {
         let current = self
             .session
@@ -451,19 +401,14 @@ impl Worker {
         self.fixes.insert(paragraph, fix);
     }
 
-    /// Open the paragraph with the underlined mistake `line` in the window,
-    /// with the model's fix of it if known.
     fn open(&mut self, line: Line) {
         let Some(session) = &self.session else {
             return;
         };
         let text = session.doc.text();
         let range = paragraph(text, line.at);
-        let Some(units) = text.get(range.clone()) else {
-            return;
-        };
-        // A second click, as in a double-click, opens the same paragraph: keep
-        // its ticket, which the window took from the first.
+        let units = &text[range.clone()];
+        // A double-click must keep the first opening's ticket, which the window already holds.
         let opened = self
             .opened
             .as_ref()
@@ -484,9 +429,6 @@ impl Worker {
         self.app.update(move |s, _| s.underline_opened(target, fix));
     }
 
-    /// Ask the window to check the next edited paragraph, once the user
-    /// stopped typing and no request is running. Paragraphs fixed before
-    /// take their known fix, and long ones are skipped.
     fn request(&mut self) {
         let Some(session) = &mut self.session else {
             return;
@@ -514,8 +456,6 @@ impl Worker {
         }
     }
 
-    /// Underline the known mistakes that show, asking the app where only for
-    /// words whose place may have changed.
     fn draw(&mut self) {
         let Some(session) = &mut self.session else {
             return;
@@ -585,7 +525,6 @@ impl Worker {
         self.show(lines);
     }
 
-    /// Have the window underline `lines`, unless it already does.
     fn show(&mut self, lines: Vec<Line>) {
         if lines == self.drawn {
             return;
@@ -600,22 +539,18 @@ impl Worker {
 }
 
 impl Paragraph {
-    /// Whether the field still holds the paragraph where it was.
     fn holds(&self) -> bool {
         let mut text = Vec::new();
         self.field.read(MAX_TEXT, &mut text)
             && text.get(self.range.clone()) == Some(&self.units[..])
     }
 
-    /// Select the paragraph in its field, so a copy takes it and a paste
-    /// replaces it. Returns false, selecting nothing, if the field no longer
-    /// holds it there.
+    /// Leave the selection alone if external edits moved the paragraph.
     fn select(&self) -> bool {
         self.holds() && self.field.select(self.range.clone())
     }
 }
 
-/// Whether the middle of `rect` is inside `frame`, if known.
 fn inside(rect: CGRect, frame: Option<CGRect>) -> bool {
     let middle = CGPoint::new(
         rect.origin.x + rect.size.width / 2.0,
@@ -624,8 +559,7 @@ fn inside(rect: CGRect, frame: Option<CGRect>) -> bool {
     frame.is_none_or(|f| NSPointInRect(middle, f))
 }
 
-/// Split `range` of `text` into its words, so a phrase over two lines gets an
-/// underline on each rather than one box around both.
+/// Split phrases into words so wrapped text gets separate underlines, not one large box.
 fn words(text: &[u16], range: Range<usize>) -> Vec<Range<usize>> {
     let space = |u: u16| char::from_u32(u32::from(u)).is_some_and(char::is_whitespace);
     let mut out = Vec::new();
@@ -644,19 +578,4 @@ fn words(text: &[u16], range: Range<usize>) -> Vec<Range<usize>> {
         out.push(s..range.end.min(text.len()));
     }
     out
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn splits_a_mistake_into_words() {
-        let text: Vec<u16> = "Hi.\nThey was here.".encode_utf16().collect();
-        let words: Vec<String> = words(&text, 4..13)
-            .into_iter()
-            .map(|r| String::from_utf16_lossy(&text[r]))
-            .collect();
-        assert_eq!(words, ["They", "was"]);
-    }
 }

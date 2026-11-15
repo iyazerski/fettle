@@ -1,7 +1,3 @@
-//! The model behind the actions: Apple's on-device model ([`on_device`]), a
-//! ChatGPT plan through the sign-in Codex uses ([`chatgpt`]), or any
-//! OpenAI-compatible API ([`compat`]). All stream the answer.
-
 pub mod chatgpt;
 mod compat;
 pub mod on_device;
@@ -16,12 +12,9 @@ use serde_json::Value;
 
 use crate::settings::{ChatGptAuth, Provider, Settings};
 
-/// The longest an answer may take in all: the HTTP client only limits each
-/// read, so a server that keeps the stream open without finishing it could
-/// hold a request, and the check or dictation waiting on it, forever.
+/// A per-read HTTP timeout can't stop a stream that stays open without completing.
 const MAX_ANSWER: Duration = Duration::from_secs(300);
 
-/// One request: the system prompt and the text it applies to.
 pub struct Ask {
     pub system: String,
     pub text: String,
@@ -30,7 +23,6 @@ pub struct Ask {
     pub effort: Effort,
 }
 
-/// How much the model reasons before it answers, as the APIs name it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Effort {
@@ -39,13 +31,11 @@ pub enum Effort {
 }
 
 impl Ask {
-    /// Return the model to ask, which every backend but the on-device one needs.
     fn model(&self) -> Result<&str> {
         self.model.as_deref().context("no model is chosen")
     }
 }
 
-/// What the settings lack before the model can be called.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Missing {
     OnDevice(on_device::Availability),
@@ -54,7 +44,6 @@ pub enum Missing {
     Model,
 }
 
-/// Where requests go, with what they need.
 #[derive(Clone)]
 pub enum Backend {
     OnDevice,
@@ -63,7 +52,6 @@ pub enum Backend {
 }
 
 impl Backend {
-    /// Where `settings` send requests, or what they lack to send any.
     pub fn of(settings: &Settings) -> Result<Self, Missing> {
         match settings.provider {
             Provider::OnDevice => match on_device::availability() {
@@ -89,8 +77,6 @@ impl Backend {
         }
     }
 
-    /// Where `settings` send a request and the model they ask, or what they
-    /// lack to send one.
     pub fn with_model(settings: &Settings) -> Result<(Self, Option<String>), Missing> {
         let backend = Self::of(settings)?;
         match settings.model().map(str::trim) {
@@ -99,14 +85,7 @@ impl Backend {
         }
     }
 
-    /// Stream the answer to `ask`, calling `on_delta` with each piece. A
-    /// model that rejects `ask`'s reasoning effort, as some can't turn
-    /// reasoning off and others don't reason at all, is asked again without
-    /// one, so it reasons as it does by default.
-    ///
-    /// # Errors
-    ///
-    /// Fails if the backend does, or if the answer takes longer than [`MAX_ANSWER`].
+    /// Retry without an effort only when the model rejects the requested reasoning setting.
     pub async fn stream(
         &self,
         http: &reqwest::Client,
@@ -125,8 +104,6 @@ impl Backend {
             .map_err(|_| anyhow!("the model took too long to answer"))?
     }
 
-    /// Stream the answer to `ask` with reasoning `effort`, or the model's
-    /// default for `None`.
     async fn send(
         &self,
         http: &reqwest::Client,
@@ -143,7 +120,6 @@ impl Backend {
         }
     }
 
-    /// The models this backend offers, sorted; none to pick from on device.
     pub async fn models(&self, http: &reqwest::Client) -> Result<Vec<String>> {
         let mut models = match self {
             Backend::OnDevice => Vec::new(),
@@ -156,8 +132,6 @@ impl Backend {
     }
 }
 
-/// The HTTP client for every call: generous on the whole answer, quick to
-/// give up on connecting.
 pub fn http() -> Result<reqwest::Client> {
     // reqwest takes the process-wide provider; an Err means it's already installed.
     let _ = rustls::crypto::ring::default_provider().install_default();
@@ -169,7 +143,6 @@ pub fn http() -> Result<reqwest::Client> {
         .context("setting up HTTP")
 }
 
-/// A request the API refused, with its own message.
 #[derive(Debug)]
 struct Refused {
     status: reqwest::StatusCode,
@@ -184,7 +157,6 @@ impl fmt::Display for Refused {
 
 impl std::error::Error for Refused {}
 
-/// Whether `error` is the API refusing the reasoning effort asked for.
 fn rejects_effort(error: &anyhow::Error) -> bool {
     error.downcast_ref::<Refused>().is_some_and(|r| {
         r.status == reqwest::StatusCode::BAD_REQUEST
@@ -192,7 +164,6 @@ fn rejects_effort(error: &anyhow::Error) -> bool {
     })
 }
 
-/// `response` if it succeeded, else an error with the API's own message.
 async fn check(response: reqwest::Response) -> Result<reqwest::Response> {
     let status = response.status();
     if status.is_success() {
@@ -206,8 +177,6 @@ async fn check(response: reqwest::Response) -> Result<reqwest::Response> {
     .into())
 }
 
-/// The message in an API error body: OpenAI's `error.message`, a `detail`, or
-/// the body itself.
 fn error_message(body: &str) -> String {
     let json: Option<Value> = serde_json::from_str(body).ok();
     let found = json.as_ref().and_then(|v| {

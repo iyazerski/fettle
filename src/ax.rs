@@ -1,7 +1,4 @@
-//! The focused text field in another app, read, watched and selected through
-//! the Accessibility API, which needs the same permission as ⌘C and ⌘V.
-//!
-//! Text ranges count UTF-16 code units, as the API and `NSString` do.
+//! Accessibility text ranges count UTF-16 code units.
 
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
@@ -20,18 +17,12 @@ use objc2_core_foundation::{
     kCFRunLoopCommonModes, kCFRunLoopDefaultMode,
 };
 
-/// How long an Accessibility call waits for an app, in seconds, so a hung
-/// app can't hold the checker up for long.
+/// Bound each call so an unresponsive app can't stall the checker indefinitely.
 const TIMEOUT: f32 = 0.25;
-/// At most this many elements under a field are looked at to find its
-/// [`Runs`], so a huge web page can't stall the UI thread.
+/// Bound traversal of huge web pages when finding static text runs.
 const MAX_ELEMENTS: usize = 500;
-/// Apps Fettle leaves alone, by bundle ID: their text is code, commands or
-/// queries, not prose, so checking it only adds noise. Editors built on VS
-/// Code also switch to screen reader mode when asked to expose their content,
-/// which changes the editor.
+/// Code isn't prose; exposing VS Code's Accessibility tree also changes its editor behavior.
 const SKIPPED_APPS: [&str; 23] = [
-    // Editors built on VS Code.
     "com.microsoft.VSCode",
     "com.microsoft.VSCodeInsiders",
     "com.vscodium",
@@ -39,17 +30,14 @@ const SKIPPED_APPS: [&str; 23] = [
     "com.exafunction.windsurf",
     "dev.kiro.desktop",
     "com.trae.app",
-    // Other code editors.
     "dev.zed.Zed",
     "com.apple.dt.Xcode",
     "com.sublimetext.4",
     "com.panic.Nova",
     "com.barebones.bbedit",
     "com.google.android.studio",
-    // Database and API tools.
     "com.tinyapp.TablePlus",
     "com.postmanlabs.mac",
-    // Terminals.
     "com.apple.Terminal",
     "com.googlecode.iterm2",
     "com.mitchellh.ghostty",
@@ -59,21 +47,18 @@ const SKIPPED_APPS: [&str; 23] = [
     "com.github.wez.wezterm",
     "co.zeit.hyper",
 ];
-/// Messengers Fettle doesn't underline in, by bundle ID, and their web
-/// versions, by host.
+/// Skip native messengers by bundle ID and their web versions by host.
 const MESSENGERS: [&str; 3] = [
     "ru.keepcoder.Telegram",
     "com.tdesktop.Telegram",
     "net.whatsapp.WhatsApp",
 ];
 const MESSENGER_SITES: [&str; 2] = ["web.telegram.org", "web.whatsapp.com"];
-/// At most this many ancestors of a field are looked through for the web page it's on.
+/// Bound ancestor traversal when looking for a messenger's web host.
 const MAX_DEPTH: usize = 64;
 /// Bundle ID prefixes of vendors whose apps are all skipped: every JetBrains
 /// IDE has its own ID.
 const SKIPPED_VENDORS: [&str; 1] = ["com.jetbrains."];
-/// Bundle ID prefixes of Chromium browsers, which build the accessibility
-/// tree of web pages, with where their text shows, only for a screen reader.
 const CHROMIUM_BROWSERS: [&str; 7] = [
     "com.google.Chrome",
     "org.chromium.Chromium",
@@ -83,8 +68,6 @@ const CHROMIUM_BROWSERS: [&str; 7] = [
     "com.operasoftware.Opera",
     "company.thebrowser.",
 ];
-/// What a [`Watch`] listens for: edits, caret moves, focus moves, and
-/// windows moving under the text.
 const NOTIFICATIONS: [&str; 5] = [
     "AXValueChanged",
     "AXSelectedTextChanged",
@@ -93,16 +76,12 @@ const NOTIFICATIONS: [&str; 5] = [
     "AXWindowResized",
 ];
 
-/// The apps Fettle reads from, remembering which it asked to expose their
-/// web content, and the attribute it turned on in each, to turn it off once
-/// dropped: the content costs them memory and speed, and the browsers
-/// animate their windows differently.
+/// Track attributes enabled in other apps so dropping this restores their Accessibility state.
 #[derive(Debug, Default)]
 pub struct Apps {
     asked: HashMap<i32, Option<&'static str>>,
 }
 
-/// The app in front and its focused element, if Fettle may read it.
 #[derive(Debug)]
 pub struct Focus {
     pub pid: i32,
@@ -110,8 +89,6 @@ pub struct Focus {
 }
 
 impl Apps {
-    /// Return the element with the keyboard focus in the app in front,
-    /// unless that's Fettle or a skipped app.
     pub fn focused(&mut self) -> Option<Focus> {
         static TIMEOUT_SET: Once = Once::new();
         TIMEOUT_SET.call_once(|| {
@@ -145,7 +122,6 @@ impl Apps {
     }
 }
 
-/// Append the UTF-16 units of `text` to `buffer`.
 fn append_units(text: &CFString, buffer: &mut Vec<u16>) {
     let Ok(len) = usize::try_from(text.length()) else {
         return;
@@ -166,7 +142,6 @@ fn append_units(text: &CFString, buffer: &mut Vec<u16>) {
     }
 }
 
-/// Whether Fettle leaves the app with bundle ID `id` alone.
 fn is_skipped(id: &str) -> bool {
     SKIPPED_APPS.contains(&id)
         || MESSENGERS.contains(&id)
@@ -192,10 +167,7 @@ impl Drop for Apps {
     }
 }
 
-/// Ask an Electron app or a Chromium browser, `id`, to build its web
-/// content's accessibility tree, which they only do for screen readers
-/// unless asked. Returns the attribute it turned on, unless the app ignores
-/// it or another client, such as a screen reader, had turned it on already.
+/// Return only attributes enabled by Fettle, not those another Accessibility client already enabled.
 fn expose_web_content(app: &AXUIElement, id: &str) -> Option<&'static str> {
     // Chromium browsers ignore Electron's attribute and take the one
     // VoiceOver sets, after a 2-second wait. It changes how other apps
@@ -217,22 +189,17 @@ fn expose_web_content(app: &AXUIElement, id: &str) -> Option<&'static str> {
     (set == AXError::Success).then_some(name)
 }
 
-/// A text field in another app.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Field {
     element: CFRetained<AXUIElement>,
 }
 
 impl Field {
-    /// Whether this is a text area, where people write prose: message
-    /// composers, notes and editable web content are, while single-line
-    /// fields such as address bars, search boxes and passwords aren't.
+    /// Exclude single-line fields, including address bars, searches, and passwords.
     pub fn is_text_area(&self) -> bool {
         has_role(&self.element, "AXTextArea")
     }
 
-    /// Whether the field is on a messenger's web page, which Fettle leaves
-    /// alone as it does the messenger's app.
     pub fn on_messenger_site(&self) -> bool {
         let mut element = self.element.clone();
         for _ in 0..MAX_DEPTH {
@@ -252,8 +219,7 @@ impl Field {
         false
     }
 
-    /// Read the field's text into `buffer`. Returns false, leaving `buffer`
-    /// empty, if the field has no text or more than `max` units of it.
+    /// Failure clears the buffer, including when text exceeds `max` UTF-16 units.
     pub fn read(&self, max: usize, buffer: &mut Vec<u16>) -> bool {
         buffer.clear();
         let count = attribute(&self.element, "AXNumberOfCharacters")
@@ -284,7 +250,6 @@ impl Field {
         to_range(range)
     }
 
-    /// Return the range of the text that shows, if the field tells.
     pub fn visible(&self) -> Option<Range<usize>> {
         let value = attribute(&self.element, "AXVisibleCharacterRange")?;
         // SAFETY: a CFRange value holds a CFRange.
@@ -306,13 +271,11 @@ impl Field {
         Some(CGRect::new(origin, size))
     }
 
-    /// Return where `range` of the text shows, as `frame` counts.
+    /// Use the same screen-point coordinates as [`Self::frame`].
     pub fn bounds(&self, range: Range<usize>) -> Option<CGRect> {
         bounds(&self.element, range)
     }
 
-    /// Find the static texts under the field and where each starts in
-    /// `text`, the field's text.
     pub fn runs(&self, text: &[u16]) -> Runs {
         let mut runs = Vec::new();
         let mut cursor = 0;
@@ -354,7 +317,6 @@ impl Field {
         Runs(runs)
     }
 
-    /// Select `range` of the text, so a paste replaces it. Returns whether the field took it.
     pub fn select(&self, range: Range<usize>) -> bool {
         let Some(value) = range_value(range) else {
             return false;
@@ -365,15 +327,12 @@ impl Field {
     }
 }
 
-/// A field's text split into the static texts under it, for fields such as
-/// Chrome's editable web content, which can't tell where their own text
-/// shows but whose pieces can.
+/// Chrome editable fields can't locate their own text, but their static-text children can.
 #[derive(Debug, Default)]
 pub struct Runs(Vec<Run>);
 
 #[derive(Debug)]
 struct Run {
-    /// The run's part of the field's text.
     text: Range<usize>,
     element: CFRetained<AXUIElement>,
 }
@@ -391,10 +350,7 @@ impl Runs {
     }
 }
 
-/// Calls a function, on the thread that made it, whenever the app it
-/// watches changes text, caret, focus or window, until dropped. The calls
-/// come while that thread [`wait`]s. Apps that don't send these are still
-/// read on a timer; this only makes the rest quick.
+/// Callbacks run on the creating thread while it processes its run loop in [`wait`].
 pub struct Watch {
     observer: CFRetained<AXObserver>,
     run_loop: CFRetained<CFRunLoop>,
@@ -402,7 +358,6 @@ pub struct Watch {
 }
 
 impl Watch {
-    /// Watch the app with `pid`.
     pub fn new(pid: i32, on_change: impl Fn() + 'static) -> Option<Self> {
         let mut out: *mut AXObserver = ptr::null_mut();
         // SAFETY: `out` receives a +1 reference on success.
@@ -449,8 +404,7 @@ impl Drop for Watch {
     }
 }
 
-/// Wakes the thread that made it from its [`wait`], from any thread. A wake
-/// that comes while the thread is busy ends its next wait at once.
+/// Signal from any thread; an early wake ends the next wait immediately.
 pub struct Waker {
     source: CFRetained<CFRunLoopSource>,
     run_loop: CFRetained<CFRunLoop>,
@@ -463,7 +417,6 @@ unsafe impl Send for Waker {}
 unsafe impl Sync for Waker {}
 
 impl Waker {
-    /// Make a waker for the current thread.
     pub fn new() -> Option<Self> {
         let mut context = CFRunLoopSourceContext {
             version: 0,
@@ -495,8 +448,6 @@ impl Waker {
 /// A [`Waker`]'s callback: being woken is all it's for.
 unsafe extern "C-unwind" fn woken(_: *mut c_void) {}
 
-/// Wait on the current thread for up to `timeout`, or until a [`Watch`]
-/// it made reports a change or a [`Waker`] it made is woken.
 pub fn wait(timeout: Duration) {
     // SAFETY: an immutable constant set up before any code runs.
     let mode = unsafe { kCFRunLoopDefaultMode };
@@ -547,7 +498,6 @@ fn children(element: &AXUIElement) -> Vec<CFRetained<AXUIElement>> {
     out
 }
 
-/// Return `element`'s attribute `name`, if it has one.
 fn attribute(element: &AXUIElement, name: &'static str) -> Option<CFRetained<CFType>> {
     let name = CFString::from_static_str(name);
     let mut out: *const CFType = ptr::null();
@@ -556,7 +506,6 @@ fn attribute(element: &AXUIElement, name: &'static str) -> Option<CFRetained<CFT
     retained(error, out)
 }
 
-/// Whether `element`'s role is `role`.
 fn has_role(element: &AXUIElement, role: &'static str) -> bool {
     attribute(element, "AXRole")
         .and_then(|v| v.downcast::<CFString>().ok())
@@ -577,7 +526,6 @@ fn to_range(range: CFRange) -> Option<Range<usize>> {
     Some(start..start + usize::try_from(range.length).ok()?)
 }
 
-/// Wrap `range` in an AXValue.
 fn range_value(range: Range<usize>) -> Option<CFRetained<AXValue>> {
     let range = CFRange {
         location: CFIndex::try_from(range.start).ok()?,

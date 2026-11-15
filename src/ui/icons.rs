@@ -1,6 +1,3 @@
-//! The window's icons, as SVG in the subset Rune reads: 24-point outlines
-//! with a 1.75 stroke.
-
 use rune::Icon;
 
 const fn icon(name: &'static str, body: &'static str) -> Icon {
@@ -63,7 +60,6 @@ pub static SMILE: Icon = icon(
     "smile",
     r#"<circle cx="12" cy="12" r="8.75" fill="none" stroke="currentColor" stroke-width="1.75"/><path d="M8.5 14.25a4.5 4.5 0 0 0 7 0" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/><circle cx="9.25" cy="9.75" r="1.1" fill="currentColor"/><circle cx="14.75" cy="9.75" r="1.1" fill="currentColor"/>"#,
 );
-/// Lines that shorten, for shorter text.
 pub static SHORTER: Icon = icon(
     "shorter",
     r#"<path d="M4.75 7h14.5M4.75 12h9.5M4.75 17h4.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round"/>"#,

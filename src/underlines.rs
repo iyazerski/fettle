@@ -1,7 +1,3 @@
-//! Underlines under mistakes in another app's text: a borderless window over
-//! them that clicks pass through, with a thin bar under each word, and a
-//! watch on clicks so a click on an underlined word can open Fettle.
-
 use std::ptr::NonNull;
 
 use objc2::MainThreadOnly;
@@ -19,16 +15,13 @@ const GAP: f64 = 1.0;
 /// How far around a word a click still counts as on it, in points.
 const SLOP: f64 = 2.0;
 
-/// An underlined word: where it is, in screen points from the primary
-/// screen's top-left, as the Accessibility API counts, and where its
-/// mistake starts in the text.
+/// `word` uses Accessibility screen points; `at` is a UTF-16 offset in the field's text.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Line {
     pub word: CGRect,
     pub at: usize,
 }
 
-/// The window that draws the lines, made when first needed.
 #[derive(Default)]
 pub struct Underlines {
     window: Option<Retained<NSWindow>>,
@@ -41,7 +34,7 @@ pub struct Underlines {
 }
 
 impl Underlines {
-    /// Underline `lines`, and nothing else. Does nothing off the main thread.
+    /// AppKit drawing must run on the main thread.
     pub fn show(&mut self, lines: Vec<Line>) {
         if lines == self.lines {
             return;
@@ -127,7 +120,6 @@ impl Underlines {
     }
 }
 
-/// A borderless, transparent window that never takes clicks or focus, on every Space.
 fn overlay(mtm: MainThreadMarker) -> Retained<NSWindow> {
     // SAFETY: a plain borderless window, kept alive by `Underlines`.
     let window = unsafe {
@@ -145,7 +137,6 @@ fn overlay(mtm: MainThreadMarker) -> Retained<NSWindow> {
     window.setBackgroundColor(Some(&NSColor::clearColor()));
     window.setHasShadow(false);
     window.setIgnoresMouseEvents(true);
-    // Over the app's windows, as Fettle's own window is.
     window.setLevel(NSFloatingWindowLevel);
     window.setCollectionBehavior(
         NSWindowCollectionBehavior::CanJoinAllSpaces
@@ -156,7 +147,6 @@ fn overlay(mtm: MainThreadMarker) -> Retained<NSWindow> {
     window
 }
 
-/// A rounded bar.
 fn underline(mtm: MainThreadMarker) -> Retained<NSBox> {
     let bar = NSBox::initWithFrame(NSBox::alloc(mtm), CGRect::default());
     bar.setBoxType(NSBoxType::Custom);
@@ -167,8 +157,7 @@ fn underline(mtm: MainThreadMarker) -> Retained<NSBox> {
     bar
 }
 
-/// Calls a function with the pointer, in AppKit's coordinates, on each left
-/// click in another app, until dropped.
+/// Report other apps' clicks in AppKit coordinates until dropped.
 pub struct Clicks(Retained<AnyObject>);
 
 impl Clicks {

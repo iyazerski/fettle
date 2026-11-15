@@ -1,6 +1,3 @@
-//! Apple's on-device model, through the Swift bridge in `swift/on_device.swift`:
-//! free and private, on Macs with Apple Intelligence.
-
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::fmt;
 
@@ -21,22 +18,17 @@ unsafe extern "C" {
     fn fettle_on_device_end(job: *mut c_void);
 }
 
-/// Whether the on-device model can run, and if not, why.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Availability {
     Ready,
-    /// macOS before 26, which has no on-device model.
     OldMacOS,
-    /// A Mac that can't run Apple Intelligence.
     NotEligible,
-    /// Apple Intelligence is off in System Settings.
     TurnedOff,
     /// Still downloading, or blocked by a setting such as Siri's language.
     NotReady,
 }
 
-/// Return whether the on-device model can run now, from the bridge's status
-/// code (see `swift/on_device.swift`).
+/// Interpret the status codes from `swift/on_device.swift`.
 pub fn availability() -> Availability {
     match fettle_on_device_status() {
         0 => Availability::Ready,
@@ -47,8 +39,6 @@ pub fn availability() -> Availability {
     }
 }
 
-/// Why the on-device model gave no answer, for the failures Fettle explains in
-/// the window's language.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Refusal {
     TooLong,
@@ -68,7 +58,6 @@ impl fmt::Display for Refusal {
 
 impl std::error::Error for Refusal {}
 
-/// What the bridge reports while it answers.
 enum Event {
     Chunk(String),
     Done(Result<()>),
@@ -90,7 +79,6 @@ impl Drop for Job {
     }
 }
 
-/// Stream the answer to `ask`, calling `on_delta` with each piece.
 pub async fn stream(ask: &Ask, mut on_delta: impl FnMut(&str)) -> Result<()> {
     let instructions = CString::new(ask.system.as_str())?;
     let prompt = CString::new(ask.text.as_str())?;
@@ -136,8 +124,7 @@ extern "C" fn on_done(context: *mut c_void, code: i32, message: *const c_char) {
     let _ = events.send(Event::Done(ended(code, &message.to_string_lossy())));
 }
 
-/// Return how an answer ended, from `OnDone`'s code (see `swift/on_device.swift`)
-/// and message.
+/// Interpret `OnDone` codes from `swift/on_device.swift`.
 fn ended(code: i32, message: &str) -> Result<()> {
     match code {
         0 => Ok(()),

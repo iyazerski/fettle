@@ -1,6 +1,4 @@
-//! Background work a page waits on. Aborting a task can't take back an
-//! update it already queued for the window, so each result names the work it
-//! answers, and only the current work's result lands.
+//! Aborting a task can't retract queued UI updates; tickets reject stale results.
 
 use std::future::Future;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -9,7 +7,6 @@ use tokio::task::JoinHandle;
 
 use super::client::Client;
 
-/// Names one piece of background work, so its result can be matched to it.
 /// Tickets are never reused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ticket(u64);
@@ -29,8 +26,6 @@ pub struct Pending {
 }
 
 impl Pending {
-    /// Run the task `work` makes on `client`, giving it the ticket its
-    /// result must carry.
     pub fn spawn<F>(client: &Client, work: impl FnOnce(Ticket) -> F) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
@@ -42,7 +37,6 @@ impl Pending {
         }
     }
 
-    /// Whether a result with `ticket` answers this work.
     pub fn answers(&self, ticket: Ticket) -> bool {
         self.ticket == ticket
     }

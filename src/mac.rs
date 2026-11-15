@@ -1,7 +1,3 @@
-//! The Mac side: read the selection in the frontmost app and paste text back,
-//! both through the pasteboard and synthetic ⌘C/⌘V, which need the
-//! Accessibility permission.
-
 use std::cmp::Ordering;
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard};
@@ -40,13 +36,11 @@ const PASTE_WAIT: Duration = Duration::from_millis(500);
 /// (see nspasteboard.org).
 const TRANSIENT: &str = "org.nspasteboard.TransientType";
 
-/// Whether Fettle may send keys to other apps.
 pub fn accessibility_trusted() -> bool {
     check_accessibility(false)
 }
 
-/// Whether Fettle may send keys to other apps; if not, macOS asks the user to
-/// allow it (once per launch) and lists Fettle in the settings.
+/// macOS prompts once per launch and adds the app to its Accessibility settings.
 pub fn request_accessibility() -> bool {
     check_accessibility(true)
 }
@@ -59,8 +53,7 @@ fn check_accessibility(prompt: bool) -> bool {
     unsafe { AXIsProcessTrustedWithOptions(Some(options.as_opaque())) }
 }
 
-/// Draw the app in `appearance`: the window's blur and the theme Rune reports
-/// follow it. Does nothing off the main thread.
+/// Update AppKit and Rune together; must run on the main thread.
 pub fn set_appearance(appearance: Appearance) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
@@ -96,9 +89,7 @@ fn screen_at(screens: &NSArray<NSScreen>, x: f64, y: f64) -> Option<Retained<NSS
         .or_else(|| screens.iter().next())
 }
 
-/// Where a window `width` points wide goes to sit centred near the top of the
-/// screen under the pointer, `margin` points below the menu bar: its top-left
-/// in physical pixels from the primary screen's top-left, as winit counts.
+/// Inputs are screen points; return physical pixels from the primary screen's top-left for winit.
 pub fn top_center_under_pointer(width: f32, margin: f32) -> Option<(i32, i32)> {
     let mtm = MainThreadMarker::new()?;
     let screens = NSScreen::screens(mtm);
@@ -113,10 +104,8 @@ pub fn top_center_under_pointer(width: f32, margin: f32) -> Option<(i32, i32)> {
     Some(((x * scale).round() as i32, (y * scale).round() as i32))
 }
 
-/// Where a window `width` by `height` points goes to sit centred over `word`,
-/// `gap` points above it, or under it if there's no room above: its top-left
-/// in physical pixels, as winit counts. `word` is in points from the primary
-/// screen's top-left, as the Accessibility API counts.
+/// Place above `word`, or below if needed. Inputs use Accessibility screen points;
+/// the result uses winit's physical pixels from the primary screen's top-left.
 pub fn over_word(word: CGRect, width: f32, height: f32, gap: f64) -> Option<(i32, i32)> {
     let mtm = MainThreadMarker::new()?;
     let screens = NSScreen::screens(mtm);
@@ -143,15 +132,12 @@ pub fn over_word(word: CGRect, width: f32, height: f32, gap: f64) -> Option<(i32
     Some(((x * scale).round() as i32, (y * scale).round() as i32))
 }
 
-/// Return the `.app` bundle `exe` runs from, if it runs from one, as in
-/// `Fettle.app/Contents/MacOS/fettle`.
 pub fn bundle_of(exe: &Path) -> Option<&Path> {
     exe.ancestors()
         .nth(3)
         .filter(|app| app.extension().is_some_and(|e| e == "app"))
 }
 
-/// Open the Accessibility pane of System Settings.
 pub fn open_accessibility_settings() {
     open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
 }
@@ -185,42 +171,31 @@ pub fn open_url(url: &str) {
     }
 }
 
-/// Held while Fettle borrows the pasteboard, from saving its contents to
-/// putting them back, so a copy and a paste can't save each other's text as
-/// the user's.
+/// Serialize pasteboard borrowing so concurrent copy/paste can't save each other's temporary text.
 static BORROWED: Mutex<()> = Mutex::new(());
 
 fn borrow() -> MutexGuard<'static, ()> {
     BORROWED.lock().expect("pasteboard lock poisoned")
 }
 
-/// What an app put on the pasteboard for one item: each type, by its
-/// identifier, with its data.
 #[derive(Debug, Clone, Default)]
 pub struct Clip(pub Vec<(String, Vec<u8>)>);
 
 impl Clip {
-    /// A clip of just `text`.
     pub fn plain(text: &str) -> Self {
         Self(vec![(PLAIN.to_owned(), text.as_bytes().to_vec())])
     }
 }
 
-/// The type of UTF-8 plain text on the pasteboard.
 pub const PLAIN: &str = "public.utf8-plain-text";
 
-/// The selection in the frontmost app, as copied with ⌘C.
 #[derive(Debug)]
 pub struct Copied {
     pub text: String,
-    /// Everything the app copied, rich formats too.
     pub clip: Clip,
 }
 
-/// The text selected in the frontmost app, copied with ⌘C. The pasteboard
-/// gets its old contents back. `None` when nothing was copied: no selection,
-/// no permission, or an app that ignores ⌘C. Blocks for a moment, and while
-/// a paste borrows the pasteboard: call it off the main thread.
+/// Borrow and restore the pasteboard; blocks on the source app, so call off the main thread.
 pub fn copy_selection() -> Option<Copied> {
     let _borrowed = borrow();
     let saved = Saved::take();
@@ -255,9 +230,7 @@ pub fn copy_selection() -> Option<Copied> {
     Some(Copied { text, clip })
 }
 
-/// Paste `clip` into the frontmost app with ⌘V, then give the pasteboard its
-/// old contents back. Blocks for a moment, and while a copy borrows the
-/// pasteboard: call it off the main thread.
+/// Restore the pasteboard after pasting; blocks, so call off the main thread.
 pub fn paste(clip: &Clip) {
     let _borrowed = borrow();
     let saved = Saved::take();
@@ -293,9 +266,7 @@ fn post_command_key(key: u16) {
     }
 }
 
-/// Change the text of RTF `data` with `edit`, which gets the text of each
-/// run of one style, keeping each run's style. `None` if the data isn't
-/// RTF or `edit` returns false. RTF, unlike HTML, may be read off the main thread.
+/// Edit styled RTF runs off the main thread, which RTF supports but HTML doesn't.
 pub fn edit_rtf(data: &[u8], edit: impl FnOnce(&mut [String]) -> bool) -> Option<Vec<u8>> {
     autoreleasepool(|_| {
         let data = NSData::with_bytes(data);
@@ -340,7 +311,6 @@ pub fn edit_rtf(data: &[u8], edit: impl FnOnce(&mut [String]) -> bool) -> Option
     })
 }
 
-/// Every item on the pasteboard, in every type, to put back after borrowing it.
 struct Saved {
     items: Vec<Vec<(Retained<NSString>, Retained<NSData>)>>,
     change_count: isize,
@@ -371,8 +341,7 @@ impl Saved {
         })
     }
 
-    /// Put the saved items back, unless someone wrote to the pasteboard after
-    /// Fettle's own write, which left it at change count `written`.
+    /// Don't overwrite a clipboard change made by the user while Fettle borrowed it.
     fn restore(self, written: isize) {
         autoreleasepool(|_| {
             let pasteboard = NSPasteboard::generalPasteboard();

@@ -1,6 +1,3 @@
-//! The languages Fettle's own window speaks, and its text in each. Prompts to
-//! the model stay in English; only what the user reads changes.
-
 mod ar;
 mod de;
 mod en;
@@ -22,7 +19,6 @@ use crate::llm::on_device::{Availability, Refusal};
 use crate::prompts::Style;
 use crate::settings::LANGUAGES;
 
-/// A language the window can be shown in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Locale {
@@ -56,7 +52,6 @@ impl Locale {
         Locale::Korean,
     ];
 
-    /// Return the language's name in itself, as the picker lists it.
     pub fn native_name(self) -> &'static str {
         match self {
             Locale::English => "English",
@@ -74,7 +69,6 @@ impl Locale {
         }
     }
 
-    /// Return the language's ISO 639-1 code, as BCP 47 tags start.
     pub fn code(self) -> &'static str {
         match self {
             Locale::English => "en",
@@ -92,8 +86,7 @@ impl Locale {
         }
     }
 
-    /// Return the first of `preferred` (BCP 47 tags like `pt-BR`, most
-    /// preferred first) that Fettle speaks, or English.
+    /// Try BCP 47 tags in preference order, falling back to English.
     pub fn from_preferred<S: AsRef<str>>(preferred: &[S]) -> Locale {
         preferred
             .iter()
@@ -104,14 +97,11 @@ impl Locale {
             .unwrap_or(Locale::English)
     }
 
-    /// Sort `languages`, from [`LANGUAGES`], by their names in this language,
-    /// as its speakers order words.
     pub fn sort_languages(self, languages: &mut [&'static str]) {
         let t = self.strings();
         crate::mac::sort_localized(languages, self.code(), |l| t.language(l));
     }
 
-    /// Return the window's text in this language.
     pub fn strings(self) -> &'static Strings {
         match self {
             Locale::English => &en::STRINGS,
@@ -130,10 +120,8 @@ impl Locale {
     }
 }
 
-/// Everything the window says, in one language. A `{}` marks where a value
-/// goes; fill it with [`fill`].
+/// `{}` is a substitution slot, filled by [`fill`].
 pub struct Strings {
-    // The main window.
     pub text: &'static str,
     pub placeholder: &'static str,
     pub clear: &'static str,
@@ -172,16 +160,13 @@ pub struct Strings {
     pub thinking: &'static str,
     pub nothing_to_fix: &'static str,
     pub copy: &'static str,
-    /// With `copy`, the items of a text field's menu.
     pub cut: &'static str,
     pub paste: &'static str,
     pub copied: &'static str,
     pub replace: &'static str,
-    /// The tooltip on a change in a fix, which a click declines.
     pub decline_change: &'static str,
     pub replace_help: &'static str,
     pub no_text: &'static str,
-    /// Replace found the clicked text gone from where it was.
     pub text_moved: &'static str,
     pub stopped: &'static str,
     pub empty_answer: &'static str,
@@ -190,7 +175,6 @@ pub struct Strings {
     pub missing_sign_in: &'static str,
     pub missing_api_url: &'static str,
     pub missing_model: &'static str,
-    // Settings.
     pub model: &'static str,
     pub chatgpt_plan: &'static str,
     pub compatible_api: &'static str,
@@ -200,7 +184,6 @@ pub struct Strings {
     pub on_device_not_eligible: &'static str,
     pub on_device_turned_off: &'static str,
     pub on_device_not_ready: &'static str,
-    /// Opens Apple Intelligence in System Settings.
     pub open_system_settings: &'static str,
     pub too_long: &'static str,
     pub unsupported_language: &'static str,
@@ -211,7 +194,6 @@ pub struct Strings {
     pub get_started: &'static str,
     pub next: &'static str,
     pub model_title: &'static str,
-    // The choices in the welcome steps, under their names.
     pub on_device_body: &'static str,
     pub chatgpt_body: &'static str,
     pub api_body: &'static str,
@@ -222,22 +204,18 @@ pub struct Strings {
     pub done_body: &'static str,
     pub try_it: &'static str,
     pub done: &'static str,
-    /// A sentence with mistakes for Fix to correct.
     pub sample: &'static str,
     pub reasoning: &'static str,
-    /// What turning reasoning on does, under its switch.
     pub reasoning_hint: &'static str,
     pub general: &'static str,
     pub appearance: &'static str,
     /// System, Light, Dark.
     pub appearances: [&'static str; 3],
     pub app_language: &'static str,
-    /// The language picker's choice to follow macOS.
     pub system_language: &'static str,
     pub shortcut: &'static str,
     pub open_fettle: &'static str,
     pub underline: &'static str,
-    /// What underlining does, under its switch.
     pub underline_hint: &'static str,
     pub start_at_login: &'static str,
     pub menu_bar: &'static str,
@@ -291,7 +269,6 @@ pub struct Strings {
 }
 
 impl Strings {
-    /// Return what to do about `missing`.
     pub fn missing(&self, missing: Missing) -> &'static str {
         match missing {
             Missing::OnDevice(availability) => self.on_device_status(availability),
@@ -301,7 +278,6 @@ impl Strings {
         }
     }
 
-    /// Return what `availability` means for the on-device model, in this language.
     pub fn on_device_status(&self, availability: Availability) -> &'static str {
         match availability {
             Availability::Ready => self.on_device_ready,
@@ -312,7 +288,6 @@ impl Strings {
         }
     }
 
-    /// Return why the on-device model gave no answer, in this language.
     pub fn refusal(&self, refusal: Refusal) -> &'static str {
         match refusal {
             Refusal::TooLong => self.too_long,
@@ -321,7 +296,6 @@ impl Strings {
         }
     }
 
-    /// Return why dictation can't run, in this language.
     pub fn dictation_problem(&self, problem: &Problem) -> String {
         match problem {
             Problem::SpeechOff => self.speech_off.into(),
@@ -331,12 +305,10 @@ impl Strings {
         }
     }
 
-    /// Return the name of `style` in this language.
     pub fn style(&self, style: Style) -> &'static str {
         self.styles[style as usize]
     }
 
-    /// Return the name of `language`, one of [`LANGUAGES`], in this language.
     pub fn language(&self, language: &str) -> &'static str {
         LANGUAGES
             .iter()
@@ -345,7 +317,6 @@ impl Strings {
     }
 }
 
-/// Put `value` in place of the `{}` in `template`.
 pub fn fill(template: &str, value: impl std::fmt::Display) -> String {
     template.replacen("{}", &value.to_string(), 1)
 }
@@ -373,7 +344,6 @@ mod tests {
     fn sorts_translation_languages_by_their_local_names() {
         let mut languages = vec!["Vietnamese", "Arabic", "German", "Amharic"];
         Locale::Spanish.sort_languages(&mut languages);
-        // Alemán, Amárico, Árabe, Vietnamita.
         assert_eq!(languages, ["German", "Amharic", "Arabic", "Vietnamese"]);
     }
 }

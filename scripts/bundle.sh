@@ -1,10 +1,7 @@
 #!/usr/bin/env bash
-# Build Fettle.app from a release binary: scripts/bundle.sh <binary> <version> <out-dir>
-# With FETTLE_DEV=1, build Fettle Dev.app from a debug binary instead: its name,
-# bundle ID and executable match `DEV` in src/main.rs, so it runs beside Fettle.app.
-# Signs with the identity in FETTLE_SIGN_IDENTITY (from FETTLE_SIGN_KEYCHAIN if
-# set), or ad hoc without one. macOS keeps the Accessibility grant across
-# updates only for a stable identity: an ad-hoc signature changes with every build.
+# Usage: scripts/bundle.sh <binary> <version> <out-dir>
+# FETTLE_DEV must match the binary's build flavor in src/main.rs.
+# Set FETTLE_SIGN_IDENTITY for a stable Accessibility grant across rebuilds.
 set -euo pipefail
 
 binary=$1

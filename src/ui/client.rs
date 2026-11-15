@@ -1,7 +1,3 @@
-//! Calls to the model from the window: each takes a fresh ChatGPT sign-in
-//! first, refreshing and saving it through the window's state when it
-//! expires soon.
-
 use std::future::Future;
 use std::sync::Arc;
 
@@ -15,7 +11,6 @@ use super::state::State;
 use crate::llm::{Ask, Backend, chatgpt};
 use crate::settings::ChatGptAuth;
 
-/// What the window's background work needs: the window, the runtime, and HTTP.
 #[derive(Clone)]
 pub struct Client {
     app: AppHandle<State>,
@@ -47,7 +42,6 @@ impl Client {
         &self.http
     }
 
-    /// Run `task` on the runtime.
     pub fn spawn<F>(&self, task: F) -> JoinHandle<F::Output>
     where
         F: Future + Send + 'static,
@@ -56,7 +50,6 @@ impl Client {
         self.rt.spawn(task)
     }
 
-    /// Stream the answer to `ask` from `backend`, calling `on_delta` with each piece.
     pub async fn stream(
         &self,
         backend: Backend,
@@ -67,7 +60,6 @@ impl Client {
         backend.stream(&self.http, ask, on_delta).await
     }
 
-    /// Return the whole answer to `ask` from `backend`.
     pub async fn answer(&self, backend: Backend, ask: &Ask) -> Result<String> {
         let mut answer = String::new();
         self.stream(backend, ask, |delta| answer.push_str(delta))
@@ -75,13 +67,11 @@ impl Client {
         Ok(answer)
     }
 
-    /// Return the models `backend` offers, sorted.
     pub async fn models(&self, backend: Backend) -> Result<Vec<String>> {
         let backend = self.fresh(backend).await?;
         backend.models(&self.http).await
     }
 
-    /// Return `backend` with a ChatGPT token that won't expire soon.
     async fn fresh(&self, backend: Backend) -> Result<Backend> {
         let Backend::ChatGpt(auth) = &backend else {
             return Ok(backend);
@@ -100,11 +90,7 @@ impl Client {
         Ok(Backend::ChatGpt(auth))
     }
 
-    /// Refresh the sign-in the settings hold, unless an earlier refresh
-    /// already did, and save it.
-    ///
-    /// A refresh token works once, so refreshes take turns on `refreshing`,
-    /// and each starts from the sign-in the settings hold by then.
+    /// Serialize single-use refresh tokens and read the latest sign-in after taking the lock.
     async fn refresh(&self) -> Result<ChatGptAuth> {
         let _turn = self.refreshing.lock().await;
         let (tx, rx) = oneshot::channel();

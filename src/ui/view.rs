@@ -1,6 +1,3 @@
-//! What the window draws: the text at the top, the actions under it, and the
-//! answer at the bottom; or the settings ([`settings_view`](super::settings_view)).
-
 use std::collections::VecDeque;
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -24,24 +21,16 @@ use crate::diff::{self, Kind, Piece};
 use crate::i18n::fill;
 use crate::prompts::{Action, Style};
 
-/// The window's corner radius.
 pub const CORNER: f32 = 16.0;
-/// The window's width until the main page's actions lay out; then it's as
-/// wide as they are on one line, at least [`MIN_WIDTH`].
+/// Initial width, until the actions lay out on one line.
 pub const WIDTH: f32 = 560.0;
 /// The narrowest the window gets, so the settings still fit.
 pub const MIN_WIDTH: f32 = 480.0;
-/// The tallest the answer gets before it scrolls.
 const ANSWER_MAX: f32 = 320.0;
-/// The tallest the language list gets before it scrolls.
 const LANGUAGES_MAX: f32 = 250.0;
-/// Clear space under the window while a dropdown is open: the window is as
-/// tall as its content, and a dropdown may hang below it. The language list
-/// is the tallest.
+/// Dropdowns can extend below a content-fitting window; reserve enough room for the language list.
 const MENU_ROOM: f32 = 300.0;
 
-/// Return the theme's kit with Fettle's violet, the app icon's colour, as the
-/// accent in place of the theme's blue.
 fn kit(dark: bool) -> &'static Kit {
     static DARK: OnceLock<Kit> = OnceLock::new();
     static LIGHT: OnceLock<Kit> = OnceLock::new();
@@ -128,8 +117,6 @@ fn main(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
 /// text area draws it.
 const SOURCE_MIN: f32 = 51.0;
 
-/// The editable text, with buttons in its corner that dictate and clear it;
-/// while dictating, the waveform stands in for it.
 fn source(s: &State, k: &Kit) -> El {
     let t = s.t();
     let asking = match &s.dictation {
@@ -191,9 +178,6 @@ fn source(s: &State, k: &Kit) -> El {
         )
 }
 
-/// While dictating, what stands in for the text: a waveform of the
-/// microphone's `levels`, the time it `took`, and `end`: a button that
-/// stops, or once listening ends, a spinner until the words land in the text.
 fn recorder(levels: &VecDeque<f32>, took: Duration, end: El, k: &Kit) -> El {
     let bars = levels.iter().map(|level| {
         el().size(2.0, (2.0 + level * 17.0).round())
@@ -213,7 +197,6 @@ fn recorder(levels: &VecDeque<f32>, took: Duration, end: El, k: &Kit) -> El {
         .fill(k.c.bg_base)
         .outline(1.0, -1.0, k.c.border_focus)
         .child(
-            // Newest on the right, the oldest fading out on the left.
             row()
                 .w(LEVELS_KEPT as f32 * 4.0 - 2.0)
                 .h(19.0)
@@ -232,15 +215,12 @@ fn recorder(levels: &VecDeque<f32>, took: Duration, end: El, k: &Kit) -> El {
         .child(end)
 }
 
-/// What starts a header: Fettle's mark, or a button back.
 #[derive(Debug)]
 pub enum Lead {
     Mark,
     Back(fn(&mut State)),
 }
 
-/// The title row: `lead`, `title`, and on the right `tools` and the hide
-/// button. It moves the window when dragged.
 pub fn header(s: &State, k: &Kit, lead: Lead, title: &str, tools: Vec<El>) -> El {
     let t = s.t();
     let lead = match lead {
@@ -271,7 +251,6 @@ pub fn header(s: &State, k: &Kit, lead: Lead, title: &str, tools: Vec<El>) -> El
         )
 }
 
-/// The main page's header buttons: settings, and pinning the window open.
 fn main_tools(s: &State, k: &Kit) -> Vec<El> {
     let t = s.t();
     let settings = IconButton::new(&icons::GEAR)
@@ -321,20 +300,16 @@ fn actions(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     row().w_full().child(line)
 }
 
-/// Rewrite and the style it writes in, joined in one control as Translate is.
 fn rewrite(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
     let current = s.settings.rewrite_style;
     let mut styles = rune_kit::Menu::new("styles")
         .trigger(picker(k, t.style(current), t.rewrite_style, Menu::Rewrite))
-        // The standard look has the raised surface and shadow the language list has.
         .standard()
         .open(s.menu_open(Menu::Rewrite))
-        // The control sits at the row's end, so the menu lines up with its right edge.
         .placement(Placement::BottomEnd)
         .on_close(|s: &mut State| s.close_menu());
     for style in Style::ALL {
-        // Tone first, then length and clarity.
         if style == Style::Shorter {
             styles = styles.separator();
         }
@@ -364,7 +339,6 @@ fn style_icon(style: Style) -> &'static Icon {
     }
 }
 
-/// The part of a split control that opens `menu`, showing the choice `label`.
 fn picker(k: &Kit, label: &str, help: &str, menu: Menu) -> El {
     split_part(
         Button::new(label)
@@ -375,7 +349,6 @@ fn picker(k: &Kit, label: &str, help: &str, menu: Menu) -> El {
     )
 }
 
-/// Build `button` as one part of a split control; the control highlights as a whole.
 fn split_part(button: Button, k: &Kit) -> El {
     button
         .variant(ButtonVariant::Ghost)
@@ -384,7 +357,6 @@ fn split_part(button: Button, k: &Kit) -> El {
         .hover(Color::TRANSPARENT)
 }
 
-/// An action and the choice it uses, joined in one capsule with a rule between.
 fn split(k: &Kit, action: El, picker: El) -> El {
     let group = row()
         .h(28.0)
@@ -396,7 +368,6 @@ fn split(k: &Kit, action: El, picker: El) -> El {
     buttons::surface(k, Tone::Secondary, group)
 }
 
-/// Translate and the language it writes in, joined in one control.
 fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     let t = s.t();
     let open = s.menu_open(Menu::Language);
@@ -426,7 +397,6 @@ fn translate(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     split(k, action, picker.build(k, layer))
 }
 
-/// The languages, favourites first; a star marks or unmarks one.
 fn languages(s: &State, k: &Kit) -> El {
     let (mut favourites, mut rest) = s.settings.languages();
     s.locale().sort_languages(&mut favourites);
@@ -519,7 +489,6 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
         Action::Rewrite(_) if running => t.rewriting.to_owned(),
         Action::Rewrite(style) => fill(t.rewritten, t.style(style)),
     };
-    // Only a Fix answer has changes.
     let changed = matches!(&answer.status, Status::Done { changes, .. } if diff::changed(changes));
     let glyph = match answer.action {
         Action::Fix => &icons::SPARKLE,
@@ -620,8 +589,6 @@ fn answer_view(s: &State, answer: &Answer, k: &Kit) -> El {
     section
 }
 
-/// The fixed text with removed words struck in red and added ones in green.
-/// A click on a change declines it.
 fn diff_text(s: &State, changes: &[Piece], k: &Kit) -> El {
     let t = s.t();
     let mut content = String::new();
@@ -688,7 +655,6 @@ fn diff_text(s: &State, changes: &[Piece], k: &Kit) -> El {
     .selectable(true)
 }
 
-/// `content`, scrolling past [`ANSWER_MAX`].
 fn scroll_box(content: El) -> El {
     col()
         .w_full()
@@ -699,7 +665,6 @@ fn scroll_box(content: El) -> El {
         .child(content)
 }
 
-/// What a [`note`] says, which sets how it looks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NoteKind {
     Info,
@@ -750,7 +715,6 @@ pub fn on_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     true
 }
 
-/// Handle the shortcuts for the main page's actions and answer.
 fn on_main_key(s: &mut State, key: &KeyEvent, tx: &mut Tx) -> bool {
     if key.key == Key::Enter && key.mods.cmd {
         s.replace();

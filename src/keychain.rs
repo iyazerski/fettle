@@ -1,6 +1,3 @@
-//! The credentials Fettle keeps in the login keychain rather than the settings
-//! file: the ChatGPT sign-in and the API key.
-
 use anyhow::{Context, Result};
 use security_framework::base::Error;
 use security_framework::passwords::{
@@ -16,7 +13,6 @@ const API_KEY: &str = "api-key";
 /// `errSecItemNotFound`.
 const NOT_FOUND: i32 = -25300;
 
-/// Read the credentials; one that can't be read is reported and left out.
 pub fn load() -> Credentials {
     let chatgpt = read(CHATGPT)
         .and_then(|bytes| {
@@ -37,7 +33,6 @@ pub fn load() -> Credentials {
     Credentials { chatgpt, api_key }
 }
 
-/// Write the credentials in `new` that differ from `old`, what the keychain holds.
 pub fn save(new: &Credentials, old: &Credentials) -> Result<()> {
     if new.chatgpt != old.chatgpt {
         let json = new.chatgpt.as_ref().map(serde_json::to_vec).transpose()?;
@@ -52,7 +47,6 @@ pub fn save(new: &Credentials, old: &Credentials) -> Result<()> {
     Ok(())
 }
 
-/// Return the item for `account`, if there is one.
 fn read(account: &str) -> Result<Option<Vec<u8>>> {
     match get_generic_password(SERVICE, account) {
         Ok(bytes) => Ok(Some(bytes)),
@@ -61,7 +55,6 @@ fn read(account: &str) -> Result<Option<Vec<u8>>> {
     }
 }
 
-/// Store `secret` for `account`, or delete the item when it's `None`.
 fn write(account: &str, secret: Option<&[u8]>) -> Result<()> {
     let result = match secret {
         Some(secret) => set_generic_password(SERVICE, account, secret),

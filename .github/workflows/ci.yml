@@ -1,7 +1,6 @@
 name: CI
 
-# Not on push: every push to main that changes the app runs these checks
-# through the release.
+# Release calls CI for main pushes; don't run it twice.
 on:
   pull_request:
   workflow_call:
@@ -9,8 +8,7 @@ on:
 
 jobs:
   rust:
-    # The app is macOS only (AppKit), and its Swift bridge needs the macOS 26
-    # SDK, which has Apple's on-device model.
+    # Foundation Models needs the macOS 26 SDK.
     runs-on: macos-26
 
     steps:
@@ -20,14 +18,12 @@ jobs:
           components: clippy, rustfmt
       - name: Format
         run: cargo fmt --all --check
-      # Compiled dependencies, saved by runs on main and reused until Cargo.lock changes.
       - uses: Swatinem/rust-cache@v2.9.3
       - name: Clippy
         run: cargo clippy --all-targets --locked -- -D warnings
       - name: Test
         run: cargo test --locked
 
-  # Its own job, as it compiles nothing and would otherwise wait for the tests.
   licenses:
     runs-on: macos-26
 
