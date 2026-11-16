@@ -29,6 +29,9 @@ use self::view::{CORNER, WIDTH, on_key, view};
 /// Keep the window on the main thread, as AppKit requires.
 pub fn run(start: Start) -> Result<()> {
     let _only = single_instance()?;
+    // Rune ends the process at once by default, which would skip `drop(rt)` below: it waits
+    // for a running paste to put the user's clipboard back.
+    rune::orderly_exit();
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .enable_all()
