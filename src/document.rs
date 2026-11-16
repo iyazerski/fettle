@@ -31,7 +31,8 @@ pub struct Request {
 }
 
 impl Document {
-    /// Treat the initial text as checked, restoring only mistakes already known.
+    /// Treat the initial text as checked, restoring only mistakes already known. `known`
+    /// returns ranges within the paragraph it's given.
     pub fn new(text: Vec<u16>, mut known: impl FnMut(&[u16]) -> Option<Vec<Range<usize>>>) -> Self {
         let mut mistakes = Vec::new();
         let mut start = 0;
@@ -139,7 +140,8 @@ impl Document {
         None
     }
 
-    /// Keep existing marks on failure (`None`), and ignore stale or unknown checks.
+    /// `found` holds ranges within the checked paragraph. Keep existing marks on failure
+    /// (`None`), and ignore stale or unknown checks.
     pub fn finish(&mut self, id: u64, found: Option<Vec<Range<usize>>>) -> bool {
         let Check::Running {
             id: running,

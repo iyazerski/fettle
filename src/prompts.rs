@@ -100,3 +100,18 @@ pub fn system(action: Action, language: &str) -> String {
 pub fn dictation() -> String {
     DICTATION.to_owned()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn prompts_name_the_language_and_style() {
+        let translate = system(Action::Translate, "Polish");
+        assert!(translate.contains("into Polish."));
+        assert!(!translate.contains("<language>"));
+        let rewrite = system(Action::Rewrite(Style::Shorter), "Polish");
+        assert!(rewrite.contains("so it is shorter:"));
+        assert!(!rewrite.contains("<style>"));
+    }
+}

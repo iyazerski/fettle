@@ -113,7 +113,6 @@ pub fn run(start: Start) -> Result<()> {
         );
         vec![WindowSpec::from_app("fettle", app).configured_options(options)]
     });
-    drop(rt);
     Ok(())
 }
 

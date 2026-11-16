@@ -131,6 +131,7 @@ impl Checker {
         self.send(Command::Locate(target.opened))
     }
 
+    /// Call once the window hides: the worker pastes with ⌘C and ⌘V in the field's app.
     pub fn replace(&self, text: String) {
         self.send(Command::Replace(text));
     }
