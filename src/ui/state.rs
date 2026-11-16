@@ -416,7 +416,8 @@ impl State {
         self.app.hide();
     }
 
-    /// Stay open during onboarding, permission prompts, and shortcut recording.
+    /// Stay open while pinned, during onboarding and shortcut recording, and while macOS asks
+    /// to allow dictation.
     pub fn blurred(&mut self) {
         let onboarding = matches!(self.page, Page::Onboarding(_));
         let asking = matches!(self.dictation, Some(Dictation::Asking));

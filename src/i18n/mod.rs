@@ -1,3 +1,5 @@
+//! Only the window's text is translated. Prompts to the model stay in English.
+
 mod ar;
 mod de;
 mod en;
