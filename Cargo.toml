@@ -30,9 +30,9 @@ ring = "0.17"
 # TLS crypto through ring, which Fettle already uses, rather than aws-lc-rs.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 # Rune is pre-release and changes often: keep one tested revision.
-rune = { git = "https://github.com/anomalyco/rune", rev = "7a92d24d63d9be8480e3e475489d2a4d0ed48c8d" }
-rune-kit = { git = "https://github.com/anomalyco/rune", rev = "7a92d24d63d9be8480e3e475489d2a4d0ed48c8d" }
-rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "7a92d24d63d9be8480e3e475489d2a4d0ed48c8d" }
+rune = { git = "https://github.com/anomalyco/rune", rev = "1c5d7edf14ae85cf320b2812c469792ced5d3ab0" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "1c5d7edf14ae85cf320b2812c469792ced5d3ab0" }
+rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "1c5d7edf14ae85cf320b2812c469792ced5d3ab0" }
 security-framework = "3"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
@@ -48,9 +48,9 @@ html-escape = "0.3"
 # reach this workspace. Keep the rev the same as the Rune pin above. Rune's other
 # patches (wgpu-hal, accesskit_windows) only change Windows code.
 [patch.crates-io]
-accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "7a92d24d63d9be8480e3e475489d2a4d0ed48c8d" }
-parley_engine = { git = "https://github.com/anomalyco/rune", rev = "7a92d24d63d9be8480e3e475489d2a4d0ed48c8d" }
-winit = { git = "https://github.com/anomalyco/rune", rev = "7a92d24d63d9be8480e3e475489d2a4d0ed48c8d" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "1c5d7edf14ae85cf320b2812c469792ced5d3ab0" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "1c5d7edf14ae85cf320b2812c469792ced5d3ab0" }
+winit = { git = "https://github.com/anomalyco/rune", rev = "1c5d7edf14ae85cf320b2812c469792ced5d3ab0" }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
