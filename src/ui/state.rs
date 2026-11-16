@@ -678,12 +678,14 @@ impl State {
         self.report(fill(self.t().save_failed, format_args!("{error:#}")));
     }
 
-    /// Flush before the runtime stops, and undo Accessibility changes before exit.
+    /// Flush before the runtime stops, undo Accessibility changes, and let a paste put the
+    /// user's clipboard back before exit.
     pub fn quitting(&mut self) {
         if let Err(e) = self.saver.flush() {
             eprintln!("saving the settings: {e:#}");
         }
         self.checker.quit();
+        mac::keep_pasteboard();
     }
 
     pub(super) fn report(&mut self, message: String) {

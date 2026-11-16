@@ -178,6 +178,12 @@ fn borrow() -> MutexGuard<'static, ()> {
     BORROWED.lock().expect("pasteboard lock poisoned")
 }
 
+/// Wait for a running copy or paste to give the pasteboard back, and hold it until the process
+/// ends, so none starts while it quits. Quitting doesn't wait for background threads.
+pub fn keep_pasteboard() {
+    std::mem::forget(borrow());
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct Clip(pub Vec<(String, Vec<u8>)>);
 
