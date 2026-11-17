@@ -15,6 +15,7 @@ use super::pending::{Pending, Ticket};
 use super::saver::Saver;
 use super::settings_state::{Form, FormError, Update};
 use super::view::{MIN_WIDTH, WIDTH};
+use crate::diff::Kind;
 use crate::i18n::{Locale, Strings, fill};
 use crate::llm::on_device::{self, Availability, Refusal};
 use crate::llm::{Ask, Backend};
@@ -323,8 +324,12 @@ impl State {
         self.checker.asking(id, request);
     }
 
-    pub fn underline_clicked(&mut self, point: (f64, f64)) {
-        if !self.app.is_visible() && !self.capturing {
+    /// A window opened from an underline leaves the field its keys, so it gets no blur
+    /// when the user clicks elsewhere: the click hides it instead.
+    pub fn clicked_elsewhere(&mut self, point: (f64, f64)) {
+        if self.app.is_visible() {
+            self.blurred();
+        } else if !self.capturing {
             self.checker.clicked(point);
         }
     }
@@ -376,7 +381,12 @@ impl State {
             self.placement.position = Some(position);
             self.app.set_position(position);
         }
-        self.app.open();
+        // Over an underline, the field keeps its keys so the user can fix the text by hand.
+        if self.placement.over.is_some() {
+            self.app.show();
+        } else {
+            self.app.open();
+        }
     }
 
     pub fn laid_out(&mut self, size: (f32, f32), tx: &mut Tx) {
@@ -638,8 +648,8 @@ impl State {
         });
     }
 
-    pub fn decline(&mut self, n: usize) {
-        self.draft.decline(n);
+    pub fn keep(&mut self, n: usize, side: Kind) {
+        self.draft.keep(n, side);
     }
 
     pub fn copy(&mut self, tx: &mut Tx) {

@@ -99,12 +99,13 @@ pub fn numbered(pieces: &[Piece]) -> impl Iterator<Item = (Option<usize>, &Piece
     })
 }
 
-pub fn decline(pieces: Vec<Piece>, n: usize) -> Vec<Piece> {
+/// Settle change `n` on one side: `Kind::Removed` keeps the old words, `Kind::Added` the new.
+pub fn keep(pieces: Vec<Piece>, n: usize, side: Kind) -> Vec<Piece> {
     let changes: Vec<Option<usize>> = numbered(&pieces).map(|(change, _)| change).collect();
     let mut out: Vec<Piece> = Vec::with_capacity(pieces.len());
     for (change, mut piece) in changes.into_iter().zip(pieces) {
         if change == Some(n) {
-            if piece.kind == Kind::Added {
+            if piece.kind != side {
                 continue;
             }
             piece.kind = Kind::Same;
@@ -287,29 +288,34 @@ mod tests {
     }
 
     #[test]
-    fn declining_a_change_keeps_the_old_words_there() {
-        let old = "We discussed about it on the meeting.";
-        let pieces = words(old, "We discussed it at the meeting.");
+    fn keeping_a_side_settles_only_that_change() {
+        let (old, new) = (
+            "We discussed about it on the meeting.",
+            "We discussed it at the meeting.",
+        );
+        let pieces = words(old, new);
         let cases = [
             (
                 0,
+                Kind::Removed,
                 "We discussed about it [-on-]{+at+} the meeting.",
-                "We discussed about it at the meeting.",
             ),
             (
                 1,
+                Kind::Removed,
                 "We discussed [-about -]it on the meeting.",
-                "We discussed it on the meeting.",
             ),
+            (1, Kind::Added, "We discussed [-about -]it at the meeting."),
         ];
-        for (n, want, text) in cases {
-            let declined = decline(pieces.clone(), n);
-            assert_eq!(show(&declined), want, "change {n}");
-            assert_eq!(result(&declined), text);
-            assert_eq!(side(&declined, Kind::Added), old);
+        for (n, side, want) in cases {
+            let kept = keep(pieces.clone(), n, side);
+            assert_eq!(show(&kept), want, "change {n}, {side:?}");
         }
-        let none = decline(decline(pieces, 0), 0);
-        assert_eq!(result(&none), old);
-        assert!(!changed(&none));
+        let olds = keep(keep(pieces.clone(), 0, Kind::Removed), 0, Kind::Removed);
+        assert_eq!(result(&olds), old);
+        assert!(!changed(&olds));
+        let news = keep(keep(pieces, 0, Kind::Added), 0, Kind::Added);
+        assert_eq!(result(&news), new);
+        assert!(!changed(&news));
     }
 }
