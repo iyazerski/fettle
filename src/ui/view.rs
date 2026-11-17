@@ -594,8 +594,9 @@ fn diff_text(s: &State, changes: &[Piece], k: &Kit) -> El {
     let mut content = String::new();
     let mut spans = Vec::new();
     let mut strikes = Vec::new();
-    // Each change's bytes in `content`, by its number.
-    let mut ranges: Vec<std::ops::Range<usize>> = Vec::new();
+    let hover = LinkPaint::new().ring(k.c.border_strong, 1.0);
+    // Each side of a change is a link that keeps it.
+    let mut links = Vec::new();
     let mut previous = Kind::Same;
     for (change, piece) in diff::numbered(changes) {
         // A thin space keeps a word from running into the one that replaces it.
@@ -606,10 +607,17 @@ fn diff_text(s: &State, changes: &[Piece], k: &Kit) -> El {
         let start = content.len();
         content.push_str(&piece.text);
         if let Some(n) = change {
-            match ranges.get_mut(n) {
-                Some(range) => range.end = content.len(),
-                None => ranges.push(start..content.len()),
-            }
+            let (sign, help) = match piece.kind {
+                Kind::Added => ('+', t.keep_change),
+                _ => ('-', t.keep_original),
+            };
+            let id = format!("{sign}{n}");
+            links.push(
+                Link::new(start..content.len(), id)
+                    .role("button")
+                    .help(help)
+                    .hover(hover),
+            );
         }
         let span = Span::new(start, content.len());
         match piece.kind {
@@ -632,21 +640,19 @@ fn diff_text(s: &State, changes: &[Piece], k: &Kit) -> El {
             }),
         }
     }
-    let hover = LinkPaint::new().ring(k.c.border_strong, 1.0);
-    let text = ranges
-        .into_iter()
-        .enumerate()
-        .fold(rich(content, spans), |text, (n, range)| {
-            text.link(
-                Link::new(range, n.to_string())
-                    .role("button")
-                    .help(t.decline_change)
-                    .hover(hover),
-            )
-        });
+    let text = links.into_iter().fold(rich(content, spans), El::link);
     text.on_link(|s: &mut State, id, _| {
-        if let Ok(n) = id.parse() {
-            s.decline(n);
+        if let Some((sign, n)) = id.split_at_checked(1)
+            && let Ok(n) = n.parse()
+        {
+            s.keep(
+                n,
+                if sign == "+" {
+                    Kind::Added
+                } else {
+                    Kind::Removed
+                },
+            );
         }
     })
     .strikes(strikes)

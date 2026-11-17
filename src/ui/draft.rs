@@ -1,7 +1,7 @@
 use rune::TextEdit;
 use tokio::task::JoinHandle;
 
-use crate::diff::{self, Piece};
+use crate::diff::{self, Kind, Piece};
 use crate::hyphens;
 use crate::prompts::Action;
 
@@ -126,7 +126,7 @@ impl Draft {
         }
     }
 
-    pub fn decline(&mut self, n: usize) {
+    pub fn keep(&mut self, n: usize, side: Kind) {
         if let Some(Answer {
             status:
                 Status::Done {
@@ -138,7 +138,7 @@ impl Draft {
         }) = self.answer.as_mut()
             && diff::changed(changes)
         {
-            *changes = diff::decline(std::mem::take(changes), n);
+            *changes = diff::keep(std::mem::take(changes), n, side);
             *text = diff::result(changes);
             *copied = false;
         }

@@ -61,7 +61,7 @@ impl Checker {
         let clicks = app.clone();
         self.running = Some(Running {
             worker,
-            _clicks: Clicks::watch(move |at| clicks.update(move |s, _| s.underline_clicked(at))),
+            _clicks: Clicks::watch(move |at| clicks.update(move |s, _| s.clicked_elsewhere(at))),
         });
     }
 
