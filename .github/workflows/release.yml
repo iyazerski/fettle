@@ -25,14 +25,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  ci:
-    uses: ./.github/workflows/ci.yml
-
-  release:
-    needs: ci
-    runs-on: macos-26
-    permissions:
-      contents: write
+  macos:
+    # Foundation Models needs the macOS 26 SDK, which Xcode 26 provides on macos-15.
+    runs-on: macos-15
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     env:
       ASSET: Fettle.zip
       TARGET: aarch64-apple-darwin
@@ -45,7 +43,14 @@ jobs:
         run: |
           minor=$(sed -nE 's/^version = "([0-9]+\.[0-9]+)\..*"/\1/p' Cargo.toml)
           patch=$(git tag --list "v$minor.*" | wc -l | tr -d ' ')
-          echo "VERSION=$minor.$patch" >> "$GITHUB_ENV"
+          version="$minor.$patch"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Select Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n 1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ env.TARGET }}
@@ -55,6 +60,8 @@ jobs:
       - name: Test binary
         run: target/$TARGET/release/fettle --version
       - uses: astral-sh/setup-uv@v10.3.3
+        with:
+          enable-cache: false
       # A self-signed certificate, the same for every release, so macOS keeps
       # the Accessibility grant when Fettle updates.
       - name: Import signing certificate
@@ -85,6 +92,30 @@ jobs:
           cd dist
           shasum -a 256 "$ASSET" > "$ASSET.sha256"
           shasum -a 256 Fettle.dmg > Fettle.dmg.sha256
+      - uses: actions/upload-artifact@v7
+        with:
+          name: macos
+          path: dist/*
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    needs: macos
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.macos.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: macos
+          path: dist
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -112,13 +143,13 @@ jobs:
         env:
           DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
         run: |
-          sha=$(cut -d' ' -f1 "dist/$ASSET.sha256")
+          sha=$(cut -d' ' -f1 dist/Fettle.zip.sha256)
           export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
           echo "$DEPLOY_KEY" > "$RUNNER_TEMP/tap_key"
           chmod 600 "$RUNNER_TEMP/tap_key"
           git clone --depth 1 git@github.com:iyazerski/homebrew-tap.git "$RUNNER_TEMP/tap"
           cd "$RUNNER_TEMP/tap"
-          sed -i '' -E "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/fettle.rb
+          sed -i -E "s/^  version \".*\"/  version \"$VERSION\"/; s/^  sha256 \".*\"/  sha256 \"$sha\"/" Casks/fettle.rb
           git diff --stat
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -am "Update Fettle to $VERSION"

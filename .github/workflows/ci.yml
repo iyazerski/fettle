@@ -1,9 +1,7 @@
 name: CI
 
-# Release calls CI for main pushes; don't run it twice.
 on:
   pull_request:
-  workflow_call:
   workflow_dispatch:
 
 # Only PR runs share a group, so a new push cancels the outdated run and frees its macOS runner.
@@ -16,28 +14,16 @@ env:
   CARGO_PROFILE_DEV_DEBUG: 0
 
 jobs:
-  rust:
-    # Foundation Models needs the macOS 26 SDK.
-    runs-on: macos-26
-
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy, rustfmt
+          components: rustfmt
       - name: Format
         run: cargo fmt --all --check
-      - uses: Swatinem/rust-cache@v2.9.3
-      - name: Clippy
-        run: cargo clippy --all-targets --locked -- -D warnings
-      - name: Test
-        run: cargo test --locked
-
-  licenses:
-    runs-on: ubuntu-24.04
-
-    steps:
-      - uses: actions/checkout@v7
       - uses: taiki-e/install-action@v2.90.6
         with:
           tool: cargo-about
@@ -48,3 +34,23 @@ jobs:
             echo "::error::THIRD_PARTY_LICENSES.md is stale: run make licenses and commit it"
             exit 1
           }
+
+  macos:
+    # Foundation Models needs the macOS 26 SDK, which Xcode 26 provides on macos-15.
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Select Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app | sort -V | tail -n 1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2.9.3
+      - name: Clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --locked
