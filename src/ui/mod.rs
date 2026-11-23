@@ -37,8 +37,7 @@ pub fn run(start: Start) -> Result<()> {
     let http = crate::llm::http()?;
     let settings_path = Settings::path();
     let mut settings = Settings::load(&settings_path);
-    let credentials = keychain::load();
-    settings.credentials = credentials.clone();
+    settings.credentials = keychain::load();
 
     let spec = AppSpec {
         fonts: rune_theme_opencode::FONTS,
@@ -60,7 +59,7 @@ pub fn run(start: Start) -> Result<()> {
     let handle = rt.handle().clone();
     me.update(move |s, _| s.started(start));
     let app = app
-        .init(move || State::new(me, handle, http, settings, settings_path, credentials))
+        .init(move || State::new(me, handle, http, settings, settings_path))
         .on_focus(|s, focused, _| {
             if focused {
                 // Back from System Settings, where Accessibility or Apple

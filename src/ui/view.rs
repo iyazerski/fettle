@@ -687,7 +687,7 @@ pub fn note(k: &Kit, message: &str, kind: NoteKind) -> El {
         }
     };
     line.child(
-        text(message.to_owned())
+        text(message)
             .font(k.ty.text_small)
             .color(color)
             .wrap()

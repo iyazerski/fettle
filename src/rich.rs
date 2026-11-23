@@ -102,19 +102,18 @@ fn byte(text: &str, n: usize) -> usize {
 fn html(data: &[u8], edit: impl FnOnce(&mut [String]) -> bool) -> Option<Vec<u8>> {
     let source = std::str::from_utf8(data).ok()?;
     let nodes = text_nodes(source);
-    let old: Vec<String> = nodes
+    let mut texts: Vec<String> = nodes
         .iter()
         .map(|r| html_escape::decode_html_entities(&source[r.clone()]).into_owned())
         .collect();
-    let mut texts = old.clone();
     if !edit(&mut texts) {
         return None;
     }
     let mut out = String::with_capacity(source.len());
     let mut at = 0;
-    for ((range, text), was) in nodes.iter().zip(&texts).zip(&old) {
+    for (range, text) in nodes.iter().zip(&texts) {
         out.push_str(&source[at..range.start]);
-        if text == was {
+        if text.as_str() == html_escape::decode_html_entities(&source[range.clone()]) {
             out.push_str(&source[range.clone()]);
         } else {
             out.push_str(&html_escape::encode_text(text));

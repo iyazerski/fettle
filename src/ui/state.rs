@@ -22,7 +22,7 @@ use crate::llm::{Ask, Backend};
 use crate::mac::{self, Clip, Copied};
 use crate::prompts::{self, Action, Style};
 use crate::rich;
-use crate::settings::{Credentials, Settings};
+use crate::settings::Settings;
 use crate::underlines::Line;
 
 const TOP_MARGIN: f32 = 120.0;
@@ -158,16 +158,9 @@ impl State {
         http: reqwest::Client,
         settings: Settings,
         settings_path: PathBuf,
-        saved_credentials: Credentials,
     ) -> Self {
         let form = Form::new(&settings);
-        let saver = Saver::new(
-            &rt,
-            app.clone(),
-            &settings,
-            settings_path,
-            saved_credentials,
-        );
+        let saver = Saver::new(&rt, app.clone(), &settings, settings_path);
         Self {
             client: Client::new(app.clone(), rt, http),
             app,

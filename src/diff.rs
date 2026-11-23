@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::ops::Range;
 use std::time::Duration;
 
@@ -82,11 +83,15 @@ fn push(out: &mut Vec<Piece>, kind: Kind, text: &str) {
 }
 
 /// Number contiguous removed/added groups from zero; unchanged pieces have no number.
-pub fn numbered(pieces: &[Piece]) -> impl Iterator<Item = (Option<usize>, &Piece)> {
+pub fn numbered<I: IntoIterator>(pieces: I) -> impl Iterator<Item = (Option<usize>, I::Item)>
+where
+    I::Item: Borrow<Piece>,
+{
     let mut next = 0;
     let mut previous = Kind::Same;
-    pieces.iter().map(move |piece| {
-        let change = match piece.kind {
+    pieces.into_iter().map(move |piece| {
+        let kind = piece.borrow().kind;
+        let change = match kind {
             Kind::Same => None,
             _ if previous == Kind::Same => {
                 next += 1;
@@ -94,16 +99,14 @@ pub fn numbered(pieces: &[Piece]) -> impl Iterator<Item = (Option<usize>, &Piece
             }
             _ => Some(next - 1),
         };
-        previous = piece.kind;
+        previous = kind;
         (change, piece)
     })
 }
 
-/// Settle change `n` on one side: `Kind::Removed` keeps the old words, `Kind::Added` the new.
-pub fn keep(pieces: Vec<Piece>, n: usize, side: Kind) -> Vec<Piece> {
-    let changes: Vec<Option<usize>> = numbered(&pieces).map(|(change, _)| change).collect();
+pub fn keep(pieces: &mut Vec<Piece>, n: usize, side: Kind) {
     let mut out: Vec<Piece> = Vec::with_capacity(pieces.len());
-    for (change, mut piece) in changes.into_iter().zip(pieces) {
+    for (change, mut piece) in numbered(pieces.drain(..)) {
         if change == Some(n) {
             if piece.kind != side {
                 continue;
@@ -115,7 +118,7 @@ pub fn keep(pieces: Vec<Piece>, n: usize, side: Kind) -> Vec<Piece> {
             _ => out.push(piece),
         }
     }
-    out
+    *pieces = out;
 }
 
 pub fn result(pieces: &[Piece]) -> String {
@@ -308,13 +311,18 @@ mod tests {
             (1, Kind::Added, "We discussed [-about -]it at the meeting."),
         ];
         for (n, side, want) in cases {
-            let kept = keep(pieces.clone(), n, side);
+            let mut kept = pieces.clone();
+            keep(&mut kept, n, side);
             assert_eq!(show(&kept), want, "change {n}, {side:?}");
         }
-        let olds = keep(keep(pieces.clone(), 0, Kind::Removed), 0, Kind::Removed);
+        let mut olds = pieces.clone();
+        keep(&mut olds, 0, Kind::Removed);
+        keep(&mut olds, 0, Kind::Removed);
         assert_eq!(result(&olds), old);
         assert!(!changed(&olds));
-        let news = keep(keep(pieces, 0, Kind::Added), 0, Kind::Added);
+        let mut news = pieces;
+        keep(&mut news, 0, Kind::Added);
+        keep(&mut news, 0, Kind::Added);
         assert_eq!(result(&news), new);
         assert!(!changed(&news));
     }

@@ -1,5 +1,6 @@
 //! Accessibility text ranges count UTF-16 code units.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::ffi::c_void;
@@ -349,11 +350,11 @@ impl Runs {
 pub struct Watch {
     observer: CFRetained<AXObserver>,
     run_loop: CFRetained<CFRunLoop>,
-    on_change: *mut Box<dyn Fn()>,
+    changed: *const Cell<bool>,
 }
 
 impl Watch {
-    pub fn new(pid: i32, on_change: impl Fn() + 'static) -> Option<Self> {
+    pub fn new(pid: i32) -> Option<Self> {
         let mut out: *mut AXObserver = ptr::null_mut();
         // SAFETY: `out` receives a +1 reference on success.
         let error = unsafe { AXObserver::create(pid, Some(changed), NonNull::from(&mut out)) };
@@ -362,11 +363,10 @@ impl Watch {
         }
         // SAFETY: a successful create hands over a +1 reference.
         let observer = unsafe { CFRetained::from_raw(NonNull::new(out)?) };
-        let on_change: Box<Box<dyn Fn()>> = Box::new(Box::new(on_change));
         let watch = Self {
             observer,
             run_loop: CFRunLoop::current()?,
-            on_change: Box::into_raw(on_change),
+            changed: Box::into_raw(Box::new(Cell::new(false))),
         };
         // SAFETY: a plain CF object for the app with `pid`.
         let app = unsafe { AXUIElement::new_application(pid) };
@@ -377,7 +377,7 @@ impl Watch {
             unsafe {
                 watch
                     .observer
-                    .add_notification(&app, &name, watch.on_change.cast())
+                    .add_notification(&app, &name, watch.changed.cast_mut().cast())
             };
         }
         // SAFETY: an immutable constant set up before any code runs, and the
@@ -385,6 +385,11 @@ impl Watch {
         let (modes, source) = unsafe { (kCFRunLoopCommonModes, watch.observer.run_loop_source()) };
         watch.run_loop.add_source(Some(&source), modes);
         Some(watch)
+    }
+
+    pub fn take_changed(&self) -> bool {
+        // SAFETY: `self.changed` lives until `drop` and is only touched on the creating thread.
+        unsafe { &*self.changed }.replace(false)
     }
 }
 
@@ -395,7 +400,7 @@ impl Drop for Watch {
         self.run_loop.remove_source(Some(&source), modes);
         // SAFETY: made by `Box::into_raw` in `new`, and the run loop no longer
         // calls `changed` with it.
-        drop(unsafe { Box::from_raw(self.on_change) });
+        drop(unsafe { Box::from_raw(self.changed.cast_mut()) });
     }
 }
 
@@ -453,11 +458,10 @@ unsafe extern "C-unwind" fn changed(
     _: NonNull<AXObserver>,
     _: NonNull<AXUIElement>,
     _: NonNull<CFString>,
-    on_change: *mut c_void,
+    flag: *mut c_void,
 ) {
-    // SAFETY: the refcon is the `Watch`'s callback, alive while the observer is on the run loop.
-    let on_change = unsafe { &*on_change.cast::<Box<dyn Fn()>>() };
-    on_change();
+    // SAFETY: the refcon is the `Watch`'s flag, alive while the observer is on the run loop.
+    unsafe { &*flag.cast::<Cell<bool>>() }.set(true);
 }
 
 /// Return where `range` of `element`'s text shows, in screen points from the

@@ -128,7 +128,7 @@ impl Draft {
         }) = self.answer.as_mut()
             && diff::changed(changes)
         {
-            *changes = diff::keep(std::mem::take(changes), n, side);
+            diff::keep(changes, n, side);
             *text = diff::result(changes);
             *copied = false;
         }

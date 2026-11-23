@@ -1,9 +1,7 @@
 //! Accessibility calls can block on other apps, so they run on this worker, not the UI thread.
 
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::ops::Range;
-use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
@@ -130,7 +128,6 @@ struct Worker {
     checks: u64,
     fixes: HashMap<Vec<u16>, Fix>,
     watch: Option<(i32, Watch)>,
-    changed: Rc<Cell<bool>>,
     session: Option<Session>,
     /// Fields underlined before, most recent last, to pick up again.
     recent: Vec<Session>,
@@ -181,7 +178,6 @@ impl Worker {
             checks: 0,
             fixes: HashMap::new(),
             watch: None,
-            changed: Rc::default(),
             session: None,
             recent: Vec::new(),
             left_alone: None,
@@ -207,7 +203,8 @@ impl Worker {
             }
             let now = Instant::now();
             let idle = self.idle_at.is_some_and(|at| at <= now);
-            if self.changed.replace(false) || idle || self.next_tick <= now {
+            let changed = self.watch.as_ref().is_some_and(|(_, w)| w.take_changed());
+            if changed || idle || self.next_tick <= now {
                 if idle {
                     self.idle_at = None;
                 }
@@ -303,8 +300,7 @@ impl Worker {
             .as_ref()
             .is_none_or(|(watched, _)| *watched != pid)
         {
-            let changed = Rc::clone(&self.changed);
-            self.watch = Watch::new(pid, move || changed.set(true)).map(|w| (pid, w));
+            self.watch = Watch::new(pid).map(|w| (pid, w));
         }
         let same = self.session.as_ref().is_some_and(|s| s.field == field);
         if (!same && !self.underlines_in(&field)) || !field.read(MAX_TEXT, &mut self.buffer) {
@@ -560,22 +556,18 @@ fn inside(rect: CGRect, frame: Option<CGRect>) -> bool {
 }
 
 /// Split phrases into words so wrapped text gets separate underlines, not one large box.
-fn words(text: &[u16], range: Range<usize>) -> Vec<Range<usize>> {
+fn words(text: &[u16], range: Range<usize>) -> impl Iterator<Item = Range<usize>> + '_ {
     let space = |u: u16| char::from_u32(u32::from(u)).is_some_and(char::is_whitespace);
-    let mut out = Vec::new();
-    let mut start = None;
-    for i in range.clone() {
-        match (start, text.get(i).copied().is_some_and(space)) {
-            (None, false) => start = Some(i),
-            (Some(s), true) => {
-                out.push(s..i);
-                start = None;
-            }
-            _ => {}
+    let end = range.end.min(text.len());
+    let mut i = range.start;
+    std::iter::from_fn(move || {
+        while i < end && space(text[i]) {
+            i += 1;
         }
-    }
-    if let Some(s) = start {
-        out.push(s..range.end.min(text.len()));
-    }
-    out
+        let start = i;
+        while i < end && !space(text[i]) {
+            i += 1;
+        }
+        (start < i).then_some(start..i)
+    })
 }
