@@ -193,15 +193,7 @@ impl State {
     pub fn sign_in(&mut self) {
         let client = self.client.clone();
         let waiting = Pending::spawn(&self.client, |ticket| async move {
-            let result = chatgpt::login(client.http(), |url| {
-                if let Err(e) = std::process::Command::new("/usr/bin/open")
-                    .arg(url)
-                    .status()
-                {
-                    eprintln!("opening the browser: {e}");
-                }
-            })
-            .await;
+            let result = chatgpt::login(client.http(), mac::open_url).await;
             let result = result.map_err(|e| format!("{e:#}"));
             client.app().update(move |s, _| s.signed_in(ticket, result));
         });

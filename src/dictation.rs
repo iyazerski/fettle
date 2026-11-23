@@ -2,7 +2,7 @@
 
 use std::cell::RefCell;
 use std::ptr::NonNull;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use block2::RcBlock;
 use objc2::rc::Retained;
@@ -45,45 +45,45 @@ pub struct Listening {
 }
 
 /// The permission callback may run on any thread.
-pub fn authorize(done: impl FnOnce(Allowed) + Send + 'static) {
-    let done = Once::new(done);
+pub fn authorize(done: impl Fn(Allowed) + Send + Sync + 'static) {
+    let done = Arc::new(done);
     // SAFETY: the status is a plain class property.
     match unsafe { SFSpeechRecognizer::authorizationStatus() } {
         SFSpeechRecognizerAuthorizationStatus::Authorized => microphone(done),
         SFSpeechRecognizerAuthorizationStatus::NotDetermined => {
             let asked = RcBlock::new(move |status: SFSpeechRecognizerAuthorizationStatus| {
                 if status == SFSpeechRecognizerAuthorizationStatus::Authorized {
-                    microphone(done.clone());
+                    microphone(Arc::clone(&done));
                 } else {
-                    done.call(Err(Problem::SpeechOff));
+                    done(Err(Problem::SpeechOff));
                 }
             });
             // SAFETY: the binary's Info.plist explains the request, which
             // macOS requires; the block is copied and may run on any queue.
             unsafe { SFSpeechRecognizer::requestAuthorization(&asked) };
         }
-        _ => done.call(Err(Problem::SpeechOff)),
+        _ => done(Err(Problem::SpeechOff)),
     }
 }
 
-fn microphone(done: Once) {
+fn microphone(done: Arc<impl Fn(Allowed) + Send + Sync + 'static>) {
     // SAFETY: AVFoundation defines the audio media type for the app's life.
     let Some(audio) = (unsafe { AVMediaTypeAudio }) else {
-        return done.call(Err(Problem::Unavailable));
+        return done(Err(Problem::Unavailable));
     };
     let denied = || Err(Problem::MicrophoneOff);
     // SAFETY: a class property, read with a valid media type.
     match unsafe { AVCaptureDevice::authorizationStatusForMediaType(audio) } {
-        AVAuthorizationStatus::Authorized => done.call(Ok(())),
+        AVAuthorizationStatus::Authorized => done(Ok(())),
         AVAuthorizationStatus::NotDetermined => {
             let asked = RcBlock::new(move |granted: Bool| {
-                done.call(if granted.as_bool() { Ok(()) } else { denied() });
+                done(if granted.as_bool() { Ok(()) } else { denied() });
             });
             // SAFETY: as for speech recognition: the Info.plist explains it,
             // and the block may run on any queue.
             unsafe { AVCaptureDevice::requestAccessForMediaType_completionHandler(audio, &asked) };
         }
-        _ => done.call(denied()),
+        _ => done(denied()),
     }
 }
 
@@ -265,25 +265,6 @@ pub fn join(before: &str, after: &str) -> String {
 }
 
 type Allowed = Result<(), Problem>;
-type Callback = Box<dyn FnOnce(Allowed) + Send>;
-
-/// `authorize`'s callback, shared by blocks that AppKit may copy and call
-/// more than once; it runs once.
-#[derive(Clone)]
-struct Once(Arc<Mutex<Option<Callback>>>);
-
-impl Once {
-    fn new(f: impl FnOnce(Allowed) + Send + 'static) -> Self {
-        Self(Arc::new(Mutex::new(Some(Box::new(f)))))
-    }
-
-    fn call(&self, allowed: Allowed) {
-        let f = self.0.lock().unwrap_or_else(|e| e.into_inner()).take();
-        if let Some(f) = f {
-            f(allowed);
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {

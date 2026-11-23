@@ -54,11 +54,7 @@ const MESSENGERS: [&str; 3] = [
     "net.whatsapp.WhatsApp",
 ];
 const MESSENGER_SITES: [&str; 2] = ["web.telegram.org", "web.whatsapp.com"];
-/// Bound ancestor traversal when looking for a messenger's web host.
 const MAX_DEPTH: usize = 64;
-/// Bundle ID prefixes of vendors whose apps are all skipped: every JetBrains
-/// IDE has its own ID.
-const SKIPPED_VENDORS: [&str; 1] = ["com.jetbrains."];
 const CHROMIUM_BROWSERS: [&str; 7] = [
     "com.google.Chrome",
     "org.chromium.Chromium",
@@ -143,9 +139,8 @@ fn append_units(text: &CFString, buffer: &mut Vec<u16>) {
 }
 
 fn is_skipped(id: &str) -> bool {
-    SKIPPED_APPS.contains(&id)
-        || MESSENGERS.contains(&id)
-        || SKIPPED_VENDORS.iter().any(|v| id.starts_with(v))
+    // Every JetBrains IDE has its own bundle ID under this prefix.
+    SKIPPED_APPS.contains(&id) || MESSENGERS.contains(&id) || id.starts_with("com.jetbrains.")
 }
 
 impl Drop for Apps {

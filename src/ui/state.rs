@@ -200,8 +200,6 @@ impl State {
         self.register_saved_shortcut();
         self.apply_underlines();
         self.apply_menu_bar();
-        // Rewrite the file without the credentials versions before 0.3 kept in it.
-        self.save();
         eprintln!(
             "fettle {} is running; {} opens it",
             crate::VERSION,
@@ -539,7 +537,8 @@ impl State {
         let (backend, model) = match Backend::with_model(&self.settings) {
             Ok(chosen) => chosen,
             Err(missing) => {
-                self.draft.fail(action, t.missing(missing).into());
+                self.draft
+                    .answered(action, Status::Failed(t.missing(missing).into()));
                 return;
             }
         };
@@ -600,13 +599,28 @@ impl State {
     }
 
     pub fn replace(&mut self) {
-        if self.draft.result().is_none() {
+        let Some(text) = self.draft.result() else {
             return;
-        }
+        };
         match &self.origin {
             Some(Origin::Underline(target)) if self.checker.locate(target) => {}
             Some(Origin::Underline(_)) => self.draft.notice = Some(self.t().text_moved.into()),
-            Some(Origin::Selection(_)) | None => self.paste(),
+            Some(Origin::Selection(_)) | None => {
+                let text = text.to_owned();
+                let copied = match self.origin.take() {
+                    Some(Origin::Selection(copied)) => Some(copied),
+                    _ => None,
+                };
+                self.hide();
+                self.client.rt().spawn_blocking(move || {
+                    let clip = match copied {
+                        Some(copied) => rich::replacement(&copied.clip, &copied.text, &text),
+                        None => Clip::plain(&text),
+                    };
+                    std::thread::sleep(PASTE_DELAY);
+                    mac::paste(&clip);
+                });
+            }
         }
     }
 
@@ -627,25 +641,6 @@ impl State {
         }
         self.hide();
         self.checker.replace(text);
-    }
-
-    fn paste(&mut self) {
-        let Some(text) = self.draft.result().map(str::to_owned) else {
-            return;
-        };
-        let copied = match self.origin.take() {
-            Some(Origin::Selection(copied)) => Some(copied),
-            Some(Origin::Underline(_)) | None => None,
-        };
-        self.hide();
-        self.client.rt().spawn_blocking(move || {
-            let clip = match copied {
-                Some(copied) => rich::replacement(&copied.clip, &copied.text, &text),
-                None => Clip::plain(&text),
-            };
-            std::thread::sleep(PASTE_DELAY);
-            mac::paste(&clip);
-        });
     }
 
     pub fn keep(&mut self, n: usize, side: Kind) {

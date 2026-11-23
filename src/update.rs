@@ -10,7 +10,6 @@ use crate::mac;
 
 const REPO: &str = "iyazerski/fettle";
 const ASSET: &str = "Fettle.zip";
-const BUNDLE_ID: &str = "dev.iyazerski.fettle";
 /// Pin the release signing certificate (`MACOS_CERT_P12` in CI); rotate this hash with it.
 const SIGNER: &str = r#"=identifier "dev.iyazerski.fettle" and certificate leaf = H"d92f0c1f8b4c244056244514e6e27e95cc431234""#;
 
@@ -96,15 +95,12 @@ fn running_app() -> Result<PathBuf> {
 
 fn swap(app: &Path, zip: &[u8]) -> Result<()> {
     let parent = app.parent().context("the app has no folder")?;
-    // Beside the app, so the swap is a rename on one volume.
-    let work = parent.join(format!(".fettle-update-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&work);
-    std::fs::create_dir(&work)
+    // Beside the app, so the swap stays on one volume; drop cleans up the old copy.
+    let work = tempfile::Builder::new()
+        .prefix(".fettle-update-")
+        .tempdir_in(parent)
         .with_context(|| format!("Fettle can't write to {}", parent.display()))?;
-    let result = unpack_and_swap(app, &work, zip);
-    // After a swap, the old version is what's left in `work`.
-    let _ = std::fs::remove_dir_all(&work);
-    result
+    unpack_and_swap(app, work.path(), zip)
 }
 
 fn unpack_and_swap(app: &Path, work: &Path, zip: &[u8]) -> Result<()> {
@@ -123,18 +119,10 @@ fn unpack_and_swap(app: &Path, work: &Path, zip: &[u8]) -> Result<()> {
         .args(["--verify", "--strict", "-R", SIGNER])
         .arg(&new))
     .context("the download isn't signed by Fettle's release certificate")?;
-    let adhoc = adhoc_signed(app);
     // One atomic exchange, so even a crash leaves one version in place.
-    exchange(&new, app).context("putting the new version in place")?;
-    if adhoc {
-        // An ad-hoc signature changes with every build, so the old grant can't
-        // match the new app: clear it, so macOS asks again.
-        let _ = run(Command::new("/usr/bin/tccutil").args(["reset", "Accessibility", BUNDLE_ID]));
-    }
-    Ok(())
+    exchange(&new, app).context("putting the new version in place")
 }
 
-/// Swap the items at `a` and `b` in one step. Both must be on one volume.
 fn exchange(a: &Path, b: &Path) -> std::io::Result<()> {
     let a = CString::new(a.as_os_str().as_bytes())?;
     let b = CString::new(b.as_os_str().as_bytes())?;
@@ -143,14 +131,6 @@ fn exchange(a: &Path, b: &Path) -> std::io::Result<()> {
         return Err(std::io::Error::last_os_error());
     }
     Ok(())
-}
-
-fn adhoc_signed(app: &Path) -> bool {
-    Command::new("/usr/bin/codesign")
-        .arg("-dv")
-        .arg(app)
-        .output()
-        .is_ok_and(|o| String::from_utf8_lossy(&o.stderr).contains("Signature=adhoc"))
 }
 
 fn run(command: &mut Command) -> Result<()> {

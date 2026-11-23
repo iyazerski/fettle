@@ -37,20 +37,10 @@ if [ ! -w "$apps" ]; then
   mkdir -p "$apps"
 fi
 
-# Ad-hoc signatures change across builds, invalidating the old Accessibility grant.
-adhoc=false
-if codesign -dv "$apps/Fettle.app" 2>&1 | grep -q 'Signature=adhoc'; then
-  adhoc=true
-fi
 pkill -x fettle 2>/dev/null && sleep 1 || true
 rm -rf "$apps/Fettle.app"
 mv "$install_tmp/Fettle.app" "$apps/Fettle.app"
 xattr -dr com.apple.quarantine "$apps/Fettle.app" 2>/dev/null || true
-
-if [ "$adhoc" = true ]; then
-  # Clear the stale grant, so Fettle asks again instead of failing to copy.
-  tccutil reset Accessibility "$id" >/dev/null 2>&1 || true
-fi
 
 echo "$("$apps/Fettle.app/Contents/MacOS/fettle" --version) is installed to $apps/Fettle.app"
 open "$apps/Fettle.app"

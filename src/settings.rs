@@ -221,7 +221,7 @@ impl Settings {
 }
 
 pub fn home() -> PathBuf {
-    std::env::var_os("HOME").map_or_else(|| PathBuf::from("/"), PathBuf::from)
+    PathBuf::from(std::env::var_os("HOME").expect("HOME is not set"))
 }
 
 #[cfg(test)]

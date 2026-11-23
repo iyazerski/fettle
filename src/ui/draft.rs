@@ -63,13 +63,6 @@ impl Draft {
         self.run
     }
 
-    pub fn fail(&mut self, action: Action, message: String) {
-        self.answer = Some(Answer {
-            action,
-            status: Status::Failed(message),
-        });
-    }
-
     pub fn answered(&mut self, action: Action, status: Status) {
         self.answer = Some(Answer { action, status });
     }
@@ -86,26 +79,23 @@ impl Draft {
     }
 
     pub fn delta(&mut self, run: u64, delta: &str) {
-        if let Some(text) = self.running_text(run) {
+        if let Some(Answer {
+            status: Status::Running {
+                run: current, text, ..
+            },
+            ..
+        }) = self.answer.as_mut()
+            && *current == run
+        {
             text.push_str(delta);
         }
     }
 
     pub fn finished(&mut self, run: u64, status: Status) {
-        if self.running_text(run).is_none() {
-            return;
-        }
-        if let Some(answer) = self.answer.as_mut() {
+        if let Some(answer) = self.answer.as_mut()
+            && matches!(answer.status, Status::Running { run: current, .. } if current == run)
+        {
             answer.status = status;
-        }
-    }
-
-    fn running_text(&mut self, run: u64) -> Option<&mut String> {
-        match &mut self.answer.as_mut()?.status {
-            Status::Running {
-                run: current, text, ..
-            } if *current == run => Some(text),
-            _ => None,
         }
     }
 
