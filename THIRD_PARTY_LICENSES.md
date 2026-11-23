@@ -1389,8 +1389,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## Apache License 2.0
 
 Used by:
-- zerocopy-derive 0.8.63
-- zerocopy 0.8.63
+- zerocopy-derive 0.8.64
+- zerocopy 0.8.64
 
 ```text
                                  Apache License
@@ -2235,9 +2235,9 @@ Used by:
 ## Apache License 2.0
 
 Used by:
-- clap 4.6.8
+- clap 4.6.9
 - clap_builder 4.6.7
-- clap_derive 4.6.8
+- clap_derive 4.6.9
 - clap_lex 1.1.2
 
 ```text
@@ -4165,8 +4165,8 @@ Used by:
 - fastrand 2.5.0
 - flate2 1.1.11
 - fontique 0.12.0
-- form_urlencoded 1.2.2
-- hashbrown 0.17.1
+- form_urlencoded 1.2.3
+- hashbrown 0.17.2
 - heck 0.5.0
 - httparse 1.10.1
 - hyper-rustls 0.27.10
@@ -4208,7 +4208,7 @@ Used by:
 - tempfile 3.27.0
 - unicode-segmentation 1.13.3
 - unicode-width 0.2.3
-- url 2.5.8
+- url 2.5.9
 - uuid 1.29.3
 
 ```text
@@ -5624,9 +5624,10 @@ limitations under the License.
 Used by:
 - accesskit_macos 0.27.2
 - parley_engine 0.12.0
+- wgpu-hal 30.0.1
 - accesskit 0.25.2
 - accesskit_consumer 0.39.2
-- anyhow 1.0.104
+- anyhow 1.0.105
 - arboard 3.7.0
 - blake3 1.8.7
 - constant_time_eq 0.4.2
@@ -5658,7 +5659,7 @@ Used by:
 - objc2-metal 0.3.2
 - objc2-quartz-core 0.3.2
 - objc2-speech 0.3.2
-- pin-project-lite 0.2.17
+- pin-project-lite 0.2.18
 - portable-atomic 1.15.0
 - proc-macro2 1.0.107
 - profiling 1.0.18
@@ -5686,7 +5687,6 @@ Used by:
 - utf8parse 0.2.2
 - wgpu-core-deps-apple 30.0.2
 - wgpu-core 30.0.2
-- wgpu-hal 30.0.2
 - wgpu-naga-bridge 30.0.2
 - wgpu-types 30.0.2
 - wgpu 30.0.2
@@ -5869,7 +5869,7 @@ pub(crate) static GB18030_2022_OVERRIDE_BYTES: [[u8; 2]; 18] = [
 ## BSD 3-Clause "New" or "Revised" License
 
 Used by:
-- tiny-skia-path 0.11.4
+- rune-tiny-skia-path 0.11.4
 - tiny-skia-path 0.11.4
 - tiny-skia 0.11.4
 

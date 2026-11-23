@@ -30,9 +30,9 @@ ring = "0.17"
 # TLS crypto through ring, which Fettle already uses, rather than aws-lc-rs.
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 # Rune is pre-release and changes often: keep one tested revision.
-rune = { git = "https://github.com/anomalyco/rune", rev = "f54cbcfa84d995d339c243a579218f5062c940b5" }
-rune-kit = { git = "https://github.com/anomalyco/rune", rev = "f54cbcfa84d995d339c243a579218f5062c940b5", default-features = false }
-rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "f54cbcfa84d995d339c243a579218f5062c940b5" }
+rune = { git = "https://github.com/anomalyco/rune", rev = "a56b6d642b91e28d70bb1ad08a587b1bcbc17e53" }
+rune-kit = { git = "https://github.com/anomalyco/rune", rev = "a56b6d642b91e28d70bb1ad08a587b1bcbc17e53", default-features = false }
+rune-theme-opencode = { git = "https://github.com/anomalyco/rune", rev = "a56b6d642b91e28d70bb1ad08a587b1bcbc17e53" }
 security-framework = "3"
 semver = "1"
 serde = { version = "1", features = ["derive"] }
@@ -46,11 +46,12 @@ html-escape = "0.3"
 
 # Rune builds these crates with its own patches, and a dependency's `[patch]` doesn't
 # reach this workspace. Keep the rev the same as the Rune pin above. Rune's other
-# patches (wgpu-hal, accesskit_windows, sctk-adwaita) only affect Windows or Linux.
+# patches (accesskit_windows, sctk-adwaita) only affect Windows or Linux.
 [patch.crates-io]
-accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "f54cbcfa84d995d339c243a579218f5062c940b5" }
-parley_engine = { git = "https://github.com/anomalyco/rune", rev = "f54cbcfa84d995d339c243a579218f5062c940b5" }
-winit = { git = "https://github.com/anomalyco/rune", rev = "f54cbcfa84d995d339c243a579218f5062c940b5" }
+accesskit_macos = { git = "https://github.com/anomalyco/rune", rev = "a56b6d642b91e28d70bb1ad08a587b1bcbc17e53" }
+parley_engine = { git = "https://github.com/anomalyco/rune", rev = "a56b6d642b91e28d70bb1ad08a587b1bcbc17e53" }
+wgpu-hal = { git = "https://github.com/anomalyco/rune", rev = "a56b6d642b91e28d70bb1ad08a587b1bcbc17e53" }
+winit = { git = "https://github.com/anomalyco/rune", rev = "a56b6d642b91e28d70bb1ad08a587b1bcbc17e53" }
 
 [lints.rust]
 unsafe_op_in_unsafe_fn = "warn"
