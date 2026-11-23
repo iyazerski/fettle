@@ -24,7 +24,7 @@ jobs:
           components: rustfmt
       - name: Format
         run: cargo fmt --all --check
-      - uses: taiki-e/install-action@v2.90.6
+      - uses: taiki-e/install-action@v2.90.8
         with:
           tool: cargo-about
       - name: Third-party licenses are current

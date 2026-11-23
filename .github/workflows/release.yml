@@ -59,7 +59,7 @@ jobs:
         run: FETTLE_VERSION="$VERSION" cargo build --release --locked --target "$TARGET"
       - name: Test binary
         run: target/$TARGET/release/fettle --version
-      - uses: astral-sh/setup-uv@v10.3.3
+      - uses: astral-sh/setup-uv@v10.4.0
         with:
           enable-cache: false
       # A self-signed certificate, the same for every release, so macOS keeps
