@@ -70,7 +70,6 @@ pub struct Settings {
     #[serde(skip)]
     pub credentials: Credentials,
     pub chatgpt_model: String,
-    /// An OpenAI-compatible API's base URL, up to `/v1`.
     pub api_base: String,
     pub api_model: String,
     pub reasoning_enabled: bool,

@@ -173,7 +173,6 @@ fn mark(unchecked: &mut Vec<Range<usize>>, mut span: Range<usize>) {
     unchecked.splice(from..to, [span]);
 }
 
-/// An edit that replaced `start..old_end` of the old text with `start..new_end` of the new.
 struct Edit {
     start: usize,
     old_end: usize,
@@ -189,8 +188,6 @@ impl Edit {
         range.start <= self.old_end && range.end >= self.start
     }
 
-    /// Where `range` of the old text is in the new one, stretched over the
-    /// edit if it covers part of it.
     fn map(&self, range: &Range<usize>) -> Range<usize> {
         self.position(range.start, self.start)..self.position(range.end, self.new_end)
     }

@@ -10,7 +10,6 @@ pub struct Draft {
     pub answer: Option<Answer>,
     pub show_changes: bool,
     pub notice: Option<String>,
-    /// Counts runs, so a late piece of an old answer is dropped.
     run: u64,
 }
 
@@ -28,7 +27,6 @@ pub enum Status {
     Stopped,
     Done {
         text: String,
-        /// For Fix: the word diff from the original to `text`.
         changes: Vec<Piece>,
         copied: bool,
     },

@@ -32,7 +32,6 @@ pub(super) const PASTE_DELAY: Duration = Duration::from_millis(120);
 const MENU_DELAY: Duration = Duration::from_millis(50);
 /// Rune-kit's 0.25 s close spring, plus time to settle.
 const MENU_FADE: Duration = Duration::from_millis(300);
-/// How far the window opened from an underline sits from its word, in points.
 const WORD_GAP: f64 = 6.0;
 
 pub struct State {
@@ -48,7 +47,6 @@ pub struct State {
     system_locale: Locale,
     pub(super) menu: Option<Dropdown>,
     pub(super) trusted: bool,
-    /// Whether macOS's Accessibility prompt was asked for since launch.
     pub(super) asked_accessibility: bool,
     pub(super) form: Form,
     pub(super) update: Update,
@@ -71,7 +69,6 @@ enum Origin {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dropdown {
     pub(super) menu: Menu,
-    /// This opening of it, so the wait for an earlier one can't show its list.
     opened: Ticket,
     stage: Stage,
 }
@@ -132,7 +129,6 @@ impl Placement {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Start {
     Shown,
-    /// Stay hidden until the shortcut (how it runs at login).
     Hidden,
 }
 
@@ -411,7 +407,6 @@ impl State {
     pub fn hide(&mut self) {
         self.placement.over = None;
         self.stop();
-        // Dropping the session stops listening and drops what wasn't added yet.
         self.dictation = None;
         self.menu = None;
         self.app.hide();

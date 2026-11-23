@@ -26,7 +26,6 @@ pub use self::state::Start;
 use self::state::State;
 use self::view::{CORNER, WIDTH, on_key, view};
 
-/// Keep the window on the main thread, as AppKit requires.
 pub fn run(start: Start) -> Result<()> {
     let _only = single_instance()?;
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -100,9 +99,7 @@ pub fn run(start: Start) -> Result<()> {
         .macos(
             MacWindowOptions::default()
                 .nonactivating_panel(true)
-                // Above normal windows, under menus.
                 .level(NSFloatingWindowLevel)
-                // On every Space, and over full-screen apps.
                 .collection_behavior(
                     (NSWindowCollectionBehavior::CanJoinAllSpaces
                         | NSWindowCollectionBehavior::FullScreenAuxiliary)

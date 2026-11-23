@@ -48,7 +48,6 @@ const SKIPPED_APPS: [&str; 23] = [
     "com.github.wez.wezterm",
     "co.zeit.hyper",
 ];
-/// Skip native messengers by bundle ID and their web versions by host.
 const MESSENGERS: [&str; 3] = [
     "ru.keepcoder.Telegram",
     "com.tdesktop.Telegram",
@@ -267,7 +266,6 @@ impl Field {
         Some(CGRect::new(origin, size))
     }
 
-    /// Use the same screen-point coordinates as [`Self::frame`].
     pub fn bounds(&self, range: Range<usize>) -> Option<CGRect> {
         bounds(&self.element, range)
     }
@@ -464,8 +462,6 @@ unsafe extern "C-unwind" fn changed(
     unsafe { &*flag.cast::<Cell<bool>>() }.set(true);
 }
 
-/// Return where `range` of `element`'s text shows, in screen points from the
-/// primary screen's top-left.
 fn bounds(element: &AXUIElement, range: Range<usize>) -> Option<CGRect> {
     let param = range_value(range)?;
     let name = CFString::from_static_str("AXBoundsForRange");
@@ -511,7 +507,6 @@ fn has_role(element: &AXUIElement, role: &'static str) -> bool {
         .is_some_and(|r| *r == *CFString::from_static_str(role))
 }
 
-/// Take ownership of the +1 reference a successful copy left in `out`.
 fn retained(error: AXError, out: *const CFType) -> Option<CFRetained<CFType>> {
     if error != AXError::Success {
         return None;
@@ -534,10 +529,7 @@ fn range_value(range: Range<usize>) -> Option<CFRetained<AXValue>> {
     unsafe { AXValue::new(AXValueType::CFRange, NonNull::from(&range).cast()) }
 }
 
-/// Read the `T` that `value` holds.
-///
 /// # Safety
-///
 /// `kind` must name `T`.
 unsafe fn unpack<T>(value: &CFType, kind: AXValueType) -> Option<T> {
     let value = value.downcast_ref::<AXValue>()?;

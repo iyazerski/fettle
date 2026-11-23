@@ -19,7 +19,6 @@ mod update;
 use anyhow::Result;
 use clap::Parser;
 
-/// The release (CI sets it), else the crate version.
 pub const VERSION: &str = match option_env!("FETTLE_VERSION") {
     Some(version) => version,
     None => env!("CARGO_PKG_VERSION"),

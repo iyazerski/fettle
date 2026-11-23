@@ -20,12 +20,9 @@ pub struct Form {
     pub error: Option<FormError>,
 }
 
-/// A problem on the settings page, kept apart by what clears it.
 #[derive(Debug)]
 pub enum FormError {
-    /// Fettle may not copy and paste: cleared once it may.
     Accessibility,
-    /// The shortcut didn't register: cleared by one that does.
     Shortcut(String),
     Other(String),
 }
@@ -39,8 +36,6 @@ impl FormError {
     }
 }
 
-/// The model list; replacing a load stops it, so a list for an old backend
-/// can't arrive late.
 pub enum Models {
     Idle,
     Loading(Pending),
@@ -48,7 +43,6 @@ pub enum Models {
     Failed(String),
 }
 
-/// The ChatGPT sign-in in the browser; replacing a wait stops it.
 pub enum Login {
     Idle,
     Waiting(Pending),

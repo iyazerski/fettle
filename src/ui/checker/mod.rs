@@ -11,14 +11,12 @@ use super::state::State;
 use crate::diff::{self, Piece};
 use crate::underlines::{Clicks, Line, Underlines};
 
-/// How long quitting waits for the checker to undo what it changed in other apps.
 const QUIT_WAIT: Duration = Duration::from_millis(500);
 
 #[derive(Default)]
 pub struct Checker {
     running: Option<Running>,
     underlines: Underlines,
-    /// The last checker's number, so underlines from a stopped one are ignored.
     started: u64,
 }
 
@@ -36,7 +34,6 @@ pub struct Fix {
 #[derive(Debug)]
 pub struct Check {
     pub id: u64,
-    /// The paragraph as the field holds it, which its fix is kept by.
     pub units: Vec<u16>,
     pub text: String,
 }
@@ -90,8 +87,6 @@ impl Checker {
         }
     }
 
-    /// Keep `request`, which asks the model about check `id`, until it
-    /// finishes or the field's session ends.
     pub fn asking(&self, id: u64, request: Pending) {
         self.send(Command::Asking(id, request));
     }
@@ -126,7 +121,6 @@ impl Checker {
         });
     }
 
-    /// Request an asynchronous location check; false if underlining is off.
     pub fn locate(&self, target: &Target) -> bool {
         self.send(Command::Locate(target.opened))
     }

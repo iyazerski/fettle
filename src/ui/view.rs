@@ -595,7 +595,6 @@ fn diff_text(s: &State, changes: &[Piece], k: &Kit) -> El {
     let mut spans = Vec::new();
     let mut strikes = Vec::new();
     let hover = LinkPaint::new().ring(k.c.border_strong, 1.0);
-    // Each side of a change is a link that keeps it.
     let mut links = Vec::new();
     let mut previous = Kind::Same;
     for (change, piece) in diff::numbered(changes) {

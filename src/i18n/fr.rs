@@ -1,5 +1,3 @@
-//! French.
-
 use super::Strings;
 
 pub static STRINGS: Strings = Strings {

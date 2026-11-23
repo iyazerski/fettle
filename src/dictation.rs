@@ -29,15 +29,12 @@ pub enum Problem {
 
 #[derive(Debug)]
 pub enum Heard {
-    /// Everything heard since the session started, as text.
     Words(String),
-    /// How loud the microphone is, from 0 to 1, many times a second.
     Level(f32),
     Done,
     Failed(String),
 }
 
-/// A running session; dropping it stops listening and drops what's unheard.
 pub struct Listening {
     engine: Retained<AVAudioEngine>,
     request: Retained<SFSpeechAudioBufferRecognitionRequest>,
@@ -204,7 +201,6 @@ unsafe fn level(buffer: &AVAudioPCMBuffer) -> Option<f32> {
 #[derive(Default)]
 struct Transcript {
     said: String,
-    /// The transcription kept at the last pause, until another starts.
     kept: Option<String>,
 }
 
@@ -239,7 +235,6 @@ fn same_word(a: &str, b: &str) -> bool {
         .eq(b.chars().flat_map(char::to_lowercase))
 }
 
-/// Stop at the first different word, as a new transcription after a pause usually does.
 fn starts_with_words(s: &str, prefix: &str) -> bool {
     let mut words_of_s = words(s);
     words(prefix).all(|p| words_of_s.next().is_some_and(|w| same_word(w, p)))

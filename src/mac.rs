@@ -28,9 +28,7 @@ use crate::settings::Appearance;
 /// them where ⌘C and ⌘V work.
 const KEY_C: u16 = 8;
 const KEY_V: u16 = 9;
-/// How long the frontmost app gets to copy the selection.
 const COPY_WAIT: Duration = Duration::from_millis(400);
-/// How long the frontmost app gets to read the pasteboard after ⌘V.
 const PASTE_WAIT: Duration = Duration::from_millis(500);
 /// Marks a pasteboard write as temporary, so clipboard managers skip it
 /// (see nspasteboard.org).
@@ -142,7 +140,6 @@ pub fn open_accessibility_settings() {
     open_url("x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility");
 }
 
-/// Return the user's preferred languages as BCP 47 tags, most preferred first.
 pub fn preferred_languages() -> Vec<String> {
     NSLocale::preferredLanguages()
         .iter()
@@ -150,8 +147,6 @@ pub fn preferred_languages() -> Vec<String> {
         .collect()
 }
 
-/// Sort `items` by their `name`s as people who speak `locale`, a BCP 47 tag,
-/// order words, ignoring case.
 pub fn sort_localized<T>(items: &mut [T], locale: &str, name: impl Fn(&T) -> &str) {
     let locale = NSLocale::localeWithLocaleIdentifier(&NSString::from_str(locale));
     let locale: &AnyObject = locale.as_ref();

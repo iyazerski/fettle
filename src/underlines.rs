@@ -9,10 +9,8 @@ use objc2_app_kit::{
 };
 use objc2_core_foundation::{CGPoint, CGRect, CGSize};
 use objc2_foundation::{MainThreadMarker, NSUnionRect};
-/// The bar's thickness, and how far under the word it sits, in points.
 const THICKNESS: f64 = 2.0;
 const GAP: f64 = 1.0;
-/// How far around a word a click still counts as on it, in points.
 const SLOP: f64 = 2.0;
 
 /// `word` uses Accessibility screen points; `at` is a UTF-16 offset in the field's text.
@@ -29,12 +27,10 @@ pub struct Underlines {
     /// The words of `lines`, in the same order, in AppKit's coordinates,
     /// which count up from the primary screen's bottom.
     words: Vec<CGRect>,
-    /// Bars made so far, reused as lines come and go; the extra ones hide.
     bars: Vec<Retained<NSBox>>,
 }
 
 impl Underlines {
-    /// AppKit drawing must run on the main thread.
     pub fn show(&mut self, lines: Vec<Line>) {
         if lines == self.lines {
             return;
@@ -109,7 +105,6 @@ impl Underlines {
         self.words.clear();
     }
 
-    /// Return the line whose word is at `point`, in AppKit's coordinates.
     pub fn hit(&self, (x, y): (f64, f64)) -> Option<Line> {
         let i = self.words.iter().position(|w| {
             (w.origin.x - SLOP..=w.origin.x + w.size.width + SLOP).contains(&x)

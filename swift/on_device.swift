@@ -7,14 +7,12 @@ public typealias OnChunk = @convention(c) (UnsafeMutableRawPointer?, UnsafePoint
 /// Called once at the end with an error code (0 for success) and a message.
 public typealias OnDone = @convention(c) (UnsafeMutableRawPointer?, Int32, UnsafePointer<CChar>) -> Void
 
-// The codes `fettle_on_device_status` returns.
 private let ready: Int32 = 0
 private let oldMacOS: Int32 = 1
 private let notEligible: Int32 = 2
 private let turnedOff: Int32 = 3
 private let notReady: Int32 = 4
 
-// The codes `OnDone` gets.
 private let ok: Int32 = 0
 private let failed: Int32 = 1
 private let tooLong: Int32 = 2

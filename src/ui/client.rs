@@ -16,7 +16,6 @@ pub struct Client {
     app: AppHandle<State>,
     rt: Handle,
     http: reqwest::Client,
-    /// Held while the ChatGPT sign-in refreshes, so refreshes take turns.
     refreshing: Arc<Mutex<()>>,
 }
 

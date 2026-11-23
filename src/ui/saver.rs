@@ -13,7 +13,6 @@ use crate::keychain;
 use crate::settings::{Credentials, Settings};
 
 pub struct Saver {
-    /// The newest settings to save, numbered by revision.
     latest: watch::Sender<(u64, Settings)>,
     store: Arc<Store>,
 }
