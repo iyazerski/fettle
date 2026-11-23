@@ -13,22 +13,15 @@ use crate::keychain;
 use crate::settings::{Credentials, Settings};
 
 pub struct Saver {
-    /// The newest settings to save, numbered by revision.
     latest: watch::Sender<(u64, Settings)>,
     store: Arc<Store>,
 }
 
 impl Saver {
-    pub fn new(
-        rt: &Handle,
-        app: AppHandle<State>,
-        settings: &Settings,
-        path: PathBuf,
-        saved: Credentials,
-    ) -> Self {
+    pub fn new(rt: &Handle, app: AppHandle<State>, settings: &Settings, path: PathBuf) -> Self {
         let store = Arc::new(Store {
             path,
-            written: Mutex::new((0, saved)),
+            written: Mutex::new((0, settings.credentials.clone())),
         });
         let (latest, mut changes) = watch::channel((0, settings.clone()));
         let writer = Arc::clone(&store);

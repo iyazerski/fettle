@@ -515,7 +515,7 @@ pub(super) fn accessibility(s: &State, k: &Kit) -> El {
 
 fn section(k: &Kit, title: &str) -> El {
     col().w_full().pt(8.0).pl(4.0).child(
-        text(title.to_owned())
+        text(title)
             .font(k.ty.text_small_medium)
             .color(k.c.text_muted),
     )
@@ -551,7 +551,7 @@ fn wide(k: &Kit, label: &str, control: El) -> El {
         .center_y()
         .gap(12.0)
         .child(
-            text(label.to_owned())
+            text(label)
                 .font(k.ty.ui)
                 .color(k.c.text_base)
                 // Some languages need two lines for a label.
@@ -562,12 +562,7 @@ fn wide(k: &Kit, label: &str, control: El) -> El {
 }
 
 fn compact(k: &Kit, label: &str, hint: Option<&str>, control: El) -> El {
-    let hint = hint.map(|h| {
-        text(h.to_owned())
-            .font(k.ty.text_small)
-            .color(k.c.text_muted)
-            .wrap()
-    });
+    let hint = hint.map(|h| text(h).font(k.ty.text_small).color(k.c.text_muted).wrap());
     row()
         .w_full()
         .px(PAD)
@@ -579,12 +574,7 @@ fn compact(k: &Kit, label: &str, hint: Option<&str>, control: El) -> El {
             col()
                 .grow(1.0)
                 .gap(2.0)
-                .child(
-                    text(label.to_owned())
-                        .font(k.ty.ui)
-                        .color(k.c.text_base)
-                        .wrap(),
-                )
+                .child(text(label).font(k.ty.ui).color(k.c.text_base).wrap())
                 .children(hint),
         )
         .child(control)

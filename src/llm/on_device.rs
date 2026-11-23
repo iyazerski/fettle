@@ -65,7 +65,6 @@ enum Event {
 
 type Events = UnboundedSender<Event>;
 
-/// A running answer; dropping it cancels the answer if it still runs.
 struct Job(*mut c_void);
 
 // SAFETY: the job is a retained Swift object whose only use, ending it, is
@@ -108,7 +107,6 @@ extern "C" fn on_chunk(context: *mut c_void, piece: *const c_char) {
     // SAFETY: `context` is the sender `stream` boxed, alive until `on_done`;
     // `piece` is a NUL-terminated string valid for this call.
     let (events, piece) = unsafe { (&*context.cast::<Events>(), CStr::from_ptr(piece)) };
-    // A closed channel means the answer was cancelled; the piece is not needed.
     let _ = events.send(Event::Chunk(piece.to_string_lossy().into_owned()));
 }
 

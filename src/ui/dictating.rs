@@ -17,12 +17,10 @@ pub enum Dictation {
 }
 
 pub struct Recording {
-    /// Which session this is, so a late report of an ended one is dropped.
     id: Ticket,
     session: Listening,
     started: Instant,
     heard: String,
-    /// Recent loudness, 0 to 1, oldest first.
     pub levels: VecDeque<f32>,
 }
 
@@ -37,7 +35,6 @@ impl Recording {
         self.started.elapsed()
     }
 
-    /// Drop the microphone session and keep the words and waveform for the write-up.
     fn into_write_up(self) -> (WriteUp, String) {
         let write_up = WriteUp {
             took: self.duration(),

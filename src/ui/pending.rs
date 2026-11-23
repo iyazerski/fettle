@@ -7,7 +7,6 @@ use tokio::task::JoinHandle;
 
 use super::client::Client;
 
-/// Tickets are never reused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Ticket(u64);
 
@@ -18,7 +17,6 @@ impl Ticket {
     }
 }
 
-/// Running work; dropping it aborts the work.
 #[derive(Debug)]
 pub struct Pending {
     ticket: Ticket,

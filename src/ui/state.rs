@@ -22,7 +22,7 @@ use crate::llm::{Ask, Backend};
 use crate::mac::{self, Clip, Copied};
 use crate::prompts::{self, Action, Style};
 use crate::rich;
-use crate::settings::{Credentials, Settings};
+use crate::settings::Settings;
 use crate::underlines::Line;
 
 const TOP_MARGIN: f32 = 120.0;
@@ -32,7 +32,6 @@ pub(super) const PASTE_DELAY: Duration = Duration::from_millis(120);
 const MENU_DELAY: Duration = Duration::from_millis(50);
 /// Rune-kit's 0.25 s close spring, plus time to settle.
 const MENU_FADE: Duration = Duration::from_millis(300);
-/// How far the window opened from an underline sits from its word, in points.
 const WORD_GAP: f64 = 6.0;
 
 pub struct State {
@@ -48,7 +47,6 @@ pub struct State {
     system_locale: Locale,
     pub(super) menu: Option<Dropdown>,
     pub(super) trusted: bool,
-    /// Whether macOS's Accessibility prompt was asked for since launch.
     pub(super) asked_accessibility: bool,
     pub(super) form: Form,
     pub(super) update: Update,
@@ -71,7 +69,6 @@ enum Origin {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Dropdown {
     pub(super) menu: Menu,
-    /// This opening of it, so the wait for an earlier one can't show its list.
     opened: Ticket,
     stage: Stage,
 }
@@ -132,7 +129,6 @@ impl Placement {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Start {
     Shown,
-    /// Stay hidden until the shortcut (how it runs at login).
     Hidden,
 }
 
@@ -158,16 +154,9 @@ impl State {
         http: reqwest::Client,
         settings: Settings,
         settings_path: PathBuf,
-        saved_credentials: Credentials,
     ) -> Self {
         let form = Form::new(&settings);
-        let saver = Saver::new(
-            &rt,
-            app.clone(),
-            &settings,
-            settings_path,
-            saved_credentials,
-        );
+        let saver = Saver::new(&rt, app.clone(), &settings, settings_path);
         Self {
             client: Client::new(app.clone(), rt, http),
             app,
@@ -200,8 +189,6 @@ impl State {
         self.register_saved_shortcut();
         self.apply_underlines();
         self.apply_menu_bar();
-        // Rewrite the file without the credentials versions before 0.3 kept in it.
-        self.save();
         eprintln!(
             "fettle {} is running; {} opens it",
             crate::VERSION,
@@ -420,7 +407,6 @@ impl State {
     pub fn hide(&mut self) {
         self.placement.over = None;
         self.stop();
-        // Dropping the session stops listening and drops what wasn't added yet.
         self.dictation = None;
         self.menu = None;
         self.app.hide();
@@ -539,7 +525,8 @@ impl State {
         let (backend, model) = match Backend::with_model(&self.settings) {
             Ok(chosen) => chosen,
             Err(missing) => {
-                self.draft.fail(action, t.missing(missing).into());
+                self.draft
+                    .answered(action, Status::Failed(t.missing(missing).into()));
                 return;
             }
         };
@@ -600,13 +587,28 @@ impl State {
     }
 
     pub fn replace(&mut self) {
-        if self.draft.result().is_none() {
+        let Some(text) = self.draft.result() else {
             return;
-        }
+        };
         match &self.origin {
             Some(Origin::Underline(target)) if self.checker.locate(target) => {}
             Some(Origin::Underline(_)) => self.draft.notice = Some(self.t().text_moved.into()),
-            Some(Origin::Selection(_)) | None => self.paste(),
+            Some(Origin::Selection(_)) | None => {
+                let text = text.to_owned();
+                let copied = match self.origin.take() {
+                    Some(Origin::Selection(copied)) => Some(copied),
+                    _ => None,
+                };
+                self.hide();
+                self.client.rt().spawn_blocking(move || {
+                    let clip = match copied {
+                        Some(copied) => rich::replacement(&copied.clip, &copied.text, &text),
+                        None => Clip::plain(&text),
+                    };
+                    std::thread::sleep(PASTE_DELAY);
+                    mac::paste(&clip);
+                });
+            }
         }
     }
 
@@ -627,25 +629,6 @@ impl State {
         }
         self.hide();
         self.checker.replace(text);
-    }
-
-    fn paste(&mut self) {
-        let Some(text) = self.draft.result().map(str::to_owned) else {
-            return;
-        };
-        let copied = match self.origin.take() {
-            Some(Origin::Selection(copied)) => Some(copied),
-            Some(Origin::Underline(_)) | None => None,
-        };
-        self.hide();
-        self.client.rt().spawn_blocking(move || {
-            let clip = match copied {
-                Some(copied) => rich::replacement(&copied.clip, &copied.text, &text),
-                None => Clip::plain(&text),
-            };
-            std::thread::sleep(PASTE_DELAY);
-            mac::paste(&clip);
-        });
     }
 
     pub fn keep(&mut self, n: usize, side: Kind) {

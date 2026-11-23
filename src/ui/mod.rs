@@ -26,7 +26,6 @@ pub use self::state::Start;
 use self::state::State;
 use self::view::{CORNER, WIDTH, on_key, view};
 
-/// Keep the window on the main thread, as AppKit requires.
 pub fn run(start: Start) -> Result<()> {
     let _only = single_instance()?;
     let rt = tokio::runtime::Builder::new_multi_thread()
@@ -37,8 +36,7 @@ pub fn run(start: Start) -> Result<()> {
     let http = crate::llm::http()?;
     let settings_path = Settings::path();
     let mut settings = Settings::load(&settings_path);
-    let credentials = keychain::load();
-    settings.credentials = credentials.clone();
+    settings.credentials = keychain::load();
 
     let spec = AppSpec {
         fonts: rune_theme_opencode::FONTS,
@@ -60,7 +58,7 @@ pub fn run(start: Start) -> Result<()> {
     let handle = rt.handle().clone();
     me.update(move |s, _| s.started(start));
     let app = app
-        .init(move || State::new(me, handle, http, settings, settings_path, credentials))
+        .init(move || State::new(me, handle, http, settings, settings_path))
         .on_focus(|s, focused, _| {
             if focused {
                 // Back from System Settings, where Accessibility or Apple
@@ -101,9 +99,7 @@ pub fn run(start: Start) -> Result<()> {
         .macos(
             MacWindowOptions::default()
                 .nonactivating_panel(true)
-                // Above normal windows, under menus.
                 .level(NSFloatingWindowLevel)
-                // On every Space, and over full-screen apps.
                 .collection_behavior(
                     (NSWindowCollectionBehavior::CanJoinAllSpaces
                         | NSWindowCollectionBehavior::FullScreenAuxiliary)

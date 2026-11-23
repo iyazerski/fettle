@@ -18,7 +18,6 @@ const MAX_ANSWER: Duration = Duration::from_secs(300);
 pub struct Ask {
     pub system: String,
     pub text: String,
-    /// The model to ask; `None` on device, which has only one.
     pub model: Option<String>,
     pub effort: Effort,
 }

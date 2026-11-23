@@ -6,18 +6,16 @@ const DASHES: [char; 2] = ['—', '–'];
 /// Replace the [`DASHES`] in `text` that `original` lacks with spaced
 /// hyphens, or bare ones between digits, as in ranges.
 pub fn restore(original: &str, text: &str) -> String {
-    let dashes: Vec<char> = DASHES
-        .into_iter()
-        .filter(|d| !original.contains(*d))
-        .collect();
-    if !text.contains(dashes.as_slice()) {
+    let missing = DASHES.map(|d| !original.contains(d));
+    let is_dash = |c: char| DASHES.iter().zip(missing).any(|(&d, m)| m && c == d);
+    if !text.contains(is_dash) {
         return text.to_owned();
     }
     let blank = |c: char| c == ' ' || c == '\t' || c == '\u{a0}';
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
-        if !dashes.contains(&c) {
+        if !is_dash(c) {
             out.push(c);
             continue;
         }

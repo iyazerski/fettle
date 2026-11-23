@@ -88,7 +88,6 @@ impl Locale {
         }
     }
 
-    /// Try BCP 47 tags in preference order, falling back to English.
     pub fn from_preferred<S: AsRef<str>>(preferred: &[S]) -> Locale {
         preferred
             .iter()
@@ -132,7 +131,6 @@ pub struct Strings {
     pub speech_off: &'static str,
     pub microphone_off: &'static str,
     pub speech_unavailable: &'static str,
-    /// `{}`: macOS's description of the error.
     pub dictation_failed: &'static str,
     pub back: &'static str,
     pub settings: &'static str,
@@ -148,13 +146,10 @@ pub struct Strings {
     pub remove_favourite: &'static str,
     pub fixing: &'static str,
     pub fixed: &'static str,
-    /// `{}`: the language.
     pub translating: &'static str,
-    /// `{}`: the language.
     pub translation: &'static str,
     pub rewrite: &'static str,
     pub rewriting: &'static str,
-    /// `{}`: the style.
     pub rewritten: &'static str,
     /// Formal, Friendly, Shorter, Clearer, as [`Style::ALL`](crate::prompts::Style::ALL).
     pub styles: [&'static str; 4],
@@ -173,7 +168,6 @@ pub struct Strings {
     pub text_moved: &'static str,
     pub stopped: &'static str,
     pub empty_answer: &'static str,
-    /// `{}`: the error.
     pub save_failed: &'static str,
     pub missing_sign_in: &'static str,
     pub missing_api_url: &'static str,
@@ -192,7 +186,6 @@ pub struct Strings {
     pub unsupported_language: &'static str,
     pub declined: &'static str,
     pub welcome_title: &'static str,
-    /// `{}`: the shortcut.
     pub welcome_body: &'static str,
     pub get_started: &'static str,
     pub next: &'static str,
@@ -203,7 +196,6 @@ pub struct Strings {
     pub access_title: &'static str,
     pub access_body: &'static str,
     pub done_title: &'static str,
-    /// `{}`: the shortcut.
     pub done_body: &'static str,
     pub try_it: &'static str,
     pub done: &'static str,
@@ -235,15 +227,12 @@ pub struct Strings {
     pub check_updates: &'static str,
     pub checking: &'static str,
     pub up_to_date: &'static str,
-    /// `{}`: the version.
     pub update_to: &'static str,
     pub update_help: &'static str,
-    /// `{}`: the version.
     pub updating: &'static str,
     pub quit: &'static str,
     pub finish_sign_in: &'static str,
     pub cancel: &'static str,
-    /// `{}`: the email.
     pub signed_in_as: &'static str,
     pub chatgpt_user: &'static str,
     pub sign_out: &'static str,
@@ -255,17 +244,11 @@ pub struct Strings {
     pub choose_model: &'static str,
     pub try_again: &'static str,
     pub no_models: &'static str,
-    /// `{}`: the error.
     pub list_models_failed: &'static str,
-    /// `{}`: the error.
     pub shortcut_broken: &'static str,
-    /// `{}`: the app that has the shortcut.
     pub shortcut_taken: &'static str,
-    /// `{}`: the error.
     pub shortcut_failed: &'static str,
-    /// `{}`: the error.
     pub check_failed: &'static str,
-    /// `{}`: the error.
     pub update_failed: &'static str,
     /// The names of [`LANGUAGES`], in its order.
     pub languages: [&'static str; LANGUAGES.len()],

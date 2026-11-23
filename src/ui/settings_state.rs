@@ -20,12 +20,9 @@ pub struct Form {
     pub error: Option<FormError>,
 }
 
-/// A problem on the settings page, kept apart by what clears it.
 #[derive(Debug)]
 pub enum FormError {
-    /// Fettle may not copy and paste: cleared once it may.
     Accessibility,
-    /// The shortcut didn't register: cleared by one that does.
     Shortcut(String),
     Other(String),
 }
@@ -39,8 +36,6 @@ impl FormError {
     }
 }
 
-/// The model list; replacing a load stops it, so a list for an old backend
-/// can't arrive late.
 pub enum Models {
     Idle,
     Loading(Pending),
@@ -48,7 +43,6 @@ pub enum Models {
     Failed(String),
 }
 
-/// The ChatGPT sign-in in the browser; replacing a wait stops it.
 pub enum Login {
     Idle,
     Waiting(Pending),
@@ -193,15 +187,7 @@ impl State {
     pub fn sign_in(&mut self) {
         let client = self.client.clone();
         let waiting = Pending::spawn(&self.client, |ticket| async move {
-            let result = chatgpt::login(client.http(), |url| {
-                if let Err(e) = std::process::Command::new("/usr/bin/open")
-                    .arg(url)
-                    .status()
-                {
-                    eprintln!("opening the browser: {e}");
-                }
-            })
-            .await;
+            let result = chatgpt::login(client.http(), mac::open_url).await;
             let result = result.map_err(|e| format!("{e:#}"));
             client.app().update(move |s, _| s.signed_in(ticket, result));
         });

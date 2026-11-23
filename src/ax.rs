@@ -1,5 +1,6 @@
 //! Accessibility text ranges count UTF-16 code units.
 
+use std::cell::Cell;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::ffi::c_void;
@@ -47,18 +48,13 @@ const SKIPPED_APPS: [&str; 23] = [
     "com.github.wez.wezterm",
     "co.zeit.hyper",
 ];
-/// Skip native messengers by bundle ID and their web versions by host.
 const MESSENGERS: [&str; 3] = [
     "ru.keepcoder.Telegram",
     "com.tdesktop.Telegram",
     "net.whatsapp.WhatsApp",
 ];
 const MESSENGER_SITES: [&str; 2] = ["web.telegram.org", "web.whatsapp.com"];
-/// Bound ancestor traversal when looking for a messenger's web host.
 const MAX_DEPTH: usize = 64;
-/// Bundle ID prefixes of vendors whose apps are all skipped: every JetBrains
-/// IDE has its own ID.
-const SKIPPED_VENDORS: [&str; 1] = ["com.jetbrains."];
 const CHROMIUM_BROWSERS: [&str; 7] = [
     "com.google.Chrome",
     "org.chromium.Chromium",
@@ -143,9 +139,8 @@ fn append_units(text: &CFString, buffer: &mut Vec<u16>) {
 }
 
 fn is_skipped(id: &str) -> bool {
-    SKIPPED_APPS.contains(&id)
-        || MESSENGERS.contains(&id)
-        || SKIPPED_VENDORS.iter().any(|v| id.starts_with(v))
+    // Every JetBrains IDE has its own bundle ID under this prefix.
+    SKIPPED_APPS.contains(&id) || MESSENGERS.contains(&id) || id.starts_with("com.jetbrains.")
 }
 
 impl Drop for Apps {
@@ -271,7 +266,6 @@ impl Field {
         Some(CGRect::new(origin, size))
     }
 
-    /// Use the same screen-point coordinates as [`Self::frame`].
     pub fn bounds(&self, range: Range<usize>) -> Option<CGRect> {
         bounds(&self.element, range)
     }
@@ -354,11 +348,11 @@ impl Runs {
 pub struct Watch {
     observer: CFRetained<AXObserver>,
     run_loop: CFRetained<CFRunLoop>,
-    on_change: *mut Box<dyn Fn()>,
+    changed: *const Cell<bool>,
 }
 
 impl Watch {
-    pub fn new(pid: i32, on_change: impl Fn() + 'static) -> Option<Self> {
+    pub fn new(pid: i32) -> Option<Self> {
         let mut out: *mut AXObserver = ptr::null_mut();
         // SAFETY: `out` receives a +1 reference on success.
         let error = unsafe { AXObserver::create(pid, Some(changed), NonNull::from(&mut out)) };
@@ -367,11 +361,10 @@ impl Watch {
         }
         // SAFETY: a successful create hands over a +1 reference.
         let observer = unsafe { CFRetained::from_raw(NonNull::new(out)?) };
-        let on_change: Box<Box<dyn Fn()>> = Box::new(Box::new(on_change));
         let watch = Self {
             observer,
             run_loop: CFRunLoop::current()?,
-            on_change: Box::into_raw(on_change),
+            changed: Box::into_raw(Box::new(Cell::new(false))),
         };
         // SAFETY: a plain CF object for the app with `pid`.
         let app = unsafe { AXUIElement::new_application(pid) };
@@ -382,7 +375,7 @@ impl Watch {
             unsafe {
                 watch
                     .observer
-                    .add_notification(&app, &name, watch.on_change.cast())
+                    .add_notification(&app, &name, watch.changed.cast_mut().cast())
             };
         }
         // SAFETY: an immutable constant set up before any code runs, and the
@@ -390,6 +383,11 @@ impl Watch {
         let (modes, source) = unsafe { (kCFRunLoopCommonModes, watch.observer.run_loop_source()) };
         watch.run_loop.add_source(Some(&source), modes);
         Some(watch)
+    }
+
+    pub fn take_changed(&self) -> bool {
+        // SAFETY: `self.changed` lives until `drop` and is only touched on the creating thread.
+        unsafe { &*self.changed }.replace(false)
     }
 }
 
@@ -400,7 +398,7 @@ impl Drop for Watch {
         self.run_loop.remove_source(Some(&source), modes);
         // SAFETY: made by `Box::into_raw` in `new`, and the run loop no longer
         // calls `changed` with it.
-        drop(unsafe { Box::from_raw(self.on_change) });
+        drop(unsafe { Box::from_raw(self.changed.cast_mut()) });
     }
 }
 
@@ -458,15 +456,12 @@ unsafe extern "C-unwind" fn changed(
     _: NonNull<AXObserver>,
     _: NonNull<AXUIElement>,
     _: NonNull<CFString>,
-    on_change: *mut c_void,
+    flag: *mut c_void,
 ) {
-    // SAFETY: the refcon is the `Watch`'s callback, alive while the observer is on the run loop.
-    let on_change = unsafe { &*on_change.cast::<Box<dyn Fn()>>() };
-    on_change();
+    // SAFETY: the refcon is the `Watch`'s flag, alive while the observer is on the run loop.
+    unsafe { &*flag.cast::<Cell<bool>>() }.set(true);
 }
 
-/// Return where `range` of `element`'s text shows, in screen points from the
-/// primary screen's top-left.
 fn bounds(element: &AXUIElement, range: Range<usize>) -> Option<CGRect> {
     let param = range_value(range)?;
     let name = CFString::from_static_str("AXBoundsForRange");
@@ -512,7 +507,6 @@ fn has_role(element: &AXUIElement, role: &'static str) -> bool {
         .is_some_and(|r| *r == *CFString::from_static_str(role))
 }
 
-/// Take ownership of the +1 reference a successful copy left in `out`.
 fn retained(error: AXError, out: *const CFType) -> Option<CFRetained<CFType>> {
     if error != AXError::Success {
         return None;
@@ -535,10 +529,7 @@ fn range_value(range: Range<usize>) -> Option<CFRetained<AXValue>> {
     unsafe { AXValue::new(AXValueType::CFRange, NonNull::from(&range).cast()) }
 }
 
-/// Read the `T` that `value` holds.
-///
 /// # Safety
-///
 /// `kind` must name `T`.
 unsafe fn unpack<T>(value: &CFType, kind: AXValueType) -> Option<T> {
     let value = value.downcast_ref::<AXValue>()?;

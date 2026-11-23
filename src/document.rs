@@ -94,20 +94,16 @@ impl Document {
         for span in &mut self.unchecked {
             *span = edit.map(span);
         }
-        let mut redo = None;
         if let Check::Running { span, outdated, .. } = &mut self.check {
             *outdated |= edit.touches(span);
             *span = edit.map(span);
             if *outdated {
-                redo = Some(span.clone());
+                mark(&mut self.unchecked, span.clone());
             }
-        }
-        if let Some(span) = redo {
-            self.mark(span);
         }
         let span = paragraph(new, edit.start).start..paragraph(new, edit.new_end).end;
         let start = span.start;
-        self.mark(span);
+        mark(&mut self.unchecked, span);
         self.text.clear();
         self.text.extend_from_slice(new);
         Some(start)
@@ -143,19 +139,12 @@ impl Document {
     /// `found` holds ranges within the checked paragraph. Keep existing marks on failure
     /// (`None`), and ignore stale or unknown checks.
     pub fn finish(&mut self, id: u64, found: Option<Vec<Range<usize>>>) -> bool {
-        let Check::Running {
-            id: running,
-            span,
-            outdated,
-        } = &self.check
-        else {
-            return false;
-        };
-        if *running != id {
+        if self.checking() != Some(id) {
             return false;
         }
-        let (span, outdated) = (span.clone(), *outdated);
-        self.check = Check::Idle;
+        let Check::Running { span, outdated, .. } = std::mem::take(&mut self.check) else {
+            return false;
+        };
         let Some(found) = found.filter(|_| !outdated) else {
             return false;
         };
@@ -172,19 +161,18 @@ impl Document {
         self.unchecked.clear();
         self.check = Check::Idle;
     }
-
-    fn mark(&mut self, mut span: Range<usize>) {
-        let from = self.unchecked.partition_point(|s| s.end < span.start);
-        let to = self.unchecked.partition_point(|s| s.start <= span.end);
-        if from < to {
-            span.start = span.start.min(self.unchecked[from].start);
-            span.end = span.end.max(self.unchecked[to - 1].end);
-        }
-        self.unchecked.splice(from..to, [span]);
-    }
 }
 
-/// An edit that replaced `start..old_end` of the old text with `start..new_end` of the new.
+fn mark(unchecked: &mut Vec<Range<usize>>, mut span: Range<usize>) {
+    let from = unchecked.partition_point(|s| s.end < span.start);
+    let to = unchecked.partition_point(|s| s.start <= span.end);
+    if from < to {
+        span.start = span.start.min(unchecked[from].start);
+        span.end = span.end.max(unchecked[to - 1].end);
+    }
+    unchecked.splice(from..to, [span]);
+}
+
 struct Edit {
     start: usize,
     old_end: usize,
@@ -200,8 +188,6 @@ impl Edit {
         range.start <= self.old_end && range.end >= self.start
     }
 
-    /// Where `range` of the old text is in the new one, stretched over the
-    /// edit if it covers part of it.
     fn map(&self, range: &Range<usize>) -> Range<usize> {
         self.position(range.start, self.start)..self.position(range.end, self.new_end)
     }

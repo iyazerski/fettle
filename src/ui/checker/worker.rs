@@ -1,9 +1,7 @@
 //! Accessibility calls can block on other apps, so they run on this worker, not the UI thread.
 
-use std::cell::Cell;
 use std::collections::HashMap;
 use std::ops::Range;
-use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::time::{Duration, Instant};
 
@@ -36,7 +34,6 @@ const MAX_TEXT: usize = 100_000;
 const MAX_LINES: usize = 40;
 /// Bound failed lookups too, so an uncooperative field can't monopolize the worker.
 const MAX_LOOKUPS: usize = 60;
-/// Keep pending edits and checks across quick field switches.
 const RECENT: usize = 8;
 
 pub(super) enum Command {
@@ -46,8 +43,6 @@ pub(super) enum Command {
         units: Vec<u16>,
         fix: Option<Fix>,
     },
-    /// Leave the edits of the field that asked for check `id` unchecked:
-    /// there's no model to ask.
     Skip(u64),
     Forget,
     Learn {
@@ -67,13 +62,11 @@ pub(super) enum Command {
 pub(super) struct Handle {
     commands: Sender<Command>,
     waker: Waker,
-    /// Closes once the thread has ended and undone what it changed in other apps.
     ended: Receiver<()>,
 }
 
 impl Handle {
     pub(super) fn send(&self, command: Command) {
-        // A closed channel means the thread is gone; there's nothing to tell.
         let _ = self.commands.send(command);
         self.waker.wake();
     }
@@ -100,7 +93,6 @@ pub(super) fn spawn(app: AppHandle<State>, id: u64) -> Option<Handle> {
         .spawn(move || {
             let waker = Waker::new();
             let started = waker.is_some();
-            // The window waits for this, so it always answers.
             let _ = ready.send(waker);
             if started {
                 Worker::new(app, id, received).run();
@@ -121,7 +113,6 @@ pub(super) fn spawn(app: AppHandle<State>, id: u64) -> Option<Handle> {
 
 struct Worker {
     app: AppHandle<State>,
-    /// Which checker this is, so the window ignores one it stopped.
     id: u64,
     commands: Receiver<Command>,
     apps: Apps,
@@ -130,16 +121,12 @@ struct Worker {
     checks: u64,
     fixes: HashMap<Vec<u16>, Fix>,
     watch: Option<(i32, Watch)>,
-    changed: Rc<Cell<bool>>,
     session: Option<Session>,
-    /// Fields underlined before, most recent last, to pick up again.
     recent: Vec<Session>,
-    /// The last field found not to underline in, so it isn't looked at again each tick.
     left_alone: Option<Field>,
     drawn: Vec<Line>,
     opened: Option<Paragraph>,
     next_tick: Instant,
-    /// Send after a typing pause without waiting for the next poll.
     idle_at: Option<Instant>,
 }
 
@@ -148,7 +135,6 @@ struct Session {
     doc: Document,
     edited: Option<Instant>,
     layout: Layout,
-    /// The model request for check `.0`; dropping the session stops it.
     request: Option<(u64, Pending)>,
 }
 
@@ -157,9 +143,7 @@ struct Session {
 struct Layout {
     frame: Option<CGRect>,
     visible: Option<Range<usize>>,
-    /// Each word asked about, and its bounds unless it doesn't show.
     words: Vec<(Range<usize>, Option<CGRect>)>,
-    /// The field's runs, found the first time the field can't place a word.
     runs: Option<Runs>,
 }
 
@@ -181,7 +165,6 @@ impl Worker {
             checks: 0,
             fixes: HashMap::new(),
             watch: None,
-            changed: Rc::default(),
             session: None,
             recent: Vec::new(),
             left_alone: None,
@@ -207,7 +190,8 @@ impl Worker {
             }
             let now = Instant::now();
             let idle = self.idle_at.is_some_and(|at| at <= now);
-            if self.changed.replace(false) || idle || self.next_tick <= now {
+            let changed = self.watch.as_ref().is_some_and(|(_, w)| w.take_changed());
+            if changed || idle || self.next_tick <= now {
                 if idle {
                     self.idle_at = None;
                 }
@@ -303,8 +287,7 @@ impl Worker {
             .as_ref()
             .is_none_or(|(watched, _)| *watched != pid)
         {
-            let changed = Rc::clone(&self.changed);
-            self.watch = Watch::new(pid, move || changed.set(true)).map(|w| (pid, w));
+            self.watch = Watch::new(pid).map(|w| (pid, w));
         }
         let same = self.session.as_ref().is_some_and(|s| s.field == field);
         if (!same && !self.underlines_in(&field)) || !field.read(MAX_TEXT, &mut self.buffer) {
@@ -332,7 +315,6 @@ impl Worker {
                 self.park();
                 let session = match back {
                     Some(mut session) => {
-                        // It may have moved or changed while away.
                         session.layout = Layout::default();
                         if session.doc.edit(&self.buffer).is_some() {
                             let now = Instant::now();
@@ -560,22 +542,18 @@ fn inside(rect: CGRect, frame: Option<CGRect>) -> bool {
 }
 
 /// Split phrases into words so wrapped text gets separate underlines, not one large box.
-fn words(text: &[u16], range: Range<usize>) -> Vec<Range<usize>> {
+fn words(text: &[u16], range: Range<usize>) -> impl Iterator<Item = Range<usize>> + '_ {
     let space = |u: u16| char::from_u32(u32::from(u)).is_some_and(char::is_whitespace);
-    let mut out = Vec::new();
-    let mut start = None;
-    for i in range.clone() {
-        match (start, text.get(i).copied().is_some_and(space)) {
-            (None, false) => start = Some(i),
-            (Some(s), true) => {
-                out.push(s..i);
-                start = None;
-            }
-            _ => {}
+    let end = range.end.min(text.len());
+    let mut i = range.start;
+    std::iter::from_fn(move || {
+        while i < end && space(text[i]) {
+            i += 1;
         }
-    }
-    if let Some(s) = start {
-        out.push(s..range.end.min(text.len()));
-    }
-    out
+        let start = i;
+        while i < end && !space(text[i]) {
+            i += 1;
+        }
+        (start < i).then_some(start..i)
+    })
 }
