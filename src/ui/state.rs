@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use objc2_core_foundation::CGRect;
-use rune::{AppHandle, Label, Phase, ShortcutId, Tx};
+use rune::{AppHandle, ColorScheme, Label, ShortcutId, Tx};
 use tokio::runtime::Handle;
 
 use super::checker::{Check, Checker, Fix, Target};
@@ -22,7 +22,7 @@ use crate::llm::{Ask, Backend};
 use crate::mac::{self, Clip, Copied};
 use crate::prompts::{self, Action, Style};
 use crate::rich;
-use crate::settings::Settings;
+use crate::settings::{Appearance, Settings};
 use crate::underlines::Line;
 
 const TOP_MARGIN: f32 = 120.0;
@@ -86,44 +86,10 @@ enum Stage {
 struct Placement {
     /// The window's top-left in physical pixels, once Fettle has placed it.
     position: Option<(i32, i32)>,
-    drag: Option<Drag>,
     /// Underlined word, in points from the primary screen's top-left; cleared on drag.
     over: Option<CGRect>,
     /// The window's width and height in points, as last laid out.
     size: (f32, f32),
-}
-
-#[derive(Clone, Copy)]
-struct Drag {
-    pointer: (f64, f64),
-    origin: (i32, i32),
-}
-
-impl Placement {
-    fn drag(&mut self, phase: Phase, pointer: Option<(f64, f64)>) -> Option<(i32, i32)> {
-        match phase {
-            Phase::Down => {
-                self.over = None;
-                self.drag = pointer
-                    .zip(self.position)
-                    .map(|(pointer, origin)| Drag { pointer, origin });
-                None
-            }
-            Phase::Move => {
-                let (Drag { pointer, origin }, now) = self.drag.zip(pointer)?;
-                let at = (
-                    origin.0 + (now.0 - pointer.0).round() as i32,
-                    origin.1 + (now.1 - pointer.1).round() as i32,
-                );
-                self.position = Some(at);
-                Some(at)
-            }
-            Phase::Up => {
-                self.drag = None;
-                None
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -202,7 +168,12 @@ impl State {
     }
 
     pub(super) fn apply_appearance(&self) {
-        mac::set_appearance(self.settings.appearance);
+        let scheme = match self.settings.appearance {
+            Appearance::System => ColorScheme::System,
+            Appearance::Light => ColorScheme::Light,
+            Appearance::Dark => ColorScheme::Dark,
+        };
+        self.app.set_color_scheme(scheme);
     }
 
     pub(super) fn apply_labels(&self) {
@@ -442,11 +413,12 @@ impl State {
         self.draft.source.replace_text(String::new());
     }
 
-    /// The panel is outside winit's reach, so `.window_drag()` can't move it.
-    pub fn drag(&mut self, phase: Phase) {
-        if let Some(at) = self.placement.drag(phase, mac::pointer()) {
-            self.app.set_position(at);
-        }
+    pub fn is_over_word(&self) -> bool {
+        self.placement.over.is_some()
+    }
+
+    pub fn dragged(&mut self) {
+        self.placement.over = None;
     }
 
     pub fn close_menu(&mut self) {

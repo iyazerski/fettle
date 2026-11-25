@@ -168,7 +168,7 @@ fn app_language(s: &State, k: &Kit, layer: &mut Vec<El>) -> El {
     Select::new("app-language", &options)
         .label(t.app_language)
         .appearance(SelectAppearance::Field)
-        .width(control(s))
+        .fill()
         .current(Some(current))
         .placement(Placement::BottomStart)
         .open(s.menu_open(Menu::AppLanguage))
@@ -454,7 +454,7 @@ fn model(s: &State, k: &Kit, layer: &mut Vec<El>) -> Option<El> {
     let select = Select::new("model", models)
         .label(t.model)
         .appearance(SelectAppearance::Field)
-        .width(control(s))
+        .fill()
         .current(current)
         .placeholder(if loading {
             t.loading_models

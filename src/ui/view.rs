@@ -3,8 +3,8 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 use rune::{
-    Color, Cx, El, Icon, Key, KeyEvent, Link, LinkPaint, ScrollSpec, Span, SystemMaterial, Tx, col,
-    el, icon, rich, row, spacer, text,
+    Color, Cx, El, Icon, Key, KeyEvent, Link, LinkPaint, PointerButton, ScrollSpec, Span,
+    SystemMaterial, Tx, col, el, icon, rich, row, spacer, text,
 };
 use rune_kit::{
     Button, ButtonVariant, IconButton, IconButtonVariant, Kit, MenuItem, Placement, Popover,
@@ -236,7 +236,19 @@ pub fn header(s: &State, k: &Kit, lead: Lead, title: &str, tools: Vec<El>) -> El
         .w_full()
         .center_y()
         .gap(6.0)
-        .on_drag(|s: &mut State, drag, _| s.drag(drag.phase))
+        .window_drag()
+        .on_any_press(|s: &mut State, button, point, tx| {
+            if button == PointerButton::Primary && s.is_over_word() {
+                tx.read_layout("header", move |s: &mut State, rect, _| {
+                    if let Some([_, _, w, h]) = rect
+                        && (0.0..=w).contains(&point.x)
+                        && (0.0..=h).contains(&point.y)
+                    {
+                        s.dragged();
+                    }
+                });
+            }
+        })
         .child(lead)
         .child(text(title).font(k.ty.ui_medium).color(k.c.text_base))
         .child(spacer())
