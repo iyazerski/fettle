@@ -8,7 +8,6 @@ use objc2::AnyThread;
 use objc2::rc::{Retained, autoreleasepool};
 use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2_app_kit::{
-    NSAppearance, NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSApplication,
     NSAttributedStringAppKitDocumentFormats, NSEvent, NSPasteboard, NSPasteboardItem,
     NSPasteboardTypeString, NSPasteboardWriting, NSScreen, NSWorkspace,
 };
@@ -21,8 +20,6 @@ use objc2_foundation::{
     MainThreadMarker, NSArray, NSAttributedString, NSData, NSDictionary, NSLocale,
     NSMutableAttributedString, NSPointInRect, NSRange, NSString, NSStringCompareOptions, NSURL,
 };
-
-use crate::settings::Appearance;
 
 /// The virtual key codes of C and V on an ANSI keyboard; other layouts keep
 /// them where ⌘C and ⌘V work.
@@ -49,35 +46,6 @@ fn check_accessibility(prompt: bool) -> bool {
     let options = CFDictionary::from_slices(&[key], &[CFBoolean::new(prompt)]);
     // SAFETY: the options map a CFString key to a CFBoolean, as the function expects.
     unsafe { AXIsProcessTrustedWithOptions(Some(options.as_opaque())) }
-}
-
-/// Update AppKit and Rune together; must run on the main thread.
-pub fn set_appearance(appearance: Appearance) {
-    let Some(mtm) = MainThreadMarker::new() else {
-        return;
-    };
-    // SAFETY: both names are immutable constants AppKit sets up before any
-    // code runs.
-    let name = unsafe {
-        match appearance {
-            Appearance::System => None,
-            Appearance::Light => Some(NSAppearanceNameAqua),
-            Appearance::Dark => Some(NSAppearanceNameDarkAqua),
-        }
-    };
-    let appearance = name.and_then(NSAppearance::appearanceNamed);
-    NSApplication::sharedApplication(mtm).setAppearance(appearance.as_deref());
-}
-
-/// The pointer, in physical pixels from the primary screen's top-left, as
-/// winit counts window positions.
-pub fn pointer() -> Option<(f64, f64)> {
-    let mtm = MainThreadMarker::new()?;
-    let screens = NSScreen::screens(mtm);
-    let primary = screens.iter().next()?.frame().size.height;
-    let pointer = NSEvent::mouseLocation();
-    let scale = screen_at(&screens, pointer.x, pointer.y)?.backingScaleFactor();
-    Some((pointer.x * scale, (primary - pointer.y) * scale))
 }
 
 fn screen_at(screens: &NSArray<NSScreen>, x: f64, y: f64) -> Option<Retained<NSScreen>> {
