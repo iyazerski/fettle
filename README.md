@@ -16,7 +16,7 @@ A free, open-source Grammarly alternative for macOS that can run entirely on you
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/hero-dark.png">
-  <img src="docs/screenshots/hero-light.png" width="840" alt="Fettle fixing grammar with inline changes over Mail, translating into Spanish, dictating by voice, and rewriting tone">
+  <img src="docs/screenshots/hero-light.png" width="840" alt="Fettle fixing grammar with inline changes over Mail, translating into Spanish, and dictating by voice">
 </picture>
 
 </div>
