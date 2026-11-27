@@ -122,23 +122,30 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           previous=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
-          changes=$(git log --no-merges --format='- %s' ${previous:+"$previous..HEAD"})
-          gh release create "v$VERSION" dist/* \
+          changes=$(git log --no-merges --format='- %s (%h)' ${previous:+"$previous..HEAD"})
+          {
+            if [ -n "$changes" ]; then
+              printf "## What's new\n\n%s\n\n" "$changes"
+              if [ -n "$previous" ]; then
+                printf "**Full changelog:** https://github.com/%s/compare/%s...v%s\n\n" "$GH_REPO" "$previous" "$VERSION"
+              fi
+            else
+              printf "Build from %s.\n\n" "${GITHUB_SHA::7}"
+            fi
+            cat <<EOF
+          ## Downloads
+
+          - **Mac (macOS 13+, Apple silicon):** [Fettle.dmg](https://github.com/$GH_REPO/releases/download/v$VERSION/Fettle.dmg), or install in Terminal (skips the first-time warning): \`curl -fsSL https://raw.githubusercontent.com/$GH_REPO/main/install.sh | sh\`
+          - **Homebrew:** \`brew install --cask iyazerski/tap/fettle\`
+          - **Update:** click **Check for updates** in Fettle's settings.
+
+          > Fettle isn't notarized by Apple yet. If you use the direct \`.dmg\` or Homebrew, open Fettle once, then go to **System Settings → Privacy & Security → Open Anyway**.
+          EOF
+          } | gh release create "v$VERSION" dist/* \
             --target "$GITHUB_SHA" \
             --title "Fettle v$VERSION" \
             --notes-file - \
-            --latest <<EOF
-          ## What's new
-
-          $changes
-
-          ## Install
-
-          - **Download:** get \`Fettle.dmg\` below, open it, and drag Fettle into Applications. The first time you open Fettle, macOS blocks it because it isn't notarized: go to System Settings > Privacy & Security and click **Open Anyway**.
-          - **Homebrew:** \`brew install --cask iyazerski/tap/fettle\`
-          - **Terminal:** \`curl -fsSL https://raw.githubusercontent.com/$GH_REPO/main/install.sh | sh\`
-          - **Update:** click **Check for updates** in Fettle's settings.
-          EOF
+            --latest
       - name: Update Homebrew cask
         env:
           DEPLOY_KEY: ${{ secrets.HOMEBREW_TAP_DEPLOY_KEY }}
