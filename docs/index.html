@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Fettle: Fix grammar, rewrite, and translate in any Mac app</title>
+  <meta name="description" content="Free, open-source Grammarly alternative for macOS. Fix grammar, rewrite tone, translate into 40 languages, or dictate in any Mac app with private on-device AI.">
+  <meta name="theme-color" content="#f5f6fc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#0b0d15" media="(prefers-color-scheme: dark)">
+
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="screenshots/icon.png">
+  <link rel="canonical" href="https://iyazerski.github.io/fettle/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Fettle: Fix grammar, rewrite, and translate in any Mac app">
+  <meta property="og:description" content="Select text, press ⌃⌥E, or let Fettle underline mistakes as you type. Free, open-source AI writing assistant for macOS that can run entirely on your Mac.">
+  <meta property="og:url" content="https://iyazerski.github.io/fettle/">
+  <meta property="og:image" content="https://iyazerski.github.io/fettle/social-preview.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Fettle: Fix grammar, rewrite, and translate in any Mac app">
+  <meta name="twitter:description" content="Select text, press ⌃⌥E, or let Fettle underline mistakes as you type. Free, open-source AI writing assistant for macOS that can run entirely on your Mac.">
+  <meta name="twitter:image" content="https://iyazerski.github.io/fettle/social-preview.png">
+
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f6fc;
+      --bg-elevated: #ffffff;
+      --bg-subtle: #eef0f9;
+      --bg-code: #111320;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --text-code: #e2e8f0;
+      --border: rgba(15, 23, 42, 0.09);
+      --border-strong: rgba(15, 23, 42, 0.16);
+      --accent: #7c3aed;
+      --accent-hover: #6d28d9;
+      --accent-indigo: #4f67f8;
+      --accent-green: #059669;
+      --accent-soft: rgba(124, 58, 237, 0.10);
+      --indigo-soft: rgba(79, 103, 248, 0.11);
+      --green-soft: rgba(5, 150, 105, 0.12);
+      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.05);
+      --shadow-md: 0 10px 30px rgba(24, 24, 58, 0.08);
+      --shadow-hero: 0 24px 64px rgba(24, 24, 58, 0.14), 0 2px 8px rgba(15, 23, 42, 0.06);
+      --glow-violet: rgba(124, 58, 237, 0.11);
+      --glow-indigo: rgba(91, 124, 250, 0.12);
+      --grad-start: #4f67f8;
+      --grad-mid: #7c3aed;
+      --grad-end: #9333ea;
+      --radius: 16px;
+      --radius-sm: 12px;
+      --max-w: 1040px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b0d15;
+        --bg-elevated: #141621;
+        --bg-subtle: #1b1e2c;
+        --bg-code: #0a0b12;
+        --text: #f1f5f9;
+        --text-muted: #94a3b8;
+        --text-code: #e2e8f0;
+        --border: rgba(248, 250, 252, 0.09);
+        --border-strong: rgba(248, 250, 252, 0.17);
+        --accent: #8b5cf6;
+        --accent-hover: #7c3aed;
+        --accent-indigo: #7aa2ff;
+        --accent-green: #34d399;
+        --accent-soft: rgba(139, 92, 246, 0.18);
+        --indigo-soft: rgba(122, 162, 255, 0.16);
+        --green-soft: rgba(16, 185, 129, 0.16);
+        --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
+        --shadow-md: 0 12px 32px rgba(0, 0, 0, 0.38);
+        --shadow-hero: 0 28px 72px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(255, 255, 255, 0.06);
+        --glow-violet: rgba(139, 92, 246, 0.19);
+        --glow-indigo: rgba(91, 124, 250, 0.15);
+        --grad-start: #7aa2ff;
+        --grad-mid: #a78bfa;
+        --grad-end: #c084fc;
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--text);
+      background:
+        radial-gradient(920px 540px at 18% -60px, var(--glow-violet), transparent 65%),
+        radial-gradient(840px 500px at 84% 40px, var(--glow-indigo), transparent 65%),
+        var(--bg);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    kbd {
+      display: inline-block;
+      padding: 1px 6px;
+      font-family: inherit;
+      font-size: 0.86em;
+      font-weight: 600;
+      line-height: 1.4;
+      color: var(--text);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      box-shadow: 0 1px 0 var(--border);
+    }
+
+    .wrap {
+      width: 100%;
+      max-width: var(--max-w);
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Nav */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      backdrop-filter: saturate(160%) blur(14px);
+      -webkit-backdrop-filter: saturate(160%) blur(14px);
+      background: color-mix(in srgb, var(--bg) 80%, transparent);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      gap: 16px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+      color: var(--text);
+    }
+    .brand:hover { text-decoration: none; }
+    .brand img { width: 28px; height: 28px; display: block; border-radius: 7px; }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    .nav-links a { color: var(--text-muted); }
+    .nav-links a:hover { color: var(--text); text-decoration: none; }
+
+    .nav-gh {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 13px;
+      border-radius: 999px;
+      border: 1px solid var(--border-strong);
+      background: var(--bg-elevated);
+      color: var(--text) !important;
+      font-size: 13.5px;
+      box-shadow: var(--shadow-sm);
+      transition: border-color 0.15s ease, transform 0.15s ease;
+    }
+    .nav-gh:hover { border-color: var(--accent); transform: translateY(-1px); }
+
+    /* Hero */
+    .hero {
+      padding: 64px 0 40px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 13px;
+      border-radius: 999px;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-bottom: 22px;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: inline-block;
+    }
+
+    h1 {
+      margin: 0 auto 18px;
+      max-width: 780px;
+      font-size: clamp(2.25rem, 5.2vw, 3.65rem);
+      font-weight: 800;
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+
+    .gradient-text {
+      background: linear-gradient(95deg, var(--grad-start) 0%, var(--grad-mid) 52%, var(--grad-end) 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .subtitle {
+      margin: 0 auto 30px;
+      max-width: 630px;
+      font-size: clamp(1.02rem, 2vw, 1.18rem);
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    /* Download buttons */
+    .downloads {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 20px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong);
+      background: var(--bg-elevated);
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 600;
+      box-shadow: var(--shadow-sm);
+      transition: transform 0.15s ease, border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .btn:hover {
+      text-decoration: none;
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      box-shadow: var(--shadow-md);
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #ffffff;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+      color: #ffffff;
+    }
+    .btn-primary .btn-sub { color: rgba(255, 255, 255, 0.84); }
+
+    .btn-label {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      line-height: 1.2;
+    }
+
+    .btn-sub {
+      font-size: 11.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .release-meta {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin: 0 0 26px;
+    }
+    .release-meta a { color: var(--text-muted); text-decoration: underline; text-underline-offset: 3px; }
+    .release-meta a:hover { color: var(--text); }
+
+    /* Quick install bar */
+    .install-box {
+      max-width: 790px;
+      margin: 0 auto 44px;
+      text-align: left;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+    }
+
+    .install-tabs {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-subtle);
+      flex-wrap: wrap;
+    }
+
+    .tab-group {
+      display: inline-flex;
+      gap: 4px;
+    }
+
+    .tab {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--text-muted);
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 5px 11px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    .tab:hover { color: var(--text); }
+    .tab[aria-selected="true"] {
+      background: var(--bg-elevated);
+      color: var(--text);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .install-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .code-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 13px 14px;
+      background: var(--bg-code);
+      color: var(--text-code);
+    }
+
+    .code-row pre {
+      margin: 0;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12.5px;
+      line-height: 1.5;
+      white-space: pre;
+      flex: 1;
+    }
+
+    .copy-btn {
+      appearance: none;
+      flex-shrink: 0;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      background: rgba(255, 255, 255, 0.08);
+      color: #f8fafc;
+      font: inherit;
+      font-size: 12.5px;
+      font-weight: 600;
+      padding: 6px 11px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .copy-btn:hover { background: rgba(255, 255, 255, 0.16); }
+    .copy-btn.copied {
+      background: rgba(16, 185, 129, 0.22);
+      border-color: rgba(16, 185, 129, 0.5);
+      color: #6ee7b7;
+    }
+
+    .dmg-note {
+      padding: 14px 16px;
+      font-size: 14px;
+      color: var(--text-muted);
+      background: var(--bg-elevated);
+    }
+
+    /* Hero poster */
+    .poster {
+      border-radius: 20px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-hero);
+      background: var(--bg-elevated);
+    }
+    .poster img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    /* Sections */
+    section {
+      padding: 64px 0;
+    }
+
+    .section-head {
+      text-align: center;
+      max-width: 640px;
+      margin: 0 auto 36px;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: clamp(1.6rem, 3.2vw, 2.15rem);
+      font-weight: 750;
+      letter-spacing: -0.025em;
+      line-height: 1.2;
+    }
+
+    .section-sub {
+      margin: 0;
+      color: var(--text-muted);
+      font-size: 16px;
+    }
+
+    /* Features grid */
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    .card-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 14px;
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .card-icon.indigo {
+      background: var(--indigo-soft);
+      color: var(--accent-indigo);
+    }
+
+    .card-icon.green {
+      background: var(--green-soft);
+      color: var(--accent-green);
+    }
+
+    .card h3 {
+      margin: 0 0 7px;
+      font-size: 16.5px;
+      font-weight: 700;
+      letter-spacing: -0.015em;
+    }
+
+    .card p {
+      margin: 0;
+      font-size: 14.5px;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    /* Steps */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .step-num {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #ffffff;
+      font-size: 14px;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 12px;
+    }
+
+    /* AI models spotlight box */
+    .spotlight-card {
+      display: grid;
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.25fr);
+      gap: 28px;
+      align-items: center;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .spotlight-card h2 { text-align: left; }
+    .spotlight-card p {
+      margin: 0 0 16px;
+      color: var(--text-muted);
+      font-size: 15px;
+    }
+
+    .provider-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .provider {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      padding: 15px 16px;
+      border-radius: var(--radius-sm);
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+    }
+
+    .provider-ico {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      flex-shrink: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--accent-soft);
+      color: var(--accent);
+      margin-top: 2px;
+    }
+
+    .provider-ico.green {
+      background: var(--green-soft);
+      color: var(--accent-green);
+    }
+
+    .provider-ico.indigo {
+      background: var(--indigo-soft);
+      color: var(--accent-indigo);
+    }
+
+    .provider-body {
+      min-width: 0;
+    }
+
+    .provider-head {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 3px;
+    }
+
+    .provider-name {
+      font-weight: 700;
+      font-size: 15px;
+      color: var(--text);
+    }
+
+    .badge {
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--green-soft);
+      color: var(--accent-green);
+    }
+
+    .provider-desc {
+      margin: 0 !important;
+      font-size: 13.5px !important;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    /* FAQ */
+    .faq-list {
+      max-width: 760px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    details {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px 20px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    summary {
+      font-weight: 650;
+      font-size: 15.5px;
+      cursor: pointer;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    summary::-webkit-details-marker { display: none; }
+    summary::after {
+      content: "+";
+      font-size: 20px;
+      font-weight: 400;
+      color: var(--text-muted);
+      line-height: 1;
+      transition: transform 0.15s ease;
+    }
+    details[open] summary::after { content: "−"; }
+
+    details p {
+      margin: 12px 0 0;
+      font-size: 14.5px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 36px 0 48px;
+      font-size: 13.5px;
+      color: var(--text-muted);
+    }
+
+    .footer-inner {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 18px;
+    }
+    .footer-links a { color: var(--text-muted); }
+    .footer-links a:hover { color: var(--text); }
+
+    .trademark {
+      margin-top: 16px;
+      font-size: 12.5px;
+      opacity: 0.8;
+    }
+
+    [hidden] { display: none !important; }
+
+    @media (max-width: 860px) {
+      .grid, .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .spotlight-card { grid-template-columns: 1fr; padding: 24px; }
+    }
+
+    @media (max-width: 600px) {
+      .hero { padding-top: 40px; }
+      section { padding: 48px 0; }
+      .nav-links .hide-sm { display: none; }
+      .grid, .steps { grid-template-columns: 1fr; }
+      .downloads { flex-direction: column; align-items: stretch; }
+      .btn { justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <a class="brand" href="#">
+        <img src="icon.svg" alt="" width="28" height="28">
+        <span>Fettle</span>
+      </a>
+      <nav class="nav-links" aria-label="Primary">
+        <a class="hide-sm" href="#features">Features</a>
+        <a class="hide-sm" href="#how-it-works">How it works</a>
+        <a class="hide-sm" href="#models">AI models</a>
+        <a class="hide-sm" href="#faq">FAQ</a>
+        <a class="nav-gh" href="https://github.com/iyazerski/fettle">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.03 11.03 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.07.78 2.15 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+          GitHub
+        </a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <div class="eyebrow">
+          <span class="dot" aria-hidden="true"></span>
+          <span>Free &amp; open source · macOS 13+ · Apple silicon</span>
+        </div>
+
+        <h1>Fix, rewrite, and translate<br><span class="gradient-text">in any Mac app.</span></h1>
+        <p class="subtitle">
+          Select text, press <kbd>⌃⌥E</kbd>, or let Fettle underline mistakes as you type.
+          Fix grammar, rewrite tone, translate into 40 languages, or dictate in place, with private on-device AI.
+        </p>
+
+        <div class="downloads">
+          <a id="dl-mac" class="btn btn-primary" href="https://github.com/iyazerski/fettle/releases/latest/download/Fettle.dmg">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.96 6.32c.68-.82 1.14-1.97 1.01-3.12-.98.04-2.17.65-2.87 1.47-.63.72-1.18 1.89-1.03 3.01 1.09.08 2.21-.55 2.89-1.36z"/></svg>
+            <span class="btn-label">
+              <span>Download Fettle.dmg</span>
+              <span class="btn-sub">macOS 13+ · Apple silicon (M1+)</span>
+            </span>
+          </a>
+
+          <a class="btn" href="https://github.com/iyazerski/fettle">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.65.5.5 5.65.5 12c0 5.08 3.29 9.39 7.86 10.91.58.11.79-.25.79-.56 0-.28-.01-1.02-.02-2-3.2.7-3.88-1.54-3.88-1.54-.52-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.09-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11.03 11.03 0 0 1 5.78 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.8 1.19 1.83 1.19 3.09 0 4.42-2.69 5.39-5.26 5.68.41.36.78 1.07.78 2.15 0 1.55-.01 2.8-.01 3.18 0 .31.21.68.8.56A11.51 11.51 0 0 0 23.5 12C23.5 5.65 18.35.5 12 .5z"/></svg>
+            <span class="btn-label">
+              <span>View on GitHub</span>
+              <span class="btn-sub">MIT licensed · 10 MB native app</span>
+            </span>
+          </a>
+        </div>
+
+        <p class="release-meta">
+          <span id="release-version">Latest release</span> · MIT licensed ·
+          <a href="https://github.com/iyazerski/fettle/releases/latest">All release files &amp; checksums</a>
+        </p>
+
+        <div class="install-box">
+          <div class="install-tabs">
+            <div class="tab-group" role="tablist" aria-label="Quick install">
+              <button class="tab" role="tab" aria-selected="true" data-tab="terminal" type="button">Terminal</button>
+              <button class="tab" role="tab" aria-selected="false" data-tab="homebrew" type="button">Homebrew</button>
+              <button class="tab" role="tab" aria-selected="false" data-tab="dmg" type="button">Direct .dmg</button>
+            </div>
+            <span class="install-hint" id="install-hint">Skips the first-launch macOS warning</span>
+          </div>
+
+          <div class="code-row" data-panel="terminal">
+            <pre><code id="cmd-terminal">curl -fsSL https://raw.githubusercontent.com/iyazerski/fettle/main/install.sh | sh</code></pre>
+            <button class="copy-btn" type="button" data-copy="cmd-terminal">Copy</button>
+          </div>
+
+          <div class="code-row" data-panel="homebrew" hidden>
+            <pre><code id="cmd-homebrew">brew install --cask iyazerski/tap/fettle</code></pre>
+            <button class="copy-btn" type="button" data-copy="cmd-homebrew">Copy</button>
+          </div>
+
+          <div class="dmg-note" data-panel="dmg" hidden>
+            Download <a href="https://github.com/iyazerski/fettle/releases/latest/download/Fettle.dmg">Fettle.dmg</a> and drag Fettle into Applications. Because Fettle isn't notarized by Apple yet, open it once, click <strong>Done</strong>, then go to <strong>System Settings → Privacy &amp; Security → Open Anyway</strong>.
+          </div>
+        </div>
+
+        <div class="poster">
+          <picture>
+            <source media="(prefers-color-scheme: dark)" srcset="screenshots/hero-dark.png">
+            <img src="screenshots/hero-light.png" width="1920" height="1136" alt="Fettle fixing grammar with inline changes over Mail, translating into Spanish, and dictating by voice">
+          </picture>
+        </div>
+      </div>
+    </section>
+
+    <section id="features">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Everything you need, where you write</h2>
+          <p class="section-sub">A lightweight, native alternative to Grammarly and DeepL that works in any Mac app.</p>
+        </div>
+
+        <div class="grid">
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linejoin="round"><path d="M12 3.5l1.9 4.6a3 3 0 0 0 1.6 1.6l4.6 1.9-4.6 1.9a3 3 0 0 0-1.6 1.6L12 19.7l-1.9-4.6a3 3 0 0 0-1.6-1.6l-4.6-1.9 4.6-1.9a3 3 0 0 0 1.6-1.6z"/></svg>
+            </div>
+            <h3>As-you-type underlines</h3>
+            <p>Marks mistakes as you pause typing in Mail, Slack, Notes, Chrome, and most Mac apps. Click an underline to fix it, or click any change to keep your original wording.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon indigo" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+            </div>
+            <h3>Write like a native</h3>
+            <p>Fix catches grammar, spelling, and awkward or literally translated phrasing while keeping your meaning, tone, links, and formatting intact.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon indigo" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linejoin="round"><circle cx="12" cy="12" r="8.75"/><path d="M3.5 12h17M12 3.25c2.3 2.4 3.5 5.3 3.5 8.75s-1.2 6.35-3.5 8.75c-2.3-2.4-3.5-5.3-3.5-8.75s1.2-6.35 3.5-8.75z"/></svg>
+            </div>
+            <h3>Translate in 40 languages</h3>
+            <p>Natural translations that read like a person wrote them, not word by word. Names, tone, and formatting stay as they are without switching tabs.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M4.75 19.25h4l10-10a2.12 2.12 0 0 0-3-3l-10 10zM13.75 8.25l2 2"/></svg>
+            </div>
+            <h3>Rewrite tone in one click</h3>
+            <p>Make an email more <strong>Formal</strong>, a message <strong>Friendlier</strong>, a long reply <strong>Shorter</strong>, or a messy paragraph <strong>Clearer</strong> with one click.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round"><rect x="8.75" y="2.75" width="6.5" height="11.5" rx="3.25"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5v3.75"/></svg>
+            </div>
+            <h3>Talk instead of type</h3>
+            <p>Click the mic and just speak. Fettle drops the ums, repeats, and false starts, adds punctuation, and writes what you meant.</p>
+          </article>
+
+          <article class="card">
+            <div class="card-icon green" aria-hidden="true">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.25 10.5V7.75a3.75 3.75 0 0 1 7.5 0v2.75"/></svg>
+            </div>
+            <h3>Tiny, private, open source</h3>
+            <p>A 10 MB native Rust app that uses about 12 MB of memory when idle. No account, no subscription, no telemetry, and MIT licensed.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="how-it-works">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Ready in under a minute</h2>
+          <p class="section-sub">No account, no browser extension, and no copy-pasting between tabs.</p>
+        </div>
+
+        <div class="steps">
+          <div class="card">
+            <span class="step-num">1</span>
+            <h3>Install &amp; pick your AI</h3>
+            <p>Open Fettle, choose Apple Intelligence on macOS 26 (or connect ChatGPT / an API), and allow Accessibility when asked.</p>
+          </div>
+
+          <div class="card">
+            <span class="step-num">2</span>
+            <h3>Press <kbd>⌃⌥E</kbd> in any app</h3>
+            <p>Select text in Mail, Slack, Notes, Chrome, or anywhere you write. Or turn on <strong>Underline mistakes</strong> to check as you type.</p>
+          </div>
+
+          <div class="card">
+            <span class="step-num">3</span>
+            <h3>Review and replace in place</h3>
+            <p>See exact red and green changes, click any change you want to skip, and press <kbd>⌘↩</kbd> to drop the result straight back in.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="models">
+      <div class="wrap">
+        <div class="spotlight-card">
+          <div>
+            <h2>Private on your Mac, or bring your own AI</h2>
+            <p>
+              Fettle has no account, no analytics, and no server of its own. On macOS 26, Apple's on-device model keeps every word on your Mac for free.
+            </p>
+            <p>
+              Need longer texts or more languages? Connect your existing ChatGPT plan, OpenAI, OpenRouter, Ollama, or LM Studio. Credentials stay in macOS Keychain.
+            </p>
+            <a class="btn" href="https://github.com/iyazerski/fettle#privacy">Read privacy details →</a>
+          </div>
+
+          <div class="provider-list">
+            <div class="provider">
+              <div class="provider-ico green" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.25 10.5V7.75a3.75 3.75 0 0 1 7.5 0v2.75"/></svg>
+              </div>
+              <div class="provider-body">
+                <div class="provider-head">
+                  <span class="provider-name">On this Mac (Apple Intelligence)</span>
+                  <span class="badge">Free &amp; local</span>
+                </div>
+                <p class="provider-desc">Runs Apple's on-device model on macOS 26. Your text never leaves your Mac, with nothing to sign in to or pay for.</p>
+              </div>
+            </div>
+
+            <div class="provider">
+              <div class="provider-ico" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3.5l1.9 4.6a3 3 0 0 0 1.6 1.6l4.6 1.9-4.6 1.9a3 3 0 0 0-1.6 1.6L12 19.7l-1.9-4.6a3 3 0 0 0-1.6-1.6l-4.6-1.9 4.6-1.9a3 3 0 0 0 1.6-1.6z"/></svg>
+              </div>
+              <div class="provider-body">
+                <div class="provider-head">
+                  <span class="provider-name">ChatGPT plan</span>
+                </div>
+                <p class="provider-desc">Sign in with your existing ChatGPT subscription for stronger results, longer passages, and more languages.</p>
+              </div>
+            </div>
+
+            <div class="provider">
+              <div class="provider-ico indigo" aria-hidden="true">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="6" rx="2"/><rect x="3" y="13" width="18" height="6" rx="2"/><path d="M7 8h.01M7 16h.01"/></svg>
+              </div>
+              <div class="provider-body">
+                <div class="provider-head">
+                  <span class="provider-name">OpenAI-compatible API</span>
+                </div>
+                <p class="provider-desc">Works with OpenAI, OpenRouter, Ollama, LM Studio, or any endpoint that lists models at <code>/v1/models</code>.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="faq">
+      <div class="wrap">
+        <div class="section-head">
+          <h2>Common questions</h2>
+        </div>
+
+        <div class="faq-list">
+          <details>
+            <summary>Is Fettle a Grammarly alternative?</summary>
+            <p>Yes, for the core job: fixing grammar, spelling, and phrasing in any app with a clear view of what changed. Select text and press <kbd>⌃⌥E</kbd> anytime, or turn on <strong>Underline mistakes</strong> in Settings so Fettle checks edited paragraphs when you pause typing and underlines what it would fix. Underlines work in most native Mac apps and Chrome (Telegram and WhatsApp aren't checked).</p>
+          </details>
+
+          <details>
+            <summary>Why does macOS show a warning the first time?</summary>
+            <p>Fettle isn't notarized by Apple yet. Installing with the Terminal command above skips the warning automatically. If you use the <code>.dmg</code> or Homebrew, open Fettle once, click <strong>Done</strong>, then open <strong>System Settings → Privacy &amp; Security</strong> and click <strong>Open Anyway</strong>.</p>
+          </details>
+
+          <details>
+            <summary>Does it cost anything?</summary>
+            <p>Fettle itself and Apple's on-device model on macOS 26 are free. If you connect a ChatGPT plan or an API provider, usage is billed by your provider.</p>
+          </details>
+
+          <details>
+            <summary>Which apps and languages does it support?</summary>
+            <p>Fettle works in any app where you can select and copy text with <kbd>⌘C</kbd>. Fix and Rewrite work in any language your model knows, Translate supports 40 languages, and the app interface is available in 12 languages.</p>
+          </details>
+
+          <details>
+            <summary>Is it safe to grant Accessibility?</summary>
+            <p>Fettle uses Accessibility to copy and paste with <kbd>⌘C</kbd> and <kbd>⌘V</kbd> when you call it, and, if you turn on <strong>Underline mistakes</strong>, to read the text box you're typing in. Your clipboard is restored afterward, and the full source code is open on GitHub.</p>
+          </details>
+
+          <details>
+            <summary>Does it run on Intel Macs, Windows, or Linux?</summary>
+            <p>Not yet. Fettle is built specifically for macOS 13+ on Apple silicon (M1 and newer).</p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <div class="footer-inner">
+        <div>
+          <strong>Fettle</strong> · MIT License · Made by <a href="https://buymeacoffee.com/iyazerski">Ihar Yazerski</a>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/iyazerski/fettle">GitHub</a>
+          <a href="https://github.com/iyazerski/fettle/releases/latest">Releases</a>
+          <a href="https://github.com/iyazerski/fettle/issues">Issues</a>
+          <a href="https://buymeacoffee.com/iyazerski">Buy me a coffee</a>
+        </div>
+      </div>
+      <p class="trademark">
+        Fettle isn't affiliated with or endorsed by OpenAI or Grammarly. ChatGPT and Grammarly are trademarks of their owners.
+      </p>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var tabs = document.querySelectorAll('.tab[data-tab]');
+      var panels = document.querySelectorAll('[data-panel]');
+      var hint = document.getElementById('install-hint');
+      var hints = {
+        terminal: 'Skips the first-launch macOS warning',
+        homebrew: 'Install via Homebrew Cask',
+        dmg: 'Drag Fettle into Applications'
+      };
+
+      function selectTab(name) {
+        tabs.forEach(function (t) {
+          t.setAttribute('aria-selected', t.dataset.tab === name ? 'true' : 'false');
+        });
+        panels.forEach(function (p) {
+          p.hidden = p.dataset.panel !== name;
+        });
+        if (hint && hints[name]) hint.textContent = hints[name];
+      }
+
+      tabs.forEach(function (t) {
+        t.addEventListener('click', function () { selectTab(t.dataset.tab); });
+      });
+
+      // Copy buttons
+      document.querySelectorAll('.copy-btn[data-copy]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var code = document.getElementById(btn.dataset.copy);
+          if (!code || !navigator.clipboard) return;
+          navigator.clipboard.writeText(code.textContent).then(function () {
+            btn.textContent = 'Copied';
+            btn.classList.add('copied');
+            setTimeout(function () {
+              btn.textContent = 'Copy';
+              btn.classList.remove('copied');
+            }, 1600);
+          });
+        });
+      });
+
+      // Resolve latest release version and direct .dmg URL.
+      function applyRelease(data) {
+        if (!data) return;
+        var ver = document.getElementById('release-version');
+        if (ver && data.tag_name) ver.textContent = 'Latest release ' + data.tag_name;
+        if (!Array.isArray(data.assets)) return;
+        var dmg = data.assets.find(function (a) { return /\.dmg$/i.test(a.name); });
+        if (dmg) document.getElementById('dl-mac').href = dmg.browser_download_url;
+      }
+
+      try {
+        var cached = sessionStorage.getItem('fettle_latest_release');
+        if (cached) {
+          applyRelease(JSON.parse(cached));
+          return;
+        }
+      } catch (_) {}
+
+      fetch('https://api.github.com/repos/iyazerski/fettle/releases/latest', {
+        headers: { 'Accept': 'application/vnd.github+json' }
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          applyRelease(data);
+          try { sessionStorage.setItem('fettle_latest_release', JSON.stringify({ tag_name: data.tag_name, assets: data.assets })); } catch (_) {}
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>
